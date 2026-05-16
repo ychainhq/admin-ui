@@ -1,0 +1,15 @@
+{
+  "name": "bitcoin-regtest-ui-proxy",
+  "version": "1.0.0",
+  "description": "Proxy server for Bitcoin Core RPC with UI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.18.3"
+  }
+}

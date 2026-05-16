@@ -1,0 +1,57 @@
+services:
+  bitcoin-core:
+    image: lncm/bitcoind:v25.0
+    command:
+      - -printtoconsole
+      - -regtest=1
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -rpcuser=bitcoin
+      - -rpcpassword=bitcoin
+      - -fallbackfee=0.0001
+      - -txindex=1
+      - -server=1
+      - -rest=1
+      - -zmqpubrawblock=tcp://0.0.0.0:28332
+      - -zmqpubrawtx=tcp://0.0.0.0:28333
+    ports:
+      - "18443:18443"   # RPC
+      - "18444:18444"   # P2P (regtest)
+      - "28332:28332"   # ZMQ blocks
+      - "28333:28333"   # ZMQ txs
+    volumes:
+      - bitcoin_regtest:/data/.bitcoin
+    healthcheck:
+      test:
+        - CMD
+        - bitcoin-cli
+        - -regtest
+        - -rpcuser=bitcoin
+        - -rpcpassword=bitcoin
+        - getblockchaininfo
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  ui:
+    build: ./proxy
+    ports:
+      - "3001:3001"
+    environment:
+      - BITCOIN_RPC_URL=http://bitcoin-core:18443
+      - BITCOIN_RPC_USER=bitcoin
+      - BITCOIN_RPC_PASSWORD=bitcoin
+      - BITCOIN_WALLET=testwallet
+      # chain-api engine — auto-loaded from .env (copy .env.example → .env)
+      - CHAIN_API_URL=${CHAIN_API_URL:-http://host.docker.internal:3000}
+      - CHAIN_API_KEY=${CHAIN_API_KEY:-}
+      - CHAIN_API_ADMIN_KEY=${CHAIN_API_ADMIN_KEY:-}
+    depends_on:
+      bitcoin-core:
+        condition: service_healthy
+    volumes:
+      - ./ui:/app/ui:ro
+
+volumes:
+  bitcoin_regtest:
