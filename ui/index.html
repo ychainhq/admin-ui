@@ -1,601 +1,819 @@
 <!DOCTYPE html>
-<html lang="pl" class="bg-gray-950">
+<html class="dark" lang="pl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>chain-api — Panel operacyjny</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script id="tailwind-config">
     tailwind.config = {
-      theme: { extend: { colors: { btc: { DEFAULT: '#f7931a', dark: '#c97a14' } } } }
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "secondary-container": "#e78603",
+            "on-tertiary-container": "#00a472",
+            "inverse-surface": "#dce1fb",
+            "on-tertiary": "#003824",
+            "on-primary-fixed-variant": "#3c475a",
+            "inverse-primary": "#545f73",
+            "on-secondary-container": "#522c00",
+            "surface": "#0c1324",
+            "primary-fixed-dim": "#bcc7de",
+            "on-secondary-fixed-variant": "#6b3b00",
+            "surface-container-high": "#23293c",
+            "tertiary-fixed-dim": "#4edea3",
+            "tertiary": "#4edea3",
+            "surface-container-low": "#151b2d",
+            "secondary-fixed": "#ffdcbf",
+            "on-surface": "#dce1fb",
+            "on-tertiary-fixed": "#002113",
+            "surface-container-lowest": "#070d1f",
+            "on-primary-container": "#8590a6",
+            "error-container": "#93000a",
+            "on-primary": "#263143",
+            "surface-dim": "#0c1324",
+            "surface-bright": "#33394c",
+            "secondary": "#ffb874",
+            "inverse-on-surface": "#2a3043",
+            "tertiary-container": "#00301e",
+            "surface-container": "#191f31",
+            "outline": "#8f9097",
+            "surface-tint": "#bcc7de",
+            "secondary-fixed-dim": "#ffb874",
+            "on-tertiary-fixed-variant": "#005236",
+            "on-secondary-fixed": "#2d1600",
+            "surface-variant": "#2e3447",
+            "on-primary-fixed": "#111c2d",
+            "on-background": "#dce1fb",
+            "tertiary-fixed": "#6ffbbe",
+            "error": "#ffb4ab",
+            "outline-variant": "#45474c",
+            "background": "#0c1324",
+            "surface-container-highest": "#2e3447",
+            "on-error-container": "#ffdad6",
+            "primary-fixed": "#d8e3fb",
+            "primary-container": "#1e293b",
+            "on-secondary": "#4b2800",
+            "on-error": "#690005",
+            "on-surface-variant": "#c5c6cd",
+            "primary": "#bcc7de"
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          spacing: {
+            "xs": "4px", "md": "24px", "lg": "40px",
+            "gutter": "24px", "base": "8px",
+            "margin-desktop": "32px", "xl": "64px",
+            "margin-mobile": "16px", "sm": "12px"
+          },
+          fontFamily: {
+            "sans": ["Inter", "sans-serif"],
+            "geist": ["Geist", "sans-serif"],
+            "mono": ["Geist", "monospace"]
+          }
+        }
+      }
     }
   </script>
   <style>
     [rv-cloak] { display: none; }
-    .card  { @apply bg-gray-900 border border-gray-800 rounded-xl p-5; }
-    .label { @apply block text-xs font-medium text-gray-400 mb-1.5; }
-    .input { @apply w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500; }
-    .select { @apply w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500; }
-    .btn-primary   { @apply px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed; }
-    .btn-btc       { @apply px-4 py-2 bg-btc hover:bg-btc-dark text-black font-semibold text-sm rounded-lg transition-colors disabled:opacity-50; }
-    .btn-secondary { @apply px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors; }
-    .btn-ghost     { @apply px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors; }
-    .btn-danger    { @apply px-3 py-1.5 bg-red-900/60 hover:bg-red-800 text-red-300 text-xs rounded-lg transition-colors; }
-    .tab-business  { @apply px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white; }
-    .tab-business.active { @apply bg-indigo-600 text-white; }
-    .tab-btc       { @apply px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white; }
-    .tab-btc.active { @apply bg-btc text-black; }
-    .subtab-btn    { @apply px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer bg-gray-900 text-gray-400 hover:text-white hover:bg-gray-800; }
-    .subtab-btn.active { @apply bg-gray-700 text-white; }
-    .badge  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; }
-    .stat-value { @apply text-3xl font-bold text-white tabular-nums; }
-    .stat-label { @apply text-xs font-medium text-gray-400 uppercase tracking-wide; }
-    .mono   { @apply font-mono text-xs; }
-    pre     { @apply font-mono text-xs whitespace-pre-wrap break-all; }
-    table.data th { @apply text-left pb-3 font-medium text-gray-400 text-xs uppercase tracking-wide; }
-    table.data td { @apply py-3 text-sm; }
-    table.data tr { @apply border-b border-gray-800/50; }
-    table.data tbody tr:hover { @apply bg-gray-800/20; }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .glass-card {
+      background: rgba(30, 41, 59, 0.5);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 8px;
+      font-family: Geist, sans-serif; font-size: 12px; font-weight: 500;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      color: #c5c6cd; cursor: pointer; width: 100%;
+      transition: all 0.15s ease;
+      border: none; background: none; text-align: left;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.05); color: #dce1fb; }
+    .nav-active {
+      color: #ffb874 !important;
+      background: rgba(255,184,116,0.07) !important;
+      border-right: 2px solid #ffb874;
+    }
+
+    .subtab-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; font-size: 12px; font-weight: 500;
+      font-family: Geist, sans-serif; letter-spacing: 0.04em;
+      color: #c5c6cd; cursor: pointer; border: none;
+      background: none; border-bottom: 2px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .subtab-btn:hover { color: #dce1fb; }
+    .subtab-active { color: #ffb874 !important; border-bottom-color: #ffb874 !important; }
+
+    .gl-input {
+      width: 100%; background: rgba(35,41,60,0.8);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 8px 12px;
+      font-size: 14px; color: #dce1fb;
+      font-family: Inter, sans-serif;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    .gl-input:focus { border-color: #ffb874; }
+    .gl-input::placeholder { color: #8f9097; }
+
+    .gl-select {
+      width: 100%; background: rgba(35,41,60,0.8);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 8px 12px;
+      font-size: 14px; color: #dce1fb;
+      font-family: Inter, sans-serif; outline: none;
+      transition: border-color 0.15s;
+      appearance: none;
+    }
+    .gl-select:focus { border-color: #ffb874; }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 9px 18px; border-radius: 8px;
+      background: #ffb874; color: #4b2800;
+      font-family: Geist, sans-serif; font-size: 13px; font-weight: 700;
+      border: none; cursor: pointer; transition: all 0.15s ease;
+    }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #dce1fb; font-family: Geist, sans-serif; font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+    .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 5px 10px; border-radius: 6px;
+      background: none; border: none;
+      color: #8f9097; font-size: 12px; font-family: Geist, sans-serif;
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .btn-ghost:hover { color: #dce1fb; background: rgba(255,255,255,0.05); }
+
+    .btn-danger {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 5px 10px; border-radius: 6px;
+      background: rgba(147,0,10,0.3); border: 1px solid rgba(255,180,171,0.2);
+      color: #ffb4ab; font-size: 12px; font-family: Geist, sans-serif;
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .btn-danger:hover { background: rgba(147,0,10,0.5); }
+
+    /* Status pills */
+    .sp {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 9999px;
+      font-family: Geist, sans-serif; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.04em; white-space: nowrap;
+    }
+    .sp::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .sp-success  { background: rgba(78,222,163,0.12);  color: #4edea3; }
+    .sp-warning  { background: rgba(255,184,116,0.12); color: #ffb874; }
+    .sp-pending  { background: rgba(188,199,222,0.12); color: #bcc7de; }
+    .sp-error    { background: rgba(255,180,171,0.12); color: #ffb4ab; }
+    .sp-neutral  { background: rgba(197,198,205,0.10); color: #c5c6cd; }
+    .sp-active   { background: rgba(78,222,163,0.12);  color: #4edea3; }
+
+    /* Table */
+    table.data { width: 100%; border-collapse: collapse; }
+    table.data thead tr { background: rgba(7,13,31,0.5); }
+    table.data th {
+      padding: 12px 16px; font-family: Geist, sans-serif;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+      text-transform: uppercase; color: #8f9097;
+      text-align: left; white-space: nowrap;
+    }
+    table.data td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    table.data tbody tr:hover { background: rgba(255,255,255,0.03); }
+    table.data td.right, table.data th.right { text-align: right; }
+
+    pre, .mono { font-family: Geist, monospace; font-size: 12px; }
+    pre { white-space: pre-wrap; word-break: break-all; }
+
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-    .no-connection-banner { @apply bg-yellow-900/20 border border-yellow-800/50 rounded-xl p-5 mb-6; }
-    .customer-banner { @apply flex items-center gap-3 bg-indigo-900/30 border border-indigo-700/40 rounded-lg px-4 py-2.5 mb-5; }
-    .status-pill { @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold; }
-    .status-detected             { @apply bg-yellow-900/50 text-yellow-300; }
-    .status-pending_confirmation { @apply bg-blue-900/50 text-blue-300; }
-    .status-confirmed            { @apply bg-green-900/50 text-green-300; }
-    .status-finalized            { @apply bg-emerald-900/50 text-emerald-300; }
-    .status-created              { @apply bg-gray-800 text-gray-300; }
-    .status-paid                 { @apply bg-green-900/50 text-green-300; }
-    .status-expired              { @apply bg-red-900/50 text-red-300; }
-    .status-cancelled            { @apply bg-red-900/50 text-red-400; }
-    .status-active               { @apply bg-green-900/50 text-green-300; }
-    .status-disabled             { @apply bg-red-900/50 text-red-300; }
+    ::-webkit-scrollbar-thumb { background: #23293c; border-radius: 4px; }
+
+    .stat-value { font-family: Geist, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.2; color: #dce1fb; }
+    .stat-label { font-family: Geist, sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #8f9097; }
+
+    .section-title { font-family: Geist, sans-serif; font-size: 18px; font-weight: 600; color: #dce1fb; }
+    .section-subtitle { font-size: 13px; color: #8f9097; margin-top: 2px; }
+
+    .form-label { display: block; font-family: Geist, sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: #8f9097; margin-bottom: 6px; }
+
+    .banner-warning {
+      background: rgba(231,134,3,0.08); border: 1px solid rgba(255,184,116,0.25);
+      border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;
+    }
+    .banner-info {
+      background: rgba(188,199,222,0.07); border: 1px solid rgba(188,199,222,0.2);
+      border-radius: 10px; padding: 10px 16px; margin-bottom: 20px;
+      display: flex; align-items: center; gap: 10px;
+    }
   </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen font-sans" rv-cloak>
+<body class="bg-background text-on-surface overflow-x-hidden" rv-cloak>
 
-<!-- ═══════════════════════════════════════════════════════════════ HEADER -->
-<header class="border-b border-gray-800 bg-gray-900/95 backdrop-blur sticky top-0 z-50">
-  <div class="max-w-screen-2xl mx-auto px-6">
+<!-- ═══════════════════════════════════════════════════ SIDEBAR -->
+<aside class="fixed left-0 top-0 h-screen w-[260px] z-50 bg-surface-container-lowest border-r border-white/5 hidden lg:flex flex-col py-8 px-3">
 
-    <!-- Row 1: BTC Core status -->
-    <div class="flex items-center gap-5 py-2 border-b border-gray-800/60 text-xs">
-      <div class="flex items-center gap-2 font-semibold text-gray-300">
-        <span class="text-btc text-lg">₿</span>
-        <span>Regtest</span>
-      </div>
+  <!-- Logo -->
+  <div class="flex items-center gap-3 px-3 mb-10">
+    <div class="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+      <span class="material-symbols-outlined text-on-secondary" style="font-variation-settings:'FILL' 1;font-size:18px;">currency_bitcoin</span>
+    </div>
+    <div>
+      <h1 class="font-geist text-base font-black text-secondary tracking-tighter leading-none">chain-api</h1>
+      <p class="font-geist text-[10px] text-on-surface-variant uppercase tracking-widest mt-0.5">Regtest Panel</p>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="flex-1 space-y-0.5">
+    <button class="nav-item" rv-class-nav-active="model.tab | eq 'deposits'"
+      rv-on-click="ctrl.setTab" data-tab="deposits">
+      <span class="material-symbols-outlined">account_balance_wallet</span>
+      Depozyty
+    </button>
+    <button class="nav-item" rv-class-nav-active="model.tab | eq 'payments'"
+      rv-on-click="ctrl.setTab" data-tab="payments">
+      <span class="material-symbols-outlined">payments</span>
+      Płatności
+    </button>
+    <button class="nav-item" rv-class-nav-active="model.tab | eq 'ledger'"
+      rv-on-click="ctrl.setTab" data-tab="ledger">
+      <span class="material-symbols-outlined">menu_book</span>
+      Księgowość
+    </button>
+    <button class="nav-item" rv-class-nav-active="model.tab | eq 'customers'"
+      rv-on-click="ctrl.setTab" data-tab="customers">
+      <span class="material-symbols-outlined">group</span>
+      Klienci
+    </button>
+    <button class="nav-item" rv-class-nav-active="model.tab | eq 'wallets'"
+      rv-on-click="ctrl.setTab" data-tab="wallets">
+      <span class="material-symbols-outlined">account_balance</span>
+      Portfele
+    </button>
+    <button class="nav-item" rv-class-nav-active="model.tab | eq 'webhooks'"
+      rv-on-click="ctrl.setTab" data-tab="webhooks">
+      <span class="material-symbols-outlined">webhook</span>
+      Webhooki
+    </button>
+    <button class="nav-item" rv-class-nav-active="model.tab | eq 'admin'"
+      rv-on-click="ctrl.setTab" data-tab="admin">
+      <span class="material-symbols-outlined">admin_panel_settings</span>
+      Admin
+    </button>
+
+    <div class="my-2 mx-3 border-t border-white/5"></div>
+
+    <button class="nav-item" rv-class-nav-active="model.tab | eq 'btc'"
+      rv-on-click="ctrl.setTab" data-tab="btc">
+      <span class="material-symbols-outlined">router</span>
+      BTC Node
+    </button>
+  </nav>
+
+  <!-- Bottom: BTC Core status -->
+  <div class="mt-auto pt-4 border-t border-white/5 px-3 space-y-2">
+    <div class="flex items-center gap-2 text-xs text-on-surface-variant">
+      <span rv-show="model.connected" class="w-2 h-2 rounded-full bg-tertiary animate-pulse flex-shrink-0"></span>
+      <span rv-hide="model.connected" class="w-2 h-2 rounded-full bg-error flex-shrink-0"></span>
+      <span class="font-geist text-[11px] uppercase tracking-wider">Bitcoin Core</span>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-on-surface-variant">
+      <span rv-show="model.chainApiConnected" class="w-2 h-2 rounded-full bg-secondary animate-pulse flex-shrink-0"></span>
+      <span rv-hide="model.chainApiConnected" class="w-2 h-2 rounded-full bg-white/20 flex-shrink-0"></span>
+      <span class="font-geist text-[11px] uppercase tracking-wider">chain-api</span>
+    </div>
+    <div class="text-[11px] text-on-surface-variant font-geist space-y-1 mt-1">
+      <div>Bloki: <span class="text-on-surface tabular-nums font-bold" rv-text="model.chain.blocks">0</span></div>
+      <div>Mempool: <span class="text-on-surface tabular-nums font-bold" rv-text="model.mempool.size">0</span></div>
+      <div>Portfel: <span class="text-secondary font-bold" rv-text="model.walletBalance">0</span> BTC</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════ HEADER -->
+<header class="fixed top-0 right-0 lg:left-[260px] left-0 h-14 z-40 bg-surface/90 backdrop-blur-xl border-b border-white/8 flex items-center justify-between px-6 gap-4">
+
+  <!-- Left: tenant + customer -->
+  <div class="flex items-center gap-3 flex-wrap">
+
+    <!-- Auto-refresh -->
+    <button rv-on-click="ctrl.toggleAutoRefresh"
+      class="flex items-center gap-1.5 text-xs font-geist text-on-surface-variant hover:text-on-surface transition-colors">
+      <span rv-show="model.autoRefresh" class="material-symbols-outlined text-tertiary" style="font-size:14px;">sync</span>
+      <span rv-hide="model.autoRefresh" class="material-symbols-outlined text-outline" style="font-size:14px;">sync_disabled</span>
+      <span rv-show="model.autoRefresh" class="text-tertiary text-[11px] uppercase tracking-wide font-bold">Live</span>
+      <span rv-hide="model.autoRefresh" class="text-[11px] uppercase tracking-wide">Wstrzymane</span>
+    </button>
+
+    <div class="w-px h-5 bg-white/10"></div>
+
+    <!-- Tenant selector -->
+    <div class="relative" rv-show="model.chainApiConnected">
       <div class="flex items-center gap-1.5">
-        <span rv-show="model.connected"  class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-        <span rv-hide="model.connected"  class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-        <span class="text-gray-400">Bitcoin Core</span>
-      </div>
-      <span class="text-gray-600">·</span>
-      <span class="text-gray-400">Bloki: <span class="text-white font-medium tabular-nums" rv-text="model.chain.blocks">0</span></span>
-      <span class="text-gray-600">·</span>
-      <span class="text-gray-400">Mempool: <span class="text-white font-medium tabular-nums" rv-text="model.mempool.size">0</span></span>
-      <span class="text-gray-600">·</span>
-      <span class="text-gray-400">Portfel: <span class="text-btc font-medium" rv-text="model.walletBalance">0</span> BTC</span>
-      <div class="ml-auto">
-        <button rv-on-click="ctrl.toggleAutoRefresh"
-          class="flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors">
-          <span rv-show="model.autoRefresh" class="text-green-400 font-medium">⟳ Live</span>
-          <span rv-hide="model.autoRefresh" class="text-gray-600">⟳ Wstrzymane</span>
+        <span class="text-[11px] text-on-surface-variant font-geist uppercase tracking-wide">Tenant:</span>
+        <button rv-on-click="ctrl.toggleTenantMenu"
+          class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container border border-white/10 rounded-lg text-xs text-on-surface font-geist hover:bg-surface-container-high transition-colors">
+          <span rv-text="model.tenant.name | defaultStr '—'">—</span>
+          <span class="material-symbols-outlined text-on-surface-variant" style="font-size:14px;">expand_more</span>
         </button>
+      </div>
+
+      <!-- Tenant dropdown -->
+      <div rv-show="model.tenantMenuOpen"
+        class="absolute left-0 top-full mt-1 w-72 bg-surface-container border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden" style="background:#191f31;">
+        <div class="px-4 py-2 border-b border-white/5">
+          <p class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest font-geist">Zmień tenanta</p>
+        </div>
+        <div class="max-h-48 overflow-y-auto">
+          <div rv-show="model.adminTenants | isEmpty" class="px-4 py-3 text-xs text-on-surface-variant text-center">Brak tenantów</div>
+          <button rv-each-t="model.adminTenants"
+            rv-attr-data-id="t.id" rv-attr-data-name="t.name"
+            rv-on-click="ctrl.switchTenant"
+            class="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors text-left">
+            <div>
+              <div class="text-sm text-on-surface font-medium" rv-text="t.name">—</div>
+              <div class="text-[11px] text-on-surface-variant mono mt-0.5" rv-text="t.id | truncate20">—</div>
+            </div>
+            <span rv-show="t.isCurrent" class="text-secondary text-[11px] font-bold font-geist">aktywny</span>
+          </button>
+        </div>
+        <div class="border-t border-white/5 p-3">
+          <p class="text-[11px] text-on-surface-variant mb-2 font-geist">Utwórz nowego tenanta</p>
+          <div class="flex gap-2">
+            <input type="text" rv-value="model.quickTenantForm.name"
+              class="gl-input flex-1 text-xs py-1.5" placeholder="Nazwa tenanta…"
+              rv-on-keydown="ctrl._tenantFormKey">
+            <button rv-on-click="ctrl.createTenantQuick"
+              rv-attr-disabled="model.quickTenantForm.loading"
+              class="btn-primary text-xs py-1.5 px-3">Utwórz</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Row 2: chain-api context controls -->
-    <div class="flex items-center gap-3 py-2.5 flex-wrap">
+    <!-- Customer selector -->
+    <div class="flex items-center gap-1.5" rv-show="model.chainApiConnected">
+      <span class="text-[11px] text-on-surface-variant font-geist uppercase tracking-wide">Klient:</span>
+      <select rv-value="model.customerId" rv-on-change="ctrl.onCustomerChange"
+        class="gl-select text-xs py-1.5 pr-6 max-w-[160px]" style="background-image:none;">
+        <option value="">Wszyscy</option>
+        <option rv-each-c="model.customers" rv-value="c.id" rv-text="c.reference | defaultStr c.id"></option>
+      </select>
+      <button rv-show="model.customerId" rv-on-click="ctrl.clearCustomer"
+        class="text-on-surface-variant hover:text-on-surface text-sm transition-colors">✕</button>
+    </div>
 
-      <!-- chain-api status -->
-      <div class="flex items-center gap-1.5 text-xs">
-        <span rv-show="model.chainApiConnected"  class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
-        <span rv-hide="model.chainApiConnected"  class="w-1.5 h-1.5 rounded-full bg-gray-600"></span>
-        <span class="text-gray-500">chain-api</span>
-      </div>
-
-      <span class="text-gray-700">|</span>
-
-      <!-- Tenant selector -->
-      <div class="relative" rv-show="model.chainApiConnected">
-        <div class="flex items-center gap-1.5">
-          <span class="text-xs text-gray-500">Tenant:</span>
-          <button rv-on-click="ctrl.toggleTenantMenu"
-            class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-white transition-colors">
-            <span class="font-medium" rv-text="model.tenant.name | defaultStr '—'">—</span>
-            <span class="text-gray-400 text-xs">▾</span>
-          </button>
-        </div>
-
-        <!-- Tenant dropdown -->
-        <div rv-show="model.tenantMenuOpen"
-          class="absolute left-0 top-full mt-1 w-72 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
-          <div class="px-3 py-2 border-b border-gray-700">
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Zmień tenanta</p>
-          </div>
-          <div class="max-h-52 overflow-y-auto">
-            <div rv-show="model.adminTenants | isEmpty"
-              class="px-4 py-3 text-xs text-gray-500 text-center">Brak tenantów</div>
-            <button rv-each-t="model.adminTenants"
-              rv-attr-data-id="t.id"
-              rv-attr-data-name="t.name"
-              rv-on-click="ctrl.switchTenant"
-              class="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-700 transition-colors text-left">
-              <div>
-                <div class="text-sm font-medium text-white" rv-text="t.name">—</div>
-                <div class="text-xs text-gray-500 mono" rv-text="t.id | truncate20">—</div>
-              </div>
-              <span rv-show="t.isCurrent" class="text-indigo-400 text-xs font-semibold">aktywny</span>
-            </button>
-          </div>
-          <div class="border-t border-gray-700 p-3">
-            <p class="text-xs text-gray-500 mb-2">Utwórz nowego tenanta</p>
-            <div class="flex gap-2">
-              <input type="text" rv-value="model.quickTenantForm.name"
-                class="input flex-1 text-xs py-1.5" placeholder="Nazwa tenanta…"
-                rv-on-keydown="ctrl._tenantFormKey">
-              <button rv-on-click="ctrl.createTenantQuick"
-                rv-attr-disabled="model.quickTenantForm.loading"
-                class="btn-primary text-xs py-1.5 px-3 whitespace-nowrap">Utwórz</button>
-            </div>
-          </div>
+    <!-- Quick create customer -->
+    <div class="relative" rv-show="model.chainApiConnected">
+      <button rv-on-click="ctrl.toggleCustomerCreate"
+        class="flex items-center gap-1 px-2.5 py-1.5 bg-surface-container border border-dashed border-white/20 rounded-lg text-[11px] text-on-surface-variant hover:text-on-surface font-geist transition-colors">
+        <span class="material-symbols-outlined" style="font-size:13px;">add</span>
+        Nowy klient
+      </button>
+      <div rv-show="model.customerCreateOpen"
+        class="absolute left-0 top-full mt-1 w-60 border border-white/10 rounded-xl shadow-2xl z-50 p-4" style="background:#191f31;">
+        <p class="text-[11px] font-bold text-on-surface-variant mb-3 uppercase tracking-widest font-geist">Nowy klient</p>
+        <div class="space-y-2">
+          <input type="text" rv-value="model.quickCustomerForm.reference"
+            class="gl-input text-xs py-1.5" placeholder="Referencja (np. user-123)…">
+          <button rv-on-click="ctrl.createCustomerQuick"
+            rv-attr-disabled="model.quickCustomerForm.loading"
+            class="btn-primary w-full text-xs py-1.5">Utwórz i wybierz</button>
         </div>
       </div>
-
-      <!-- Customer selector -->
-      <div class="flex items-center gap-1.5" rv-show="model.chainApiConnected">
-        <span class="text-xs text-gray-500">Klient:</span>
-        <select rv-value="model.customerId" rv-on-change="ctrl.onCustomerChange"
-          class="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500 max-w-[180px]">
-          <option value="">Wszyscy klienci</option>
-          <option rv-each-c="model.customers"
-                  rv-value="c.id"
-                  rv-text="c.reference | defaultStr c.id"></option>
-        </select>
-        <button rv-show="model.customerId" rv-on-click="ctrl.clearCustomer"
-          class="text-gray-500 hover:text-white text-sm leading-none transition-colors" title="Wyczyść">✕</button>
-      </div>
-
-      <!-- Quick create customer button -->
-      <div class="relative" rv-show="model.chainApiConnected">
-        <button rv-on-click="ctrl.toggleCustomerCreate"
-          class="flex items-center gap-1 px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 rounded-lg text-xs text-gray-400 hover:text-white transition-colors">
-          <span>+ Nowy klient</span>
-        </button>
-        <!-- Customer create popup -->
-        <div rv-show="model.customerCreateOpen"
-          class="absolute left-0 top-full mt-1 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 p-4">
-          <p class="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wide">Nowy klient</p>
-          <div class="space-y-2">
-            <input type="text" rv-value="model.quickCustomerForm.reference"
-              class="input text-xs py-1.5" placeholder="Referencja (np. user-123)…">
-            <button rv-on-click="ctrl.createCustomerQuick"
-              rv-attr-disabled="model.quickCustomerForm.loading"
-              class="btn-primary w-full text-xs py-1.5">Utwórz i wybierz</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Close overlays (click outside) -->
-      <div rv-show="model.tenantMenuOpen" rv-on-click="ctrl.closeTenantMenu"
-        class="fixed inset-0 z-40"></div>
-      <div rv-show="model.customerCreateOpen" rv-on-click="ctrl.toggleCustomerCreate"
-        class="fixed inset-0 z-40"></div>
-
-    </div><!-- /row2 -->
+    </div>
   </div>
+
+  <!-- Overlays -->
+  <div rv-show="model.tenantMenuOpen" rv-on-click="ctrl.closeTenantMenu" class="fixed inset-0 z-40"></div>
+  <div rv-show="model.customerCreateOpen" rv-on-click="ctrl.toggleCustomerCreate" class="fixed inset-0 z-40"></div>
 </header>
 
-<!-- TOAST -->
-<div rv-show="model.toast.visible" class="fixed top-20 right-6 z-[60] max-w-sm w-full pointer-events-none">
-  <div rv-class-bg-green-900="model.toast.type | eq 'success'"
-       rv-class-bg-red-900="model.toast.type   | eq 'error'"
-       rv-class-bg-blue-900="model.toast.type  | eq 'info'"
-       rv-class-border-green-700="model.toast.type | eq 'success'"
-       rv-class-border-red-700="model.toast.type   | eq 'error'"
-       rv-class-border-blue-700="model.toast.type  | eq 'info'"
-       class="rounded-xl border px-4 py-3 shadow-xl">
-    <p class="text-sm" rv-text="model.toast.message"></p>
+<!-- ═══════════════════════════════════════════════════ TOAST -->
+<div rv-show="model.toast.visible" class="fixed top-16 right-5 z-[60] max-w-sm w-full pointer-events-none">
+  <div class="glass-card rounded-xl px-4 py-3 shadow-xl border"
+       rv-class-border-tertiary="model.toast.type | eq 'success'"
+       rv-class-border-error="model.toast.type | eq 'error'"
+       rv-class-border-primary="model.toast.type | eq 'info'">
+    <p class="text-sm font-geist" rv-text="model.toast.message"></p>
   </div>
 </div>
 
-<div class="max-w-screen-2xl mx-auto px-6 py-6">
+<!-- ═══════════════════════════════════════════════════ MAIN -->
+<main class="lg:ml-[260px] pt-14 min-h-screen">
+<div class="p-8">
 
-  <!-- ═══════════════════════════════════════════════════════ NAVIGATION -->
-  <nav class="flex items-center gap-1.5 mb-7 flex-wrap">
-    <!-- Business tabs -->
-    <button class="tab-business" rv-class-active="model.tab | eq 'deposits'"
-      rv-on-click="ctrl.setTab" data-tab="deposits">Depozyty</button>
-    <button class="tab-business" rv-class-active="model.tab | eq 'payments'"
-      rv-on-click="ctrl.setTab" data-tab="payments">Płatności</button>
-    <button class="tab-business" rv-class-active="model.tab | eq 'ledger'"
-      rv-on-click="ctrl.setTab" data-tab="ledger">Księgowość</button>
-    <button class="tab-business" rv-class-active="model.tab | eq 'customers'"
-      rv-on-click="ctrl.setTab" data-tab="customers">Klienci</button>
-    <button class="tab-business" rv-class-active="model.tab | eq 'wallets'"
-      rv-on-click="ctrl.setTab" data-tab="wallets">Portfele</button>
-    <button class="tab-business" rv-class-active="model.tab | eq 'webhooks'"
-      rv-on-click="ctrl.setTab" data-tab="webhooks">Webhooki</button>
-    <button class="tab-business" rv-class-active="model.tab | eq 'admin'"
-      rv-on-click="ctrl.setTab" data-tab="admin">Admin</button>
-
-    <!-- Separator -->
-    <div class="w-px h-6 bg-gray-700 mx-2"></div>
-
-    <!-- Technical: BTC Node -->
-    <button class="tab-btc" rv-class-active="model.tab | eq 'btc'"
-      rv-on-click="ctrl.setTab" data-tab="btc">₿ BTC Node</button>
-  </nav>
-
-  <!-- ═════════════════════════════ NO CONNECTION BANNER (business tabs) -->
-  <div rv-show="model.chainApiConnected | not"
-       rv-hide="model.tab | eq 'btc'"
-       class="no-connection-banner">
-    <h3 class="text-sm font-semibold text-yellow-300 mb-2">chain-api nie jest połączony</h3>
-    <p class="text-xs text-gray-300 mb-3">Uruchom silnik i skonfiguruj klucze w <span class="mono text-white">.env</span>:</p>
-    <pre class="text-xs text-gray-400 bg-gray-950 rounded-lg p-3">cp chain-api.env ../engine/.env
-cd ../engine && npm run db:migrate && npm run db:seed && npm run dev
-# Skopiuj wydrukowane klucze → btc-test-ui/.env
-cp .env.example .env
-# Edytuj .env: wklej CHAIN_API_KEY i CHAIN_API_ADMIN_KEY
-docker compose up -d   # restart proxy</pre>
+  <!-- Customer context banner -->
+  <div rv-show="model.customerId" rv-hide="model.tab | eq 'btc'" class="banner-info mb-6">
+    <div class="w-2 h-2 rounded-full bg-secondary flex-shrink-0"></div>
+    <span class="text-xs text-on-surface-variant">Kontekst klienta:</span>
+    <span class="text-sm font-bold text-secondary font-geist" rv-text="model.customerName">—</span>
+    <button rv-on-click="ctrl.clearCustomer" class="ml-auto btn-ghost text-xs">✕ wyczyść</button>
   </div>
 
-  <!-- Customer context banner (business tabs, when customer selected) -->
-  <div rv-show="model.customerId"
-       rv-hide="model.tab | eq 'btc'"
-       class="customer-banner">
-    <div class="w-2 h-2 rounded-full bg-indigo-400 flex-shrink-0"></div>
-    <span class="text-xs text-gray-400">Kontekst klienta:</span>
-    <span class="text-sm font-semibold text-indigo-300" rv-text="model.customerName">—</span>
-    <button rv-on-click="ctrl.clearCustomer"
-      class="ml-auto text-xs text-gray-500 hover:text-white transition-colors">✕ wyczyść filtr</button>
+  <!-- No connection banner -->
+  <div rv-show="model.chainApiConnected | not" rv-hide="model.tab | eq 'btc'" class="banner-warning">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="material-symbols-outlined text-secondary" style="font-size:18px;">warning</span>
+      <h3 class="text-sm font-bold text-secondary font-geist">chain-api nie jest połączony</h3>
+    </div>
+    <p class="text-xs text-on-surface-variant mb-3">Uruchom skrypt startowy — ustawi wszystko automatycznie:</p>
+    <pre class="text-xs text-on-surface-variant bg-surface-container-lowest rounded-lg p-3">cd btc-test-ui
+./start.sh          # pierwsze uruchomienie lub restart
+./start.sh reset    # reset wszystkich danych i regeneracja kluczy</pre>
   </div>
 
-  <!-- ══════════════════════════════════════════════════ DEPOSITS TAB -->
+  <!-- ══════════════════════════════════════════ DEPOSITS TAB -->
   <div rv-show="model.tab | eq 'deposits'">
     <div rv-show="model.chainApiConnected">
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+        <div>
+          <h2 class="section-title">Depozyty</h2>
+          <p class="section-subtitle">Monitoruj przychodzące transakcje Bitcoin</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button rv-on-click="ctrl.mine1" class="btn-secondary text-xs">
+            <span class="material-symbols-outlined" style="font-size:15px;">mining</span>
+            +1 blok
+          </button>
+          <button rv-on-click="ctrl.mine6" class="btn-secondary text-xs">+6 bloków</button>
+          <button rv-on-click="ctrl.scenarioChainApiDeposit" class="btn-primary">
+            <span class="material-symbols-outlined" style="font-size:15px;">add</span>
+            Symuluj depozyt
+          </button>
+        </div>
+      </div>
+
       <!-- Stats -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div class="card">
-          <div class="stat-label">Łącznie</div>
-          <div class="stat-value mt-2" rv-text="model.deposits | length">0</div>
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-gutter mb-8">
+        <div class="glass-card rounded-xl p-md flex flex-col justify-between h-36">
+          <p class="stat-label">Łącznie</p>
+          <div>
+            <div class="stat-value" rv-text="model.deposits | length">0</div>
+            <p class="text-xs text-on-surface-variant mt-1">depozytów</p>
+          </div>
         </div>
-        <div class="card">
-          <div class="stat-label">Wykryte</div>
-          <div class="stat-value mt-2 text-yellow-400" rv-text="model.deposits | countStatus 'detected'">0</div>
+        <div class="glass-card rounded-xl p-md flex flex-col justify-between h-36">
+          <p class="stat-label">Wykryte</p>
+          <div>
+            <div class="stat-value text-secondary" rv-text="model.deposits | countStatus 'detected'">0</div>
+            <p class="text-xs text-on-surface-variant mt-1">w mempool</p>
+          </div>
         </div>
-        <div class="card">
-          <div class="stat-label">Oczekujące</div>
-          <div class="stat-value mt-2 text-blue-400" rv-text="model.deposits | countStatus 'pending_confirmation'">0</div>
+        <div class="glass-card rounded-xl p-md flex flex-col justify-between h-36">
+          <p class="stat-label">Oczekujące</p>
+          <div>
+            <div class="stat-value text-primary" rv-text="model.deposits | countStatus 'pending_confirmation'">0</div>
+            <p class="text-xs text-on-surface-variant mt-1">potwierdzeń</p>
+          </div>
         </div>
-        <div class="card">
-          <div class="stat-label">Rozliczone</div>
-          <div class="stat-value mt-2 text-emerald-400" rv-text="model.deposits | countStatus 'finalized'">0</div>
+        <div class="glass-card rounded-xl p-md flex flex-col justify-between h-36">
+          <p class="stat-label">Rozliczone</p>
+          <div>
+            <div class="stat-value text-tertiary" rv-text="model.deposits | countStatus 'finalized'">0</div>
+            <p class="text-xs text-on-surface-variant mt-1">finalized</p>
+          </div>
         </div>
       </div>
 
       <!-- Mining quick action -->
-      <div class="card mb-5 bg-gray-900/50">
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="text-xs text-gray-400 font-medium">Potwierdź depozyty:</span>
-          <button rv-on-click="ctrl.mine1"   class="btn-btc text-xs py-1.5 px-3">⛏ +1 blok</button>
-          <button rv-on-click="ctrl.mine6"   class="btn-btc text-xs py-1.5 px-3">⛏ +6 bloków</button>
-          <button rv-on-click="ctrl.mine144" class="btn-secondary text-xs py-1.5 px-3">+144 bloków</button>
-          <button rv-on-click="ctrl.scenarioChainApiDeposit"
-            class="btn-primary text-xs py-1.5 px-3 ml-auto">+ Symuluj depozyt</button>
-        </div>
+      <div class="glass-card rounded-xl p-4 mb-6 flex flex-wrap items-center gap-3">
+        <span class="text-xs text-on-surface-variant font-geist font-bold uppercase tracking-wider">Potwierdź depozyty:</span>
+        <button rv-on-click="ctrl.mine1"   class="btn-primary text-xs py-1.5 px-3">⛏ +1</button>
+        <button rv-on-click="ctrl.mine6"   class="btn-primary text-xs py-1.5 px-3">⛏ +6</button>
+        <button rv-on-click="ctrl.mine144" class="btn-secondary text-xs py-1.5 px-3">+144</button>
       </div>
 
       <!-- Deposits table -->
-      <div class="card">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold text-white">Lista depozytów
-            <span class="text-gray-500 font-normal text-xs ml-1">GET /v1/deposits</span>
-          </h3>
-          <button rv-on-click="ctrl.loadDeposits" class="btn-ghost text-xs">Odśwież</button>
+      <section class="glass-card rounded-xl overflow-hidden">
+        <div class="px-md py-4 border-b border-white/5 flex items-center justify-between bg-white/3">
+          <div>
+            <h4 class="font-geist font-semibold text-on-surface">Lista depozytów</h4>
+            <p class="text-[11px] text-on-surface-variant mt-0.5 font-geist">GET /v1/deposits</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+            <button rv-on-click="ctrl.loadDeposits" class="btn-ghost text-xs">Odśwież</button>
+          </div>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full data">
+          <table class="data">
             <thead>
               <tr>
                 <th>Status</th>
                 <th>Kwota</th>
                 <th>Klient</th>
                 <th>Adres</th>
-                <th class="text-right">Potw.</th>
+                <th class="right">Potw.</th>
                 <th>Hash TX</th>
                 <th>Zaktualizowano</th>
               </tr>
             </thead>
             <tbody>
               <tr rv-each-d="model.deposits">
+                <td><span rv-attr-class="d.status | statusColor" rv-text="d.status | statusLabel">—</span></td>
                 <td>
-                  <span rv-attr-class="d.status | statusColor"
-                    class="status-pill"
-                    rv-text="d.status | statusLabel">—</span>
+                  <span class="font-geist font-bold text-on-surface tabular-nums" rv-text="d.amountDisplay">—</span>
+                  <span class="text-[11px] text-on-surface-variant ml-1">BTC</span>
                 </td>
-                <td class="text-white font-semibold tabular-nums">
-                  <span rv-text="d.amountDisplay">—</span>
-                  <span class="text-xs text-gray-500 font-normal ml-1">BTC</span>
-                </td>
-                <td class="text-gray-300" rv-text="d.customerRef | defaultStr (d.customerId | truncate16) | defaultStr '—'">—</td>
-                <td class="mono text-gray-400" rv-text="d.address | truncate24">—</td>
-                <td class="text-right tabular-nums"
-                  rv-class-text-green-400="d.confirmations | gt0"
-                  rv-class-text-yellow-400="d.confirmations | eq0"
+                <td class="text-on-surface-variant" rv-text="d.customerRef | defaultStr (d.customerId | truncate16) | defaultStr '—'">—</td>
+                <td class="mono text-on-surface-variant text-xs" rv-text="d.address | truncate24">—</td>
+                <td class="right tabular-nums font-geist"
+                  rv-class-text-tertiary="d.confirmations | gt0"
+                  rv-class-text-secondary="d.confirmations | eq0"
                   rv-text="d.confirmations">0</td>
-                <td class="mono text-gray-500" rv-text="d.txHash | truncate16 | defaultStr '—'">—</td>
-                <td class="text-gray-500 text-xs" rv-text="d.updatedAt | isodate">—</td>
+                <td class="mono text-on-surface-variant text-xs" rv-text="d.txHash | truncate16 | defaultStr '—'">—</td>
+                <td class="text-on-surface-variant text-xs" rv-text="d.updatedAt | isodate">—</td>
               </tr>
             </tbody>
           </table>
-          <p rv-show="model.deposits | isEmpty"
-            class="text-center text-gray-500 text-sm py-10">
-            Brak depozytów. Zarejestruj adres do monitorowania i wyślij BTC.
-          </p>
         </div>
-      </div>
+        <p rv-show="model.deposits | isEmpty" class="text-center text-on-surface-variant text-sm py-12">
+          Brak depozytów. Zarejestruj adres do monitorowania i wyślij BTC.
+        </p>
+      </section>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════ PAYMENTS TAB -->
+  <!-- ══════════════════════════════════════════ PAYMENTS TAB -->
   <div rv-show="model.tab | eq 'payments'">
     <div rv-show="model.chainApiConnected">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
+      <div class="mb-8">
+        <h2 class="section-title">Płatności</h2>
+        <p class="section-subtitle">Żądania płatności Bitcoin</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
         <!-- Create form -->
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Nowe żądanie płatności</h3>
-          <div class="space-y-3">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-5">Nowe żądanie płatności</h4>
+          <div class="space-y-4">
             <div>
-              <label class="label">Portfel</label>
-              <select rv-value="model.payReqForm.walletId" class="select">
+              <label class="form-label">Portfel</label>
+              <select rv-value="model.payReqForm.walletId" class="gl-select">
                 <option value="">Wybierz portfel…</option>
                 <option rv-each-w="model.wallets" rv-value="w.id" rv-text="w.name"></option>
               </select>
             </div>
             <div>
-              <label class="label">Adres BTC (depozytowy)</label>
-              <input type="text" rv-value="model.payReqForm.address" class="input mono" placeholder="bcrt1q…">
+              <label class="form-label">Adres BTC</label>
+              <input type="text" rv-value="model.payReqForm.address" class="gl-input mono" placeholder="bcrt1q…">
             </div>
             <div>
-              <label class="label">Kwota (BTC)</label>
-              <input type="number" rv-value="model.payReqForm.amount" class="input"
-                step="0.00000001" min="0.00000001" placeholder="0.001">
+              <label class="form-label">Kwota (BTC)</label>
+              <input type="number" rv-value="model.payReqForm.amount" class="gl-input" step="0.00000001" min="0.00000001" placeholder="0.001">
             </div>
             <div>
-              <label class="label">Referencja <span class="text-gray-500">(opcjonalnie)</span></label>
-              <input type="text" rv-value="model.payReqForm.reference" class="input" placeholder="zamówienie-123">
+              <label class="form-label">Referencja <span class="normal-case text-outline">(opcjonalnie)</span></label>
+              <input type="text" rv-value="model.payReqForm.reference" class="gl-input" placeholder="zamówienie-123">
             </div>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="label">Wygasa (min)</label>
-                <input type="number" rv-value="model.payReqForm.expiresMinutes" class="input" placeholder="60">
+                <label class="form-label">Wygasa (min)</label>
+                <input type="number" rv-value="model.payReqForm.expiresMinutes" class="gl-input" placeholder="60">
               </div>
               <div>
-                <label class="label">Min. potwierdzeń</label>
-                <input type="number" rv-value="model.payReqForm.confirmationsRequired" class="input" min="1" placeholder="1">
+                <label class="form-label">Min. potw.</label>
+                <input type="number" rv-value="model.payReqForm.confirmationsRequired" class="gl-input" min="1" placeholder="1">
               </div>
             </div>
-            <div rv-show="model.customerId"
-              class="text-xs text-indigo-300 bg-indigo-900/20 rounded-lg px-3 py-2">
-              Klient: <span class="font-medium" rv-text="model.customerName">—</span>
+            <div rv-show="model.customerId" class="text-xs text-secondary bg-secondary/5 border border-secondary/20 rounded-lg px-3 py-2 font-geist">
+              Klient: <span class="font-bold" rv-text="model.customerName">—</span>
             </div>
             <button rv-on-click="ctrl.createPaymentRequest" class="btn-primary w-full">Utwórz żądanie</button>
           </div>
         </div>
 
         <!-- List -->
-        <div class="card lg:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">Żądania płatności
-              <span class="text-gray-500 font-normal text-xs ml-1">GET /v1/payment-requests</span>
-            </h3>
+        <div class="glass-card rounded-xl overflow-hidden lg:col-span-2">
+          <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+            <div>
+              <h4 class="font-geist font-semibold text-on-surface">Żądania płatności</h4>
+              <p class="text-[11px] text-on-surface-variant mt-0.5 font-geist">GET /v1/payment-requests</p>
+            </div>
             <button rv-on-click="ctrl.loadPaymentRequests" class="btn-ghost text-xs">Odśwież</button>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full data">
+            <table class="data">
               <thead>
                 <tr>
-                  <th>Status</th>
-                  <th>Kwota</th>
-                  <th>Referencja</th>
-                  <th>Adres</th>
-                  <th>Klient</th>
-                  <th class="text-right">Akcje</th>
+                  <th>Status</th><th>Kwota</th><th>Referencja</th>
+                  <th>Adres</th><th>Klient</th><th class="right">Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 <tr rv-each-pr="model.paymentRequests">
-                  <td>
-                    <span rv-attr-class="pr.status | statusColor"
-                      class="status-pill" rv-text="pr.status | statusLabel">—</span>
-                  </td>
-                  <td class="text-white font-medium tabular-nums">
+                  <td><span rv-attr-class="pr.status | statusColor" rv-text="pr.status | statusLabel">—</span></td>
+                  <td class="font-geist font-bold tabular-nums">
                     <span rv-text="pr.amountDisplay">—</span>
-                    <span class="text-xs text-gray-500 ml-1">BTC</span>
+                    <span class="text-xs text-on-surface-variant ml-1 font-normal">BTC</span>
                   </td>
-                  <td class="text-gray-300" rv-text="pr.reference | defaultStr '—'">—</td>
-                  <td class="mono text-gray-400" rv-text="pr.address | truncate20">—</td>
-                  <td class="mono text-gray-500" rv-text="pr.customerId | truncate16 | defaultStr '—'">—</td>
-                  <td class="text-right">
+                  <td class="text-on-surface-variant" rv-text="pr.reference | defaultStr '—'">—</td>
+                  <td class="mono text-on-surface-variant text-xs" rv-text="pr.address | truncate20">—</td>
+                  <td class="mono text-on-surface-variant text-xs" rv-text="pr.customerId | truncate16 | defaultStr '—'">—</td>
+                  <td class="right">
                     <button rv-show="pr.status | eq 'created'" class="btn-danger"
                       rv-attr-data-id="pr.id" rv-on-click="ctrl.cancelPaymentRequest">Anuluj</button>
                   </td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.paymentRequests | isEmpty"
-              class="text-center text-gray-500 text-sm py-10">Brak żądań płatności.</p>
           </div>
+          <p rv-show="model.paymentRequests | isEmpty" class="text-center text-on-surface-variant text-sm py-10">Brak żądań płatności.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════ LEDGER TAB -->
+  <!-- ══════════════════════════════════════════ LEDGER TAB -->
   <div rv-show="model.tab | eq 'ledger'">
     <div rv-show="model.chainApiConnected">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="mb-8">
+        <h2 class="section-title">Księgowość</h2>
+        <p class="section-subtitle">Konta i wpisy księgowe</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
         <!-- Accounts -->
-        <div class="card">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">Konta księgowe
-              <span class="text-gray-500 font-normal text-xs ml-1">GET /v1/ledger/accounts</span>
-            </h3>
+        <div class="glass-card rounded-xl overflow-hidden">
+          <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+            <div>
+              <h4 class="font-geist font-semibold text-on-surface">Konta księgowe</h4>
+              <p class="text-[11px] text-on-surface-variant mt-0.5 font-geist">GET /v1/ledger/accounts</p>
+            </div>
             <button rv-on-click="ctrl.loadLedgerAccounts" class="btn-ghost text-xs">Odśwież</button>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full data">
-              <thead><tr><th>Nazwa</th><th>Typ</th><th class="text-right">Wpisy</th></tr></thead>
+            <table class="data">
+              <thead><tr><th>Nazwa</th><th>Typ</th><th class="right">Wpisy</th></tr></thead>
               <tbody>
                 <tr rv-each-la="model.ledgerAccounts">
-                  <td class="text-white font-medium" rv-text="la.name | defaultStr '—'">—</td>
-                  <td class="text-gray-400 text-xs" rv-text="la.accountType | defaultStr '—'">—</td>
-                  <td class="text-right">
-                    <button class="btn-ghost text-xs py-1"
-                      rv-attr-data-id="la.id" rv-on-click="ctrl.selectLedgerAccount">Wpisy →</button>
+                  <td class="text-on-surface font-medium font-geist" rv-text="la.name | defaultStr '—'">—</td>
+                  <td class="text-on-surface-variant text-xs" rv-text="la.accountType | defaultStr '—'">—</td>
+                  <td class="right">
+                    <button class="btn-ghost text-xs" rv-attr-data-id="la.id" rv-on-click="ctrl.selectLedgerAccount">
+                      Wpisy →
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.ledgerAccounts | isEmpty"
-              class="text-center text-gray-500 text-sm py-8">Brak kont.</p>
           </div>
+          <p rv-show="model.ledgerAccounts | isEmpty" class="text-center text-on-surface-variant text-sm py-8">Brak kont.</p>
         </div>
 
         <!-- Entries -->
-        <div class="card">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">
+        <div class="glass-card rounded-xl overflow-hidden">
+          <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+            <h4 class="font-geist font-semibold text-on-surface">
               Wpisy
-              <span rv-show="model.selectedLedgerAccountId"
-                class="text-gray-500 font-normal text-xs ml-1"
-                rv-text="model.selectedLedgerAccountId | truncate20"></span>
-            </h3>
+              <span rv-show="model.selectedLedgerAccountId" class="text-on-surface-variant font-normal text-xs ml-2 font-geist" rv-text="model.selectedLedgerAccountId | truncate20"></span>
+            </h4>
             <button rv-on-click="ctrl.loadLedgerEntries" class="btn-ghost text-xs">Odśwież</button>
           </div>
-          <div rv-hide="model.selectedLedgerAccountId"
-            class="text-center text-gray-500 text-sm py-10">
+          <div rv-hide="model.selectedLedgerAccountId" class="text-center text-on-surface-variant text-sm py-12">
             Wybierz konto, aby zobaczyć wpisy.
           </div>
           <div rv-show="model.selectedLedgerAccountId" class="overflow-x-auto">
-            <table class="w-full data">
+            <table class="data">
               <thead>
-                <tr>
-                  <th>Typ</th>
-                  <th class="text-right">Kwota (sat)</th>
-                  <th class="text-right">Sal. bieżące</th>
-                  <th>Data</th>
-                </tr>
+                <tr><th>Typ</th><th class="right">Kwota (sat)</th><th class="right">Sal. bieżące</th><th>Data</th></tr>
               </thead>
               <tbody>
                 <tr rv-each-le="model.ledgerEntries">
-                  <td class="text-gray-300" rv-text="le.type">—</td>
-                  <td class="text-right tabular-nums font-medium"
-                    rv-class-text-green-400="le.amountRaw | positive"
-                    rv-class-text-red-400="le.amountRaw | negative"
+                  <td class="text-on-surface-variant" rv-text="le.type">—</td>
+                  <td class="right tabular-nums font-geist font-bold"
+                    rv-class-text-tertiary="le.amountRaw | positive"
+                    rv-class-text-error="le.amountRaw | negative"
                     rv-text="le.amountRaw | satsFromRaw">—</td>
-                  <td class="text-right tabular-nums text-gray-300"
-                    rv-text="le.balanceSettledRaw | satsFromRaw">—</td>
-                  <td class="text-gray-500 text-xs" rv-text="le.createdAt | isodate">—</td>
+                  <td class="right tabular-nums text-on-surface-variant" rv-text="le.balanceSettledRaw | satsFromRaw">—</td>
+                  <td class="text-on-surface-variant text-xs" rv-text="le.createdAt | isodate">—</td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.ledgerEntries | isEmpty"
-              class="text-center text-gray-500 text-sm py-6">Brak wpisów.</p>
           </div>
+          <p rv-show="model.ledgerEntries | isEmpty" class="text-center text-on-surface-variant text-sm py-6">Brak wpisów.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════ CUSTOMERS TAB -->
+  <!-- ══════════════════════════════════════════ CUSTOMERS TAB -->
   <div rv-show="model.tab | eq 'customers'">
     <div rv-show="model.chainApiConnected">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="mb-8">
+        <h2 class="section-title">Klienci</h2>
+        <p class="section-subtitle">Zarządzaj kontami klientów</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
         <!-- Create form -->
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Nowy klient</h3>
-          <div class="space-y-3">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-5">Nowy klient</h4>
+          <div class="space-y-4">
             <div>
-              <label class="label">Referencja <span class="text-gray-500">(zewnętrzne ID)</span></label>
-              <input type="text" rv-value="model.customerForm.reference" class="input" placeholder="np. user-123">
+              <label class="form-label">Referencja <span class="normal-case text-outline">(zewnętrzne ID)</span></label>
+              <input type="text" rv-value="model.customerForm.reference" class="gl-input" placeholder="np. user-123">
             </div>
             <div>
-              <label class="label">Metadane <span class="text-gray-500">(JSON, opcjonalnie)</span></label>
-              <input type="text" rv-value="model.customerForm.metadata" class="input mono"
-                placeholder='{"name":"Anna Kowalska"}'>
+              <label class="form-label">Metadane <span class="normal-case text-outline">(JSON, opcjonalnie)</span></label>
+              <input type="text" rv-value="model.customerForm.metadata" class="gl-input mono" placeholder='{"name":"Anna"}'>
             </div>
             <button rv-on-click="ctrl.createCustomer" class="btn-primary w-full">Utwórz klienta</button>
           </div>
         </div>
 
         <!-- List -->
-        <div class="card lg:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">Klienci
-              <span class="text-gray-500 font-normal text-xs ml-1">GET /v1/customers</span>
-            </h3>
+        <div class="glass-card rounded-xl overflow-hidden lg:col-span-2">
+          <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+            <div>
+              <h4 class="font-geist font-semibold text-on-surface">Klienci</h4>
+              <p class="text-[11px] text-on-surface-variant mt-0.5 font-geist">GET /v1/customers</p>
+            </div>
             <button rv-on-click="ctrl.loadCustomers" class="btn-ghost text-xs">Odśwież</button>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full data">
-              <thead><tr><th>Referencja</th><th>Status</th><th>Utworzony</th><th class="text-right">Akcje</th></tr></thead>
+            <table class="data">
+              <thead><tr><th>Referencja</th><th>Status</th><th>Utworzony</th><th class="right">Akcje</th></tr></thead>
               <tbody>
                 <tr rv-each-c="model.customers">
                   <td>
-                    <div class="text-white font-medium" rv-text="c.reference | defaultStr '—'">—</div>
-                    <div class="mono text-gray-500 text-xs mt-0.5" rv-text="c.id | truncate20">—</div>
+                    <div class="text-on-surface font-medium font-geist" rv-text="c.reference | defaultStr '—'">—</div>
+                    <div class="mono text-on-surface-variant text-xs mt-0.5" rv-text="c.id | truncate20">—</div>
                   </td>
-                  <td>
-                    <span rv-attr-class="c.status | statusColor" class="status-pill"
-                      rv-text="c.status | statusLabel">—</span>
-                  </td>
-                  <td class="text-gray-400 text-xs" rv-text="c.createdAt | isodate">—</td>
-                  <td class="text-right space-x-1">
-                    <button class="btn-ghost text-xs py-1"
-                      rv-attr-data-id="c.id" rv-attr-data-ref="c.reference"
-                      rv-on-click="ctrl.selectCustomer">Ustaw kontekst</button>
-                    <button rv-show="c.status | eq 'active'" class="btn-danger"
-                      rv-attr-data-id="c.id" rv-on-click="ctrl.disableCustomer">Wyłącz</button>
+                  <td><span rv-attr-class="c.status | statusColor" rv-text="c.status | statusLabel">—</span></td>
+                  <td class="text-on-surface-variant text-xs" rv-text="c.createdAt | isodate">—</td>
+                  <td class="right space-x-1">
+                    <button class="btn-ghost text-xs" rv-attr-data-id="c.id" rv-attr-data-ref="c.reference" rv-on-click="ctrl.selectCustomer">Ustaw</button>
+                    <button rv-show="c.status | eq 'active'" class="btn-danger" rv-attr-data-id="c.id" rv-on-click="ctrl.disableCustomer">Wyłącz</button>
                   </td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.customers | isEmpty"
-              class="text-center text-gray-500 text-sm py-8">Brak klientów.</p>
           </div>
+          <p rv-show="model.customers | isEmpty" class="text-center text-on-surface-variant text-sm py-8">Brak klientów.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════ WALLETS TAB -->
+  <!-- ══════════════════════════════════════════ WALLETS TAB -->
   <div rv-show="model.tab | eq 'wallets'">
     <div rv-show="model.chainApiConnected">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="mb-8">
+        <h2 class="section-title">Portfele</h2>
+        <p class="section-subtitle">Portfele Bitcoin przypisane do tenanta</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
         <!-- Create form -->
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Nowy portfel</h3>
-          <div class="space-y-3">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-5">Nowy portfel</h4>
+          <div class="space-y-4">
             <div>
-              <label class="label">Nazwa</label>
-              <input type="text" rv-value="model.walletForm.name" class="input" placeholder="np. Portfel depozytowy">
+              <label class="form-label">Nazwa</label>
+              <input type="text" rv-value="model.walletForm.name" class="gl-input" placeholder="Portfel depozytowy">
             </div>
             <div>
-              <label class="label">Typ</label>
-              <select rv-value="model.walletForm.type" class="select">
+              <label class="form-label">Typ</label>
+              <select rv-value="model.walletForm.type" class="gl-select">
                 <option value="watch_only">watch_only</option>
                 <option value="external_signer">external_signer</option>
               </select>
             </div>
             <div>
-              <label class="label">Rola</label>
-              <select rv-value="model.walletForm.walletRole" class="select">
+              <label class="form-label">Rola</label>
+              <select rv-value="model.walletForm.walletRole" class="gl-select">
                 <option value="customer_deposits">customer_deposits</option>
                 <option value="tenant_hot">tenant_hot</option>
                 <option value="tenant_cold">tenant_cold</option>
@@ -607,238 +825,234 @@ docker compose up -d   # restart proxy</pre>
         </div>
 
         <!-- List -->
-        <div class="card lg:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">Portfele
-              <span class="text-gray-500 font-normal text-xs ml-1">GET /v1/wallets</span>
-            </h3>
+        <div class="glass-card rounded-xl overflow-hidden lg:col-span-2">
+          <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+            <div>
+              <h4 class="font-geist font-semibold text-on-surface">Portfele</h4>
+              <p class="text-[11px] text-on-surface-variant mt-0.5 font-geist">GET /v1/wallets</p>
+            </div>
             <button rv-on-click="ctrl.loadWallets" class="btn-ghost text-xs">Odśwież</button>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full data">
+            <table class="data">
               <thead><tr><th>Nazwa</th><th>Typ</th><th>Rola</th><th>Status</th></tr></thead>
               <tbody>
                 <tr rv-each-w="model.wallets">
                   <td>
-                    <div class="text-white font-medium" rv-text="w.name">—</div>
-                    <div class="mono text-gray-500 text-xs mt-0.5" rv-text="w.id | truncate20">—</div>
+                    <div class="text-on-surface font-medium font-geist" rv-text="w.name">—</div>
+                    <div class="mono text-on-surface-variant text-xs mt-0.5" rv-text="w.id | truncate20">—</div>
                   </td>
-                  <td class="text-gray-300 text-xs" rv-text="w.type">—</td>
-                  <td class="text-gray-300 text-xs" rv-text="w.walletRole | defaultStr '—'">—</td>
-                  <td>
-                    <span rv-attr-class="w.status | statusColor" class="status-pill"
-                      rv-text="w.status | statusLabel">—</span>
-                  </td>
+                  <td class="text-on-surface-variant text-xs" rv-text="w.type">—</td>
+                  <td class="text-on-surface-variant text-xs" rv-text="w.walletRole | defaultStr '—'">—</td>
+                  <td><span rv-attr-class="w.status | statusColor" rv-text="w.status | statusLabel">—</span></td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.wallets | isEmpty"
-              class="text-center text-gray-500 text-sm py-8">Brak portfeli. Utwórz powyżej.</p>
           </div>
+          <p rv-show="model.wallets | isEmpty" class="text-center text-on-surface-variant text-sm py-8">Brak portfeli.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════ WEBHOOKS TAB -->
+  <!-- ══════════════════════════════════════════ WEBHOOKS TAB -->
   <div rv-show="model.tab | eq 'webhooks'">
     <div rv-show="model.chainApiConnected">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+      <div class="mb-8">
+        <h2 class="section-title">Webhooki</h2>
+        <p class="section-subtitle">Konfiguracja zdarzeń i dostaw</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter mb-gutter">
         <!-- Create form -->
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Nowy webhook</h3>
-          <div class="space-y-3">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-5">Nowy webhook</h4>
+          <div class="space-y-4">
             <div>
-              <label class="label">URL endpointu</label>
-              <input type="text" rv-value="model.webhookForm.url" class="input mono" placeholder="https://…/webhook">
+              <label class="form-label">URL endpointu</label>
+              <input type="text" rv-value="model.webhookForm.url" class="gl-input mono" placeholder="https://…/webhook">
             </div>
             <div>
-              <label class="label">Zdarzenia <span class="text-gray-500">(przecinkami)</span></label>
-              <input type="text" rv-value="model.webhookForm.events" class="input mono"
-                placeholder="deposit.detected,deposit.confirmed">
+              <label class="form-label">Zdarzenia <span class="normal-case text-outline">(przecinkami)</span></label>
+              <input type="text" rv-value="model.webhookForm.events" class="gl-input mono" placeholder="deposit.detected,deposit.confirmed">
             </div>
             <div>
-              <label class="label">Sekret HMAC <span class="text-gray-500">(opcjonalnie)</span></label>
-              <input type="text" rv-value="model.webhookForm.secret" class="input mono" placeholder="mój-sekret">
+              <label class="form-label">Sekret HMAC <span class="normal-case text-outline">(opcjonalnie)</span></label>
+              <input type="text" rv-value="model.webhookForm.secret" class="gl-input mono" placeholder="mój-sekret">
             </div>
             <button rv-on-click="ctrl.createWebhook" class="btn-primary w-full">Utwórz webhook</button>
           </div>
         </div>
 
         <!-- Webhooks list -->
-        <div class="card lg:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">Webhooki
-              <span class="text-gray-500 font-normal text-xs ml-1">GET /v1/webhooks</span>
-            </h3>
+        <div class="glass-card rounded-xl overflow-hidden lg:col-span-2">
+          <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+            <div>
+              <h4 class="font-geist font-semibold text-on-surface">Webhooki</h4>
+              <p class="text-[11px] text-on-surface-variant mt-0.5 font-geist">GET /v1/webhooks</p>
+            </div>
             <button rv-on-click="ctrl.loadWebhooks" class="btn-ghost text-xs">Odśwież</button>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full data">
-              <thead><tr><th>URL</th><th>Zdarzenia</th><th>Aktywny</th><th class="text-right">Akcje</th></tr></thead>
+            <table class="data">
+              <thead><tr><th>URL</th><th>Zdarzenia</th><th>Aktywny</th><th class="right">Akcje</th></tr></thead>
               <tbody>
                 <tr rv-each-wh="model.webhooks">
-                  <td class="mono text-gray-300" rv-text="wh.url | truncate32">—</td>
-                  <td class="text-gray-400 text-xs" rv-text="wh.events | truncate40">—</td>
+                  <td class="mono text-on-surface-variant text-xs" rv-text="wh.url | truncate32">—</td>
+                  <td class="text-on-surface-variant text-xs" rv-text="wh.events | truncate40">—</td>
                   <td>
-                    <span rv-show="wh.isActive" class="badge bg-green-900/50 text-green-300">✓ tak</span>
-                    <span rv-hide="wh.isActive" class="badge bg-gray-800 text-gray-500">nie</span>
+                    <span rv-show="wh.isActive" class="sp sp-success">aktywny</span>
+                    <span rv-hide="wh.isActive" class="sp sp-neutral">nieaktywny</span>
                   </td>
-                  <td class="text-right space-x-1">
-                    <button class="btn-ghost text-xs py-1"
-                      rv-attr-data-id="wh.id" rv-on-click="ctrl.testWebhook">Test</button>
-                    <button class="btn-danger"
-                      rv-attr-data-id="wh.id" rv-on-click="ctrl.deleteWebhook">Usuń</button>
+                  <td class="right space-x-1">
+                    <button class="btn-ghost text-xs" rv-attr-data-id="wh.id" rv-on-click="ctrl.testWebhook">Test</button>
+                    <button class="btn-danger" rv-attr-data-id="wh.id" rv-on-click="ctrl.deleteWebhook">Usuń</button>
                   </td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.webhooks | isEmpty"
-              class="text-center text-gray-500 text-sm py-6">Brak webhooków.</p>
           </div>
+          <p rv-show="model.webhooks | isEmpty" class="text-center text-on-surface-variant text-sm py-6">Brak webhooków.</p>
         </div>
       </div>
 
       <!-- Deliveries -->
-      <div class="card">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold text-white">Ostatnie dostawy
-            <span class="text-gray-500 font-normal text-xs ml-1">GET /v1/webhook-deliveries</span>
-          </h3>
+      <div class="glass-card rounded-xl overflow-hidden">
+        <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+          <div>
+            <h4 class="font-geist font-semibold text-on-surface">Ostatnie dostawy</h4>
+            <p class="text-[11px] text-on-surface-variant mt-0.5 font-geist">GET /v1/webhook-deliveries</p>
+          </div>
           <button rv-on-click="ctrl.loadWebhookDeliveries" class="btn-ghost text-xs">Odśwież</button>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full data">
-            <thead><tr><th>Zdarzenie</th><th>Status</th><th class="text-right">Próby</th><th>Błąd</th><th>Dostarczone</th><th class="text-right">Akcje</th></tr></thead>
+          <table class="data">
+            <thead><tr><th>Zdarzenie</th><th>Status</th><th class="right">Próby</th><th>Błąd</th><th>Dostarczone</th><th class="right">Akcje</th></tr></thead>
             <tbody>
               <tr rv-each-dlv="model.webhookDeliveries">
-                <td class="text-gray-300" rv-text="dlv.eventType">—</td>
-                <td>
-                  <span rv-attr-class="dlv.status | statusColor" class="status-pill"
-                    rv-text="dlv.status | statusLabel">—</span>
-                </td>
-                <td class="text-right text-white" rv-text="dlv.attempts">0</td>
-                <td class="text-gray-500 text-xs" rv-text="dlv.lastError | truncate40 | defaultStr '—'">—</td>
-                <td class="text-gray-400 text-xs" rv-text="dlv.deliveredAt | isodate | defaultStr '—'">—</td>
-                <td class="text-right">
-                  <button rv-show="dlv.status | neq 'sent'" class="btn-ghost text-xs py-1"
-                    rv-attr-data-id="dlv.id" rv-on-click="ctrl.retryDelivery">Ponów</button>
+                <td class="text-on-surface-variant font-geist" rv-text="dlv.eventType">—</td>
+                <td><span rv-attr-class="dlv.status | statusColor" rv-text="dlv.status | statusLabel">—</span></td>
+                <td class="right text-on-surface font-geist" rv-text="dlv.attempts">0</td>
+                <td class="text-on-surface-variant text-xs" rv-text="dlv.lastError | truncate40 | defaultStr '—'">—</td>
+                <td class="text-on-surface-variant text-xs" rv-text="dlv.deliveredAt | isodate | defaultStr '—'">—</td>
+                <td class="right">
+                  <button rv-show="dlv.status | neq 'sent'" class="btn-ghost text-xs" rv-attr-data-id="dlv.id" rv-on-click="ctrl.retryDelivery">Ponów</button>
                 </td>
               </tr>
             </tbody>
           </table>
-          <p rv-show="model.webhookDeliveries | isEmpty"
-            class="text-center text-gray-500 text-sm py-6">Brak dostaw.</p>
         </div>
+        <p rv-show="model.webhookDeliveries | isEmpty" class="text-center text-on-surface-variant text-sm py-6">Brak dostaw.</p>
       </div>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════ ADMIN TAB -->
+  <!-- ══════════════════════════════════════════ ADMIN TAB -->
   <div rv-show="model.tab | eq 'admin'">
     <div rv-show="model.chainApiConnected">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+      <div class="mb-8">
+        <h2 class="section-title">Administracja</h2>
+        <p class="section-subtitle">Konfiguracja tenantów i kluczy API</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter mb-gutter">
 
         <!-- Tenant config -->
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-1">Konfiguracja tenanta</h3>
-          <p class="text-xs text-gray-500 mb-4">
-            Aktywny tenant: <span class="text-indigo-300 font-medium" rv-text="model.tenant.name | defaultStr '—'">—</span>
-            <span class="ml-2 mono text-gray-600" rv-text="model.tenant.id | truncate20">—</span>
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-1">Konfiguracja tenanta</h4>
+          <p class="text-xs text-on-surface-variant mb-5">
+            <span class="text-secondary font-bold" rv-text="model.tenant.name | defaultStr '—'">—</span>
+            <span class="ml-2 mono text-outline" rv-text="model.tenant.id | truncate20">—</span>
           </p>
-          <div class="grid grid-cols-2 gap-4 mb-4">
-            <div class="bg-gray-800/50 rounded-lg px-4 py-3">
-              <div class="text-xs text-gray-400 mb-1">Min. potwierdzeń</div>
-              <div class="text-2xl font-bold text-white" rv-text="model.tenant.config.btcConfirmationsRequired">—</div>
+          <div class="grid grid-cols-2 gap-4 mb-5">
+            <div class="bg-surface-container rounded-lg px-4 py-3">
+              <div class="text-[11px] text-on-surface-variant mb-1 font-geist uppercase tracking-wide">Min. potwierdzeń</div>
+              <div class="text-2xl font-bold text-on-surface font-geist tabular-nums" rv-text="model.tenant.config.btcConfirmationsRequired">—</div>
             </div>
-            <div class="bg-gray-800/50 rounded-lg px-4 py-3">
-              <div class="text-xs text-gray-400 mb-1">Finalność (bloków)</div>
-              <div class="text-2xl font-bold text-white" rv-text="model.tenant.config.btcFinalityConfirmations">—</div>
+            <div class="bg-surface-container rounded-lg px-4 py-3">
+              <div class="text-[11px] text-on-surface-variant mb-1 font-geist uppercase tracking-wide">Finalność (bloków)</div>
+              <div class="text-2xl font-bold text-on-surface font-geist tabular-nums" rv-text="model.tenant.config.btcFinalityConfirmations">—</div>
             </div>
           </div>
           <div class="space-y-3">
             <div>
-              <label class="label">Min. potwierdzeń BTC</label>
-              <input type="number" rv-value="model.tenantConfigForm.btcConfirmationsRequired" class="input" min="0">
+              <label class="form-label">Min. potwierdzeń BTC</label>
+              <input type="number" rv-value="model.tenantConfigForm.btcConfirmationsRequired" class="gl-input" min="0">
             </div>
             <div>
-              <label class="label">Finalność BTC (bloki)</label>
-              <input type="number" rv-value="model.tenantConfigForm.btcFinalityConfirmations" class="input" min="1">
+              <label class="form-label">Finalność BTC (bloki)</label>
+              <input type="number" rv-value="model.tenantConfigForm.btcFinalityConfirmations" class="gl-input" min="1">
             </div>
             <button rv-on-click="ctrl.saveTenantConfig" class="btn-primary w-full">Zapisz konfigurację</button>
           </div>
         </div>
 
         <!-- API Keys -->
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Klucze API</h3>
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-5">Klucze API</h4>
           <div class="space-y-3 mb-5">
             <div>
-              <label class="label">Nazwa klucza</label>
-              <input type="text" rv-value="model.generateKeyForm.name" class="input" placeholder="dev-key">
+              <label class="form-label">Nazwa klucza</label>
+              <input type="text" rv-value="model.generateKeyForm.name" class="gl-input" placeholder="dev-key">
             </div>
             <button rv-on-click="ctrl.generateApiKey" class="btn-primary w-full">Generuj nowy klucz</button>
-            <p class="text-xs text-yellow-500">Klucz wyświetlany jest tylko raz w powiadomieniu — skopiuj go natychmiast.</p>
+            <p class="text-xs text-secondary font-geist">
+              <span class="material-symbols-outlined" style="font-size:13px;vertical-align:middle;">warning</span>
+              Klucz wyświetlany jest tylko raz — skopiuj go natychmiast.
+            </p>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full data">
+            <table class="data">
               <thead><tr><th>Nazwa</th><th>Aktywny</th><th>Ostatnie użycie</th><th>Wygasa</th></tr></thead>
               <tbody>
                 <tr rv-each-k="model.tenant.apiKeys">
-                  <td class="text-white" rv-text="k.name">—</td>
+                  <td class="text-on-surface font-geist" rv-text="k.name">—</td>
                   <td>
-                    <span rv-show="k.isActive" class="badge bg-green-900/50 text-green-300">✓</span>
-                    <span rv-hide="k.isActive" class="badge bg-gray-800 text-gray-500">nie</span>
+                    <span rv-show="k.isActive" class="sp sp-success">tak</span>
+                    <span rv-hide="k.isActive" class="sp sp-neutral">nie</span>
                   </td>
-                  <td class="text-gray-400 text-xs" rv-text="k.lastUsedAt | isodate | defaultStr 'nigdy'">—</td>
-                  <td class="text-gray-400 text-xs" rv-text="k.expiresAt | isodate | defaultStr 'brak'">—</td>
+                  <td class="text-on-surface-variant text-xs" rv-text="k.lastUsedAt | isodate | defaultStr 'nigdy'">—</td>
+                  <td class="text-on-surface-variant text-xs" rv-text="k.expiresAt | isodate | defaultStr 'brak'">—</td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.tenant.apiKeys | isEmpty"
-              class="text-center text-gray-500 text-xs py-4">Brak załadowanych kluczy.</p>
           </div>
+          <p rv-show="model.tenant.apiKeys | isEmpty" class="text-center text-on-surface-variant text-xs py-4">Brak załadowanych kluczy.</p>
         </div>
       </div>
 
       <!-- All tenants -->
-      <div class="card">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold text-white">Wszyscy tenanci
-            <span class="text-gray-500 font-normal text-xs ml-1">GET /admin/v1/tenants</span>
-          </h3>
+      <div class="glass-card rounded-xl overflow-hidden">
+        <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+          <div>
+            <h4 class="font-geist font-semibold text-on-surface">Wszyscy tenanci</h4>
+            <p class="text-[11px] text-on-surface-variant mt-0.5 font-geist">GET /admin/v1/tenants</p>
+          </div>
           <button rv-on-click="ctrl.loadAdminTenants" class="btn-ghost text-xs">Odśwież</button>
         </div>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-0">
           <div class="lg:col-span-2 overflow-x-auto">
-            <table class="w-full data">
-              <thead><tr><th>Nazwa</th><th>Status</th><th>Utworzony</th><th class="text-right">Akcje</th></tr></thead>
+            <table class="data">
+              <thead><tr><th>Nazwa</th><th>Status</th><th>Utworzony</th><th class="right">Akcje</th></tr></thead>
               <tbody>
                 <tr rv-each-t="model.adminTenants">
                   <td>
-                    <div class="text-white font-medium" rv-text="t.name">—</div>
-                    <div class="mono text-gray-500 text-xs mt-0.5" rv-text="t.id | truncate20">—</div>
-                    <span rv-show="t.isCurrent" class="text-xs text-indigo-400">aktywny</span>
+                    <div class="text-on-surface font-medium font-geist" rv-text="t.name">—</div>
+                    <div class="mono text-on-surface-variant text-xs mt-0.5" rv-text="t.id | truncate20">—</div>
+                    <span rv-show="t.isCurrent" class="text-[11px] text-secondary font-bold font-geist">aktywny</span>
                   </td>
-                  <td>
-                    <span rv-attr-class="t.status | statusColor" class="status-pill"
-                      rv-text="t.status | statusLabel">—</span>
-                  </td>
-                  <td class="text-gray-400 text-xs" rv-text="t.createdAt | isodate">—</td>
-                  <td class="text-right">
-                    <button rv-show="t.status | eq 'active'" class="btn-danger"
-                      rv-attr-data-id="t.id" rv-on-click="ctrl.disableTenant">Wyłącz</button>
+                  <td><span rv-attr-class="t.status | statusColor" rv-text="t.status | statusLabel">—</span></td>
+                  <td class="text-on-surface-variant text-xs" rv-text="t.createdAt | isodate">—</td>
+                  <td class="right">
+                    <button rv-show="t.status | eq 'active'" class="btn-danger" rv-attr-data-id="t.id" rv-on-click="ctrl.disableTenant">Wyłącz</button>
                   </td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.adminTenants | isEmpty"
-              class="text-center text-gray-500 text-sm py-4">Brak tenantów.</p>
+            <p rv-show="model.adminTenants | isEmpty" class="text-center text-on-surface-variant text-sm py-4">Brak tenantów.</p>
           </div>
-          <div>
-            <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Nowy tenant</h4>
+          <div class="p-md border-l border-white/5">
+            <h5 class="font-geist font-semibold text-on-surface-variant text-xs uppercase tracking-wider mb-4">Nowy tenant</h5>
             <div class="space-y-2">
-              <input type="text" rv-value="model.newTenantForm.name" class="input" placeholder="Nazwa tenanta">
+              <input type="text" rv-value="model.newTenantForm.name" class="gl-input" placeholder="Nazwa tenanta">
               <button rv-on-click="ctrl.createTenant" class="btn-primary w-full">Utwórz tenanta</button>
             </div>
           </div>
@@ -847,46 +1061,81 @@ docker compose up -d   # restart proxy</pre>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════ BTC NODE TAB -->
+  <!-- ══════════════════════════════════════════ BTC NODE TAB -->
   <div rv-show="model.tab | eq 'btc'">
 
+    <div class="mb-6">
+      <h2 class="section-title">BTC Node</h2>
+      <p class="section-subtitle">Bitcoin Core Regtest — kontrola i diagnostyka</p>
+    </div>
+
     <!-- BTC Subtab navigation -->
-    <nav class="flex items-center gap-1.5 mb-6 flex-wrap">
-      <button class="subtab-btn" rv-class-active="model.btcSubtab | eq 'overview'"
-        rv-on-click="ctrl.setBtcSubtab" data-tab="overview">Przegląd</button>
-      <button class="subtab-btn" rv-class-active="model.btcSubtab | eq 'mining'"
-        rv-on-click="ctrl.setBtcSubtab" data-tab="mining">Wydobycie</button>
-      <button class="subtab-btn" rv-class-active="model.btcSubtab | eq 'send'"
-        rv-on-click="ctrl.setBtcSubtab" data-tab="send">Wyślij</button>
-      <button class="subtab-btn" rv-class-active="model.btcSubtab | eq 'mempool'"
-        rv-on-click="ctrl.setBtcSubtab" data-tab="mempool">Mempool</button>
-      <button class="subtab-btn" rv-class-active="model.btcSubtab | eq 'addresses'"
-        rv-on-click="ctrl.setBtcSubtab" data-tab="addresses">Adresy</button>
-      <button class="subtab-btn" rv-class-active="model.btcSubtab | eq 'wallet'"
-        rv-on-click="ctrl.setBtcSubtab" data-tab="wallet">Portfel BTC</button>
-      <button class="subtab-btn" rv-class-active="model.btcSubtab | eq 'console'"
-        rv-on-click="ctrl.setBtcSubtab" data-tab="console">Konsola RPC</button>
-    </nav>
+    <div class="border-b border-white/8 mb-6 flex gap-0 flex-wrap">
+      <button class="subtab-btn" rv-class-subtab-active="model.btcSubtab | eq 'overview'"
+        rv-on-click="ctrl.setBtcSubtab" data-tab="overview">
+        <span class="material-symbols-outlined" style="font-size:14px;">dashboard</span>Przegląd
+      </button>
+      <button class="subtab-btn" rv-class-subtab-active="model.btcSubtab | eq 'mining'"
+        rv-on-click="ctrl.setBtcSubtab" data-tab="mining">
+        <span class="material-symbols-outlined" style="font-size:14px;">construction</span>Wydobycie
+      </button>
+      <button class="subtab-btn" rv-class-subtab-active="model.btcSubtab | eq 'send'"
+        rv-on-click="ctrl.setBtcSubtab" data-tab="send">
+        <span class="material-symbols-outlined" style="font-size:14px;">send</span>Wyślij
+      </button>
+      <button class="subtab-btn" rv-class-subtab-active="model.btcSubtab | eq 'mempool'"
+        rv-on-click="ctrl.setBtcSubtab" data-tab="mempool">
+        <span class="material-symbols-outlined" style="font-size:14px;">queue</span>Mempool
+      </button>
+      <button class="subtab-btn" rv-class-subtab-active="model.btcSubtab | eq 'addresses'"
+        rv-on-click="ctrl.setBtcSubtab" data-tab="addresses">
+        <span class="material-symbols-outlined" style="font-size:14px;">qr_code</span>Adresy
+      </button>
+      <button class="subtab-btn" rv-class-subtab-active="model.btcSubtab | eq 'wallet'"
+        rv-on-click="ctrl.setBtcSubtab" data-tab="wallet">
+        <span class="material-symbols-outlined" style="font-size:14px;">account_balance_wallet</span>Portfel BTC
+      </button>
+      <button class="subtab-btn" rv-class-subtab-active="model.btcSubtab | eq 'console'"
+        rv-on-click="ctrl.setBtcSubtab" data-tab="console">
+        <span class="material-symbols-outlined" style="font-size:14px;">terminal</span>Konsola RPC
+      </button>
+    </div>
 
     <!-- ── Overview ── -->
     <div rv-show="model.btcSubtab | eq 'overview'">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <div class="card"><div class="stat-label">Wysokość bloków</div><div class="stat-value mt-2" rv-text="model.chain.blocks">0</div><div class="mt-2 text-xs text-gray-500 mono truncate" rv-text="model.chain.bestblockhash | truncate32">—</div></div>
-        <div class="card"><div class="stat-label">Trudność</div><div class="stat-value mt-2 text-sm" rv-text="model.chain.difficulty | number">0</div><div class="mt-2 text-xs text-gray-500">Hashrate: <span rv-text="model.mining.networkhashps | hashrate">—</span></div></div>
-        <div class="card"><div class="stat-label">Mempool</div><div class="stat-value mt-2" rv-text="model.mempool.size">0</div><div class="mt-2 text-xs text-gray-500" rv-text="model.mempool.bytes | filesize">0 B</div></div>
-        <div class="card"><div class="stat-label">Saldo portfela</div><div class="stat-value mt-2 text-btc" rv-text="model.walletBalance">0</div><div class="mt-2 text-xs text-gray-500">Niepotwierdzono: <span class="text-yellow-400" rv-text="model.walletUnconfirmed">0</span></div></div>
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-gutter mb-6">
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Wysokość bloków</p>
+          <div class="stat-value mt-2 text-secondary" rv-text="model.chain.blocks">0</div>
+          <div class="mt-2 text-[11px] text-on-surface-variant mono truncate" rv-text="model.chain.bestblockhash | truncate32">—</div>
+        </div>
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Trudność</p>
+          <div class="stat-value mt-2 text-sm font-geist" rv-text="model.chain.difficulty | number">0</div>
+          <div class="mt-2 text-xs text-on-surface-variant">Hashrate: <span rv-text="model.mining.networkhashps | hashrate">—</span></div>
+        </div>
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Mempool</p>
+          <div class="stat-value mt-2" rv-text="model.mempool.size">0</div>
+          <div class="mt-2 text-xs text-on-surface-variant" rv-text="model.mempool.bytes | filesize">0 B</div>
+        </div>
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Saldo portfela</p>
+          <div class="stat-value mt-2 text-secondary" rv-text="model.walletBalance">0</div>
+          <div class="mt-2 text-xs text-on-surface-variant">Niepotw.: <span class="text-secondary" rv-text="model.walletUnconfirmed">0</span></div>
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Szybkie akcje</h3>
-          <div class="space-y-3">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Szybkie akcje</h4>
+          <div class="space-y-4">
             <div>
-              <label class="label">Wykopaj N bloków</label>
+              <label class="form-label">Wykopaj N bloków</label>
               <div class="flex gap-2">
-                <input type="number" rv-value="model.quickMineCount" min="1" max="1000" class="input w-20" placeholder="1">
-                <input type="text" rv-value="model.quickMineAddr" placeholder="adres (opcjonalnie)" class="input flex-1">
-                <button rv-on-click="ctrl.quickMine" class="btn-btc whitespace-nowrap">⛏ Wydobądź</button>
+                <input type="number" rv-value="model.quickMineCount" min="1" max="1000" class="gl-input w-20" placeholder="1">
+                <input type="text" rv-value="model.quickMineAddr" placeholder="adres (opcjonalnie)" class="gl-input flex-1">
+                <button rv-on-click="ctrl.quickMine" class="btn-primary whitespace-nowrap">⛏ Wydobądź</button>
               </div>
             </div>
             <div class="flex gap-2 flex-wrap">
@@ -897,49 +1146,75 @@ docker compose up -d   # restart proxy</pre>
             </div>
           </div>
         </div>
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Info o łańcuchu</h3>
-          <dl class="space-y-2 text-sm">
-            <div class="flex justify-between"><dt class="text-gray-400">Sieć</dt><dd class="text-btc font-medium" rv-text="model.chain.chain">—</dd></div>
-            <div class="flex justify-between"><dt class="text-gray-400">Bloki</dt><dd class="text-white" rv-text="model.chain.blocks">—</dd></div>
-            <div class="flex justify-between"><dt class="text-gray-400">Czas medianowy</dt><dd class="text-white" rv-text="model.chain.mediantime | unixdate">—</dd></div>
-            <div class="flex justify-between"><dt class="text-gray-400">Rozmiar na dysku</dt><dd class="text-white" rv-text="model.chain.size_on_disk | filesize">—</dd></div>
-            <div class="flex justify-between"><dt class="text-gray-400">Wersja node</dt><dd class="text-white" rv-text="model.network.subversion">—</dd></div>
-            <div class="flex justify-between"><dt class="text-gray-400">Połączenia</dt><dd class="text-white" rv-text="model.network.connections">—</dd></div>
+
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Info o łańcuchu</h4>
+          <dl class="space-y-2.5 text-sm">
+            <div class="flex justify-between">
+              <dt class="text-on-surface-variant">Sieć</dt>
+              <dd class="text-secondary font-bold font-geist" rv-text="model.chain.chain">—</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-on-surface-variant">Bloki</dt>
+              <dd class="text-on-surface font-geist tabular-nums" rv-text="model.chain.blocks">—</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-on-surface-variant">Czas medianowy</dt>
+              <dd class="text-on-surface" rv-text="model.chain.mediantime | unixdate">—</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-on-surface-variant">Rozmiar na dysku</dt>
+              <dd class="text-on-surface" rv-text="model.chain.size_on_disk | filesize">—</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-on-surface-variant">Wersja node</dt>
+              <dd class="text-on-surface mono text-xs" rv-text="model.network.subversion">—</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-on-surface-variant">Połączenia</dt>
+              <dd class="text-on-surface" rv-text="model.network.connections">—</dd>
+            </div>
           </dl>
         </div>
-        <div class="card lg:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">Ostatnie bloki</h3>
+
+        <div class="glass-card rounded-xl overflow-hidden lg:col-span-2">
+          <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+            <h4 class="font-geist font-semibold text-on-surface">Ostatnie bloki</h4>
             <button rv-on-click="ctrl.loadRecentBlocks" class="btn-ghost text-xs">Odśwież</button>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full data">
-              <thead><tr><th>Wysokość</th><th>Hash</th><th class="text-right">TX</th><th class="text-right">Rozmiar</th><th class="text-right">Czas</th></tr></thead>
+            <table class="data">
+              <thead><tr><th>Wysokość</th><th>Hash</th><th class="right">TX</th><th class="right">Rozmiar</th><th class="right">Czas</th></tr></thead>
               <tbody>
                 <tr rv-each-blk="model.recentBlocks">
-                  <td class="text-btc font-semibold" rv-text="blk.height"></td>
-                  <td class="mono text-gray-300 max-w-xs truncate" rv-text="blk.hash | truncate64"></td>
-                  <td class="text-right text-white" rv-text="blk.nTx"></td>
-                  <td class="text-right text-gray-300" rv-text="blk.size | filesize"></td>
-                  <td class="text-right text-gray-400 text-xs" rv-text="blk.time | unixdate"></td>
+                  <td class="text-secondary font-bold font-geist tabular-nums" rv-text="blk.height"></td>
+                  <td class="mono text-on-surface-variant text-xs" rv-text="blk.hash | truncate64"></td>
+                  <td class="right text-on-surface font-geist" rv-text="blk.nTx"></td>
+                  <td class="right text-on-surface-variant" rv-text="blk.size | filesize"></td>
+                  <td class="right text-on-surface-variant text-xs" rv-text="blk.time | unixdate"></td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.recentBlocks | isEmpty" class="text-center text-gray-500 text-sm py-6">Brak bloków — wydobądź kilka!</p>
           </div>
+          <p rv-show="model.recentBlocks | isEmpty" class="text-center text-on-surface-variant text-sm py-8">Brak bloków — wydobądź kilka!</p>
         </div>
       </div>
     </div>
 
     <!-- ── Mining ── -->
     <div rv-show="model.btcSubtab | eq 'mining'">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Wydobycie do adresu</h3>
-          <div class="space-y-3">
-            <div><label class="label">Adres docelowy</label><input type="text" rv-value="model.mine.address" class="input mono" placeholder="bcrt1q… (puste = pierwszy adres portfela)"></div>
-            <div><label class="label">Liczba bloków</label><input type="number" rv-value="model.mine.count" min="1" max="10000" class="input" placeholder="1"></div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Wydobycie do adresu</h4>
+          <div class="space-y-4">
+            <div>
+              <label class="form-label">Adres docelowy</label>
+              <input type="text" rv-value="model.mine.address" class="gl-input mono" placeholder="bcrt1q… (puste = pierwszy adres portfela)">
+            </div>
+            <div>
+              <label class="form-label">Liczba bloków</label>
+              <input type="number" rv-value="model.mine.count" min="1" max="10000" class="gl-input" placeholder="1">
+            </div>
             <div class="flex gap-2 flex-wrap">
               <button rv-on-click="ctrl.mine1"   class="btn-secondary text-xs">1</button>
               <button rv-on-click="ctrl.mine6"   class="btn-secondary text-xs">6</button>
@@ -947,51 +1222,65 @@ docker compose up -d   # restart proxy</pre>
               <button rv-on-click="ctrl.mine101" class="btn-secondary text-xs">101</button>
               <button rv-on-click="ctrl.mine144" class="btn-secondary text-xs">144</button>
             </div>
-            <button rv-on-click="ctrl.mineToAddress" class="btn-btc w-full">⛏ Wydobywaj</button>
+            <button rv-on-click="ctrl.mineToAddress" class="btn-primary w-full">⛏ Wydobywaj</button>
           </div>
         </div>
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Wynik</h3>
-          <div rv-show="model.mine.loading" class="text-center text-gray-400 py-8">⛏ Wydobywanie…</div>
+
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Wynik</h4>
+          <div rv-show="model.mine.loading" class="text-center text-on-surface-variant py-8">⛏ Wydobywanie…</div>
           <div rv-hide="model.mine.loading">
             <div rv-show="model.mine.result" class="space-y-3">
-              <div><div class="label">Wydobyte bloki</div><div class="text-3xl font-bold text-white" rv-text="model.mine.blocksMinedCount">0</div></div>
-              <div><div class="label">Nowa wysokość</div><div class="text-white font-medium" rv-text="model.chain.blocks">—</div></div>
-              <div><div class="label">Ostatnie hashe</div><div class="space-y-1 mt-1"><div rv-each-h="model.mine.recentHashes" class="mono text-gray-400 truncate text-xs" rv-text="h"></div></div></div>
+              <div>
+                <div class="form-label">Wydobyte bloki</div>
+                <div class="text-3xl font-bold text-on-surface font-geist tabular-nums" rv-text="model.mine.blocksMinedCount">0</div>
+              </div>
+              <div>
+                <div class="form-label">Nowa wysokość</div>
+                <div class="text-on-surface font-geist font-bold" rv-text="model.chain.blocks">—</div>
+              </div>
+              <div>
+                <div class="form-label">Ostatnie hashe</div>
+                <div class="space-y-1 mt-1">
+                  <div rv-each-h="model.mine.recentHashes" class="mono text-on-surface-variant truncate text-xs" rv-text="h"></div>
+                </div>
+              </div>
             </div>
-            <div rv-hide="model.mine.result" class="text-center text-gray-500 text-sm py-8">Brak wydobycia.</div>
+            <div rv-hide="model.mine.result" class="text-center text-on-surface-variant text-sm py-8">Brak wydobycia.</div>
           </div>
         </div>
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-2">Scenariusze</h3>
-          <p class="text-xs text-gray-400 mb-4">Wyślij BTC + wykopaj bloki żeby wywołać detekcję depozytów w chain-api.</p>
+
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-2">Scenariusze</h4>
+          <p class="text-xs text-on-surface-variant mb-4">Wyślij BTC + wykopaj bloki żeby wywołać detekcję depozytów w chain-api.</p>
           <div class="space-y-2">
-            <button rv-on-click="ctrl.scenarioSendUnconfirmed" class="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-white transition-colors">
-              <div class="font-medium">Depozyt niepotwierdzony</div>
-              <div class="text-gray-400 mt-0.5">Wyślij 0.01 BTC → tylko mempool.</div>
+            <button rv-on-click="ctrl.scenarioSendUnconfirmed" class="w-full text-left px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-lg text-xs text-on-surface transition-colors">
+              <div class="font-bold font-geist">Depozyt niepotwierdzony</div>
+              <div class="text-on-surface-variant mt-0.5">Wyślij 0.01 BTC → tylko mempool.</div>
             </button>
-            <button rv-on-click="ctrl.scenarioConfirmed" class="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-white transition-colors">
-              <div class="font-medium">Depozyt potwierdzony</div>
-              <div class="text-gray-400 mt-0.5">Wyślij + wykopaj 1 blok.</div>
+            <button rv-on-click="ctrl.scenarioConfirmed" class="w-full text-left px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-lg text-xs text-on-surface transition-colors">
+              <div class="font-bold font-geist">Depozyt potwierdzony</div>
+              <div class="text-on-surface-variant mt-0.5">Wyślij + wykopaj 1 blok.</div>
             </button>
-            <button rv-on-click="ctrl.scenarioFullySettled" class="w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-white transition-colors">
-              <div class="font-medium">Depozyt rozliczony (6 potw.)</div>
-              <div class="text-gray-400 mt-0.5">Wyślij + wykopaj 6 bloków → finalized.</div>
+            <button rv-on-click="ctrl.scenarioFullySettled" class="w-full text-left px-4 py-3 bg-surface-container hover:bg-surface-container-high rounded-lg text-xs text-on-surface transition-colors">
+              <div class="font-bold font-geist">Depozyt rozliczony (6 potw.)</div>
+              <div class="text-on-surface-variant mt-0.5">Wyślij + wykopaj 6 bloków → finalized.</div>
             </button>
             <button rv-show="model.chainApiConnected" rv-on-click="ctrl.scenarioChainApiDeposit"
-              class="w-full text-left px-3 py-2 bg-indigo-900/30 hover:bg-indigo-900/60 border border-indigo-800/40 rounded-lg text-xs text-white transition-colors">
-              <div class="font-medium text-indigo-300">Pełny scenariusz chain-api</div>
-              <div class="text-gray-400 mt-0.5">Zarejestruj adres w chain-api, wyślij BTC, obserwuj depozyt.</div>
+              class="w-full text-left px-4 py-3 bg-secondary/5 hover:bg-secondary/10 border border-secondary/20 rounded-lg text-xs text-on-surface transition-colors">
+              <div class="font-bold font-geist text-secondary">Pełny scenariusz chain-api</div>
+              <div class="text-on-surface-variant mt-0.5">Zarejestruj adres w chain-api, wyślij BTC, obserwuj depozyt.</div>
             </button>
           </div>
         </div>
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Info o wydobyciu</h3>
-          <dl class="space-y-2 text-sm">
-            <div class="flex justify-between"><dt class="text-gray-400">Bloki</dt><dd class="text-white" rv-text="model.mining.blocks">—</dd></div>
-            <div class="flex justify-between"><dt class="text-gray-400">Trudność</dt><dd class="text-white" rv-text="model.mining.difficulty">—</dd></div>
-            <div class="flex justify-between"><dt class="text-gray-400">Hashrate</dt><dd class="text-white" rv-text="model.mining.networkhashps | hashrate">—</dd></div>
-            <div class="flex justify-between"><dt class="text-gray-400">TX w puli</dt><dd class="text-white" rv-text="model.mining.pooledtx">—</dd></div>
+
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Info o wydobyciu</h4>
+          <dl class="space-y-2.5 text-sm">
+            <div class="flex justify-between"><dt class="text-on-surface-variant">Bloki</dt><dd class="text-on-surface font-geist" rv-text="model.mining.blocks">—</dd></div>
+            <div class="flex justify-between"><dt class="text-on-surface-variant">Trudność</dt><dd class="text-on-surface" rv-text="model.mining.difficulty">—</dd></div>
+            <div class="flex justify-between"><dt class="text-on-surface-variant">Hashrate</dt><dd class="text-on-surface" rv-text="model.mining.networkhashps | hashrate">—</dd></div>
+            <div class="flex justify-between"><dt class="text-on-surface-variant">TX w puli</dt><dd class="text-on-surface" rv-text="model.mining.pooledtx">—</dd></div>
           </dl>
         </div>
       </div>
@@ -999,21 +1288,30 @@ docker compose up -d   # restart proxy</pre>
 
     <!-- ── Send ── -->
     <div rv-show="model.btcSubtab | eq 'send'">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-2">Wyślij Bitcoin</h3>
-          <p class="text-xs text-gray-400 mb-4">Wysyła z portfela przez <span class="mono">sendtoaddress</span>. Wymaga salda (wykopaj 101 bloków).</p>
-          <div class="space-y-3">
-            <div><label class="label">Adres odbiorcy</label><input type="text" rv-value="model.send.to" class="input mono" placeholder="bcrt1q…"></div>
-            <div><label class="label">Kwota (BTC)</label><input type="number" rv-value="model.send.amount" class="input" step="0.00000001" min="0.00000001" placeholder="0.01"></div>
-            <div><label class="label">Komentarz (opcjonalnie)</label><input type="text" rv-value="model.send.comment" class="input" placeholder="płatność za…"></div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-2">Wyślij Bitcoin</h4>
+          <p class="text-xs text-on-surface-variant mb-5">Wysyła z portfela przez <span class="mono">sendtoaddress</span>. Wymaga salda (wykopaj 101 bloków).</p>
+          <div class="space-y-4">
+            <div>
+              <label class="form-label">Adres odbiorcy</label>
+              <input type="text" rv-value="model.send.to" class="gl-input mono" placeholder="bcrt1q…">
+            </div>
+            <div>
+              <label class="form-label">Kwota (BTC)</label>
+              <input type="number" rv-value="model.send.amount" class="gl-input" step="0.00000001" min="0.00000001" placeholder="0.01">
+            </div>
+            <div>
+              <label class="form-label">Komentarz <span class="normal-case text-outline">(opcjonalnie)</span></label>
+              <input type="text" rv-value="model.send.comment" class="gl-input" placeholder="płatność za…">
+            </div>
             <div class="flex gap-2">
-              <button rv-on-click="ctrl.sendBitcoin" class="btn-btc flex-1">Wyślij</button>
+              <button rv-on-click="ctrl.sendBitcoin" class="btn-primary flex-1">Wyślij</button>
               <button rv-on-click="ctrl.sendAndMine" class="btn-secondary flex-1">Wyślij + 1 blok</button>
             </div>
           </div>
-          <div class="mt-4 pt-4 border-t border-gray-800">
-            <p class="text-xs text-gray-400 mb-2">Szybkie wypełnienie → aktywny adres:</p>
+          <div class="mt-5 pt-4 border-t border-white/5">
+            <p class="text-xs text-on-surface-variant mb-2">Szybkie wypełnienie → aktywny adres:</p>
             <div class="flex gap-2 flex-wrap">
               <button rv-on-click="ctrl.fillSend001" class="btn-secondary text-xs">0.001 BTC</button>
               <button rv-on-click="ctrl.fillSend01"  class="btn-secondary text-xs">0.01 BTC</button>
@@ -1021,22 +1319,23 @@ docker compose up -d   # restart proxy</pre>
             </div>
           </div>
         </div>
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Wynik transakcji</h3>
-          <div rv-show="model.send.loading" class="text-center text-gray-400 py-8">Wysyłanie…</div>
+
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Wynik transakcji</h4>
+          <div rv-show="model.send.loading" class="text-center text-on-surface-variant py-8">Wysyłanie…</div>
           <div rv-hide="model.send.loading">
             <div rv-show="model.send.txid">
-              <div class="label">TXID</div>
-              <div class="mono text-btc break-all mt-1" rv-text="model.send.txid">—</div>
+              <div class="form-label">TXID</div>
+              <div class="mono text-secondary break-all mt-1 text-xs" rv-text="model.send.txid">—</div>
               <button class="mt-2 btn-ghost text-xs" rv-attr-data-address="model.send.txid" rv-on-click="ctrl.copyByAttr">Kopiuj TXID</button>
-              <div class="mt-4 p-3 bg-gray-800 rounded-lg space-y-2 text-xs">
-                <div class="text-gray-400">TX w mempool. Potwierdź:</div>
+              <div class="mt-4 p-3 bg-surface-container rounded-lg space-y-2 text-xs">
+                <div class="text-on-surface-variant">TX w mempool. Potwierdź:</div>
                 <button rv-on-click="ctrl.mine1" class="btn-secondary text-xs w-full">⛏ 1 blok</button>
                 <button rv-on-click="ctrl.mine6" class="btn-secondary text-xs w-full">⛏ 6 bloków (finalized)</button>
               </div>
             </div>
-            <div rv-show="model.send.error" class="text-red-400 text-sm" rv-text="model.send.error">—</div>
-            <div rv-hide="model.send.txid | or model.send.error" class="text-center text-gray-500 text-sm py-8">Brak transakcji.</div>
+            <div rv-show="model.send.error" class="text-error text-sm" rv-text="model.send.error">—</div>
+            <div rv-hide="model.send.txid | or model.send.error" class="text-center text-on-surface-variant text-sm py-8">Brak transakcji.</div>
           </div>
         </div>
       </div>
@@ -1044,223 +1343,258 @@ docker compose up -d   # restart proxy</pre>
 
     <!-- ── Mempool ── -->
     <div rv-show="model.btcSubtab | eq 'mempool'">
-      <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
-        <div class="card"><div class="stat-label">Transakcje</div><div class="stat-value mt-2" rv-text="model.mempool.size">0</div></div>
-        <div class="card"><div class="stat-label">Łączny rozmiar</div><div class="stat-value mt-2 text-sm" rv-text="model.mempool.bytes | filesize">0</div></div>
-        <div class="card"><div class="stat-label">Użycie pamięci</div><div class="stat-value mt-2 text-sm" rv-text="model.mempool.usage | filesize">0</div></div>
-        <div class="card"><div class="stat-label">Min. fee</div><div class="stat-value mt-2 text-sm" rv-text="model.mempool.mempoolminfee | btc8">0</div><div class="text-xs text-gray-500 mt-1">BTC/kB</div></div>
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-gutter mb-6">
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Transakcje</p>
+          <div class="stat-value mt-2" rv-text="model.mempool.size">0</div>
+        </div>
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Łączny rozmiar</p>
+          <div class="stat-value mt-2 text-lg font-geist" rv-text="model.mempool.bytes | filesize">0</div>
+        </div>
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Użycie pamięci</p>
+          <div class="stat-value mt-2 text-lg font-geist" rv-text="model.mempool.usage | filesize">0</div>
+        </div>
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Min. fee</p>
+          <div class="stat-value mt-2 text-lg font-geist" rv-text="model.mempool.mempoolminfee | btc8">0</div>
+          <div class="text-xs text-on-surface-variant mt-1">BTC/kB</div>
+        </div>
       </div>
-      <div class="card">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold text-white">Transakcje w mempool</h3>
+
+      <div class="glass-card rounded-xl overflow-hidden">
+        <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+          <h4 class="font-geist font-semibold text-on-surface">Transakcje w mempool</h4>
           <div class="flex gap-2">
             <button rv-on-click="ctrl.loadMempool" class="btn-ghost text-xs">Odśwież</button>
-            <button rv-on-click="ctrl.mine1" class="btn-btc text-xs py-1.5 px-3">⛏ Wykopaj blok</button>
+            <button rv-on-click="ctrl.mine1" class="btn-primary text-xs py-1.5 px-3">⛏ Wykopaj blok</button>
           </div>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full data">
-            <thead><tr><th>TXID</th><th class="text-right">Rozmiar</th><th class="text-right">Fee (sat)</th><th class="text-right">Fee rate</th><th class="text-right">Czas w puli</th></tr></thead>
+          <table class="data">
+            <thead><tr><th>TXID</th><th class="right">Rozmiar</th><th class="right">Fee (sat)</th><th class="right">Fee rate</th><th class="right">Czas w puli</th></tr></thead>
             <tbody>
               <tr rv-each-tx="model.mempoolTxs">
-                <td class="mono text-btc" rv-text="tx.txid | truncate32">…</td>
-                <td class="text-right text-white" rv-text="tx.vsize">—</td>
-                <td class="text-right text-white" rv-text="tx.fees.base | sats">—</td>
-                <td class="text-right text-white" rv-text="tx.feeRate">—</td>
-                <td class="text-right text-gray-400 text-xs" rv-text="tx.time | secAgo">—</td>
+                <td class="mono text-secondary text-xs" rv-text="tx.txid | truncate32">…</td>
+                <td class="right text-on-surface font-geist" rv-text="tx.vsize">—</td>
+                <td class="right text-on-surface font-geist" rv-text="tx.fees.base | sats">—</td>
+                <td class="right text-on-surface" rv-text="tx.feeRate">—</td>
+                <td class="right text-on-surface-variant text-xs" rv-text="tx.time | secAgo">—</td>
               </tr>
             </tbody>
           </table>
-          <p rv-show="model.mempoolTxs | isEmpty" class="text-center text-gray-500 text-sm py-8">Mempool pusty.</p>
         </div>
+        <p rv-show="model.mempoolTxs | isEmpty" class="text-center text-on-surface-variant text-sm py-8">Mempool pusty.</p>
       </div>
     </div>
 
     <!-- ── Addresses ── -->
     <div rv-show="model.btcSubtab | eq 'addresses'">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Wygeneruj adres</h3>
-          <div class="space-y-3">
-            <div><label class="label">Etykieta</label><input type="text" rv-value="model.newAddress.label" class="input" placeholder="np. depozyt-1"></div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Wygeneruj adres</h4>
+          <div class="space-y-4">
             <div>
-              <label class="label">Typ</label>
-              <select rv-value="model.newAddress.type" class="input">
+              <label class="form-label">Etykieta</label>
+              <input type="text" rv-value="model.newAddress.label" class="gl-input" placeholder="np. depozyt-1">
+            </div>
+            <div>
+              <label class="form-label">Typ</label>
+              <select rv-value="model.newAddress.type" class="gl-select">
                 <option value="bech32">bech32 (bcrt1q…)</option>
                 <option value="bech32m">bech32m (bcrt1p… Taproot)</option>
                 <option value="legacy">legacy</option>
                 <option value="p2sh-segwit">p2sh-segwit</option>
               </select>
             </div>
-            <button rv-on-click="ctrl.generateAddress" class="btn-btc w-full">Generuj adres</button>
+            <button rv-on-click="ctrl.generateAddress" class="btn-primary w-full">Generuj adres</button>
           </div>
-          <div rv-show="model.lastGeneratedAddress" class="mt-4 p-3 bg-gray-800 rounded-lg">
-            <div class="text-xs text-gray-400 mb-1">Wygenerowany:</div>
-            <div class="mono text-btc break-all text-xs" rv-text="model.lastGeneratedAddress"></div>
+          <div rv-show="model.lastGeneratedAddress" class="mt-5 p-3 bg-surface-container rounded-lg">
+            <div class="text-xs text-on-surface-variant mb-1 font-geist">Wygenerowany:</div>
+            <div class="mono text-secondary break-all text-xs" rv-text="model.lastGeneratedAddress"></div>
             <button rv-on-click="ctrl.copyLastAddress" class="mt-2 btn-ghost text-xs">Kopiuj</button>
           </div>
         </div>
-        <div class="card lg:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">Adresy portfela</h3>
+
+        <div class="glass-card rounded-xl overflow-hidden lg:col-span-2">
+          <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+            <h4 class="font-geist font-semibold text-on-surface">Adresy portfela</h4>
             <button rv-on-click="ctrl.loadWalletAddresses" class="btn-ghost text-xs">Odśwież</button>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full data">
-              <thead><tr><th>Adres</th><th>Etykieta</th><th class="text-right">Otrzymano</th><th class="text-right">Akcje</th></tr></thead>
+            <table class="data">
+              <thead><tr><th>Adres</th><th>Etykieta</th><th class="right">Otrzymano</th><th class="right">Akcje</th></tr></thead>
               <tbody>
                 <tr rv-each-a="model.walletAddresses">
-                  <td class="mono text-gray-200 pr-3">
+                  <td class="mono text-on-surface-variant text-xs pr-3">
                     <span rv-text="a.address | truncate32"></span>
-                    <button class="ml-1 text-gray-500 hover:text-white"
-                      rv-attr-data-address="a.address" rv-on-click="ctrl.copyByAttr" title="Kopiuj">⎘</button>
+                    <button class="ml-1 text-on-surface-variant hover:text-on-surface" rv-attr-data-address="a.address" rv-on-click="ctrl.copyByAttr" title="Kopiuj">⎘</button>
                   </td>
-                  <td class="text-gray-400" rv-text="a.label | defaultStr '—'"></td>
-                  <td class="text-right text-white tabular-nums" rv-text="a.amount | btc8"></td>
-                  <td class="text-right">
-                    <button class="btn-ghost text-xs py-1"
-                      rv-attr-data-address="a.address" rv-on-click="ctrl.selectActiveAddress">Wybierz</button>
+                  <td class="text-on-surface-variant" rv-text="a.label | defaultStr '—'"></td>
+                  <td class="right text-on-surface tabular-nums font-geist" rv-text="a.amount | btc8"></td>
+                  <td class="right">
+                    <button class="btn-ghost text-xs" rv-attr-data-address="a.address" rv-on-click="ctrl.selectActiveAddress">Wybierz</button>
                   </td>
                 </tr>
               </tbody>
             </table>
-            <p rv-show="model.walletAddresses | isEmpty" class="text-center text-gray-500 text-sm py-6">Brak adresów.</p>
           </div>
-          <div rv-show="model.activeAddress" class="mt-4 p-3 bg-gray-800 rounded-lg flex items-center gap-3">
-            <span class="text-xs text-gray-400">Aktywny:</span>
-            <span class="mono text-btc text-xs" rv-text="model.activeAddress">—</span>
-            <button rv-on-click="ctrl.goToWallet" class="ml-auto btn-ghost text-xs py-1">Portfel →</button>
+          <p rv-show="model.walletAddresses | isEmpty" class="text-center text-on-surface-variant text-sm py-6">Brak adresów.</p>
+          <div rv-show="model.activeAddress" class="p-4 border-t border-white/5 flex items-center gap-3">
+            <span class="text-xs text-on-surface-variant">Aktywny:</span>
+            <span class="mono text-secondary text-xs" rv-text="model.activeAddress">—</span>
+            <button rv-on-click="ctrl.goToWallet" class="ml-auto btn-ghost text-xs">Portfel →</button>
           </div>
         </div>
-        <div class="card lg:col-span-3">
-          <h3 class="text-sm font-semibold text-white mb-4">Walidacja adresu</h3>
+
+        <div class="glass-card rounded-xl p-md lg:col-span-3">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Walidacja adresu</h4>
           <div class="flex gap-2">
-            <input type="text" rv-value="model.validateAddr" class="input flex-1 mono" placeholder="Wpisz adres Bitcoin…">
+            <input type="text" rv-value="model.validateAddr" class="gl-input flex-1 mono" placeholder="Wpisz adres Bitcoin…">
             <button rv-on-click="ctrl.validateAddress" class="btn-secondary">Waliduj</button>
           </div>
-          <pre rv-show="model.validateResult" class="mt-3 p-3 bg-gray-800 rounded-lg text-green-300" rv-text="model.validateResult"></pre>
+          <pre rv-show="model.validateResult" class="mt-3 p-3 bg-surface-container rounded-lg text-tertiary text-xs" rv-text="model.validateResult"></pre>
         </div>
       </div>
     </div>
 
     <!-- ── Wallet ── -->
     <div rv-show="model.btcSubtab | eq 'wallet'">
-      <div class="card mb-4">
-        <div class="flex items-center gap-4 flex-wrap">
-          <div class="flex-1">
-            <label class="label">Aktywny adres</label>
-            <div class="flex gap-2">
-              <input type="text" rv-value="model.activeAddress" class="input flex-1 mono" placeholder="Wpisz lub wybierz z zakładki Adresy">
-              <button rv-on-click="ctrl.loadAddressInfo" class="btn-btc">Załaduj</button>
-            </div>
-          </div>
+      <div class="glass-card rounded-xl p-md mb-gutter">
+        <label class="form-label">Aktywny adres</label>
+        <div class="flex gap-2">
+          <input type="text" rv-value="model.activeAddress" class="gl-input flex-1 mono" placeholder="Wpisz lub wybierz z zakładki Adresy">
+          <button rv-on-click="ctrl.loadAddressInfo" class="btn-primary">Załaduj</button>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="card"><div class="stat-label flex items-center gap-2">Potwierdzone <span class="badge bg-green-900/50 text-green-300">≥1</span></div><div class="stat-value mt-2 text-green-400" rv-text="model.addrBalance.confirmed | btc8">0</div><div class="text-xs text-gray-500 mt-1">BTC</div></div>
-        <div class="card"><div class="stat-label flex items-center gap-2">Niepotwierdzone <span class="badge bg-yellow-900/50 text-yellow-300">0-conf</span></div><div class="stat-value mt-2 text-yellow-400" rv-text="model.addrBalance.unconfirmed | btc8">0</div><div class="text-xs text-gray-500 mt-1">BTC</div></div>
-        <div class="card"><div class="stat-label">Łącznie</div><div class="stat-value mt-2 text-btc" rv-text="model.addrBalance.total | btc8">0</div><button rv-on-click="ctrl.loadAddressInfo" class="mt-3 btn-ghost text-xs w-full">Odśwież</button></div>
-        <div class="card md:col-span-3">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">UTXO</h3>
-            <button rv-on-click="ctrl.loadUtxos" class="btn-ghost text-xs">Odśwież</button>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full data">
-              <thead><tr><th>TXID</th><th class="text-right">Vout</th><th class="text-right">Kwota</th><th class="text-right">Potwierdzenia</th><th>Wydawalny</th></tr></thead>
-              <tbody>
-                <tr rv-each-utxo="model.utxos">
-                  <td class="mono text-gray-300 text-xs" rv-text="utxo.txid | truncate16">…</td>
-                  <td class="text-right text-gray-300" rv-text="utxo.vout">0</td>
-                  <td class="text-right text-white font-medium tabular-nums" rv-text="utxo.amount | btc8">0</td>
-                  <td class="text-right"
-                    rv-class-text-green-400="utxo.confirmations | gt0"
-                    rv-class-text-yellow-400="utxo.confirmations | eq0"
-                    rv-text="utxo.confirmations">0</td>
-                  <td>
-                    <span rv-show="utxo.spendable" class="badge bg-green-900/50 text-green-300">✓</span>
-                    <span rv-hide="utxo.spendable" class="badge bg-red-900/50 text-red-300">✗</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p rv-show="model.utxos | isEmpty" class="text-center text-gray-500 text-sm py-6">Brak UTXO.</p>
-          </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-gutter">
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label flex items-center gap-2">Potwierdzone <span class="sp sp-success">≥1</span></p>
+          <div class="stat-value mt-2 text-tertiary" rv-text="model.addrBalance.confirmed | btc8">0</div>
+          <div class="text-xs text-on-surface-variant mt-1">BTC</div>
         </div>
-        <div class="card md:col-span-3">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-white">Transakcje portfela</h3>
-            <button rv-on-click="ctrl.loadWalletTxs" class="btn-ghost text-xs">Odśwież</button>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full data">
-              <thead><tr><th>TXID</th><th>Typ</th><th class="text-right">Kwota</th><th class="text-right">Potw.</th><th>Adres</th><th>Czas</th></tr></thead>
-              <tbody>
-                <tr rv-each-tx="model.walletTxs">
-                  <td class="mono text-gray-300 text-xs" rv-text="tx.txid | truncate16">…</td>
-                  <td rv-class-text-green-400="tx.category | eq 'receive'"
-                      rv-class-text-red-400="tx.category | eq 'send'"
-                      rv-class-text-btc="tx.category | eq 'generate'"
-                      rv-text="tx.category">—</td>
-                  <td class="text-right tabular-nums"
-                      rv-class-text-green-400="tx.amount | positive"
-                      rv-class-text-red-400="tx.amount | negative"
-                      rv-text="tx.amount | btc8">0</td>
-                  <td class="text-right" rv-text="tx.confirmations">0</td>
-                  <td class="mono text-gray-400 text-xs" rv-text="tx.address | truncate20 | defaultStr '—'">—</td>
-                  <td class="text-gray-400 text-xs" rv-text="tx.time | unixdate">—</td>
-                </tr>
-              </tbody>
-            </table>
-            <p rv-show="model.walletTxs | isEmpty" class="text-center text-gray-500 text-sm py-6">Brak transakcji.</p>
-          </div>
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label flex items-center gap-2">Niepotwierdzone <span class="sp sp-warning">0-conf</span></p>
+          <div class="stat-value mt-2 text-secondary" rv-text="model.addrBalance.unconfirmed | btc8">0</div>
+          <div class="text-xs text-on-surface-variant mt-1">BTC</div>
         </div>
+        <div class="glass-card rounded-xl p-md">
+          <p class="stat-label">Łącznie</p>
+          <div class="stat-value mt-2 text-secondary" rv-text="model.addrBalance.total | btc8">0</div>
+          <button rv-on-click="ctrl.loadAddressInfo" class="mt-3 btn-ghost text-xs w-full">Odśwież</button>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-xl overflow-hidden mb-gutter">
+        <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+          <h4 class="font-geist font-semibold text-on-surface">UTXO</h4>
+          <button rv-on-click="ctrl.loadUtxos" class="btn-ghost text-xs">Odśwież</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data">
+            <thead><tr><th>TXID</th><th class="right">Vout</th><th class="right">Kwota</th><th class="right">Potwierdzenia</th><th>Wydawalny</th></tr></thead>
+            <tbody>
+              <tr rv-each-utxo="model.utxos">
+                <td class="mono text-on-surface-variant text-xs" rv-text="utxo.txid | truncate16">…</td>
+                <td class="right text-on-surface-variant" rv-text="utxo.vout">0</td>
+                <td class="right text-on-surface font-bold font-geist tabular-nums" rv-text="utxo.amount | btc8">0</td>
+                <td class="right font-geist tabular-nums"
+                  rv-class-text-tertiary="utxo.confirmations | gt0"
+                  rv-class-text-secondary="utxo.confirmations | eq0"
+                  rv-text="utxo.confirmations">0</td>
+                <td>
+                  <span rv-show="utxo.spendable" class="sp sp-success">tak</span>
+                  <span rv-hide="utxo.spendable" class="sp sp-error">nie</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p rv-show="model.utxos | isEmpty" class="text-center text-on-surface-variant text-sm py-6">Brak UTXO.</p>
+      </div>
+
+      <div class="glass-card rounded-xl overflow-hidden">
+        <div class="px-md py-4 border-b border-white/5 flex items-center justify-between">
+          <h4 class="font-geist font-semibold text-on-surface">Transakcje portfela</h4>
+          <button rv-on-click="ctrl.loadWalletTxs" class="btn-ghost text-xs">Odśwież</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data">
+            <thead><tr><th>TXID</th><th>Typ</th><th class="right">Kwota</th><th class="right">Potw.</th><th>Adres</th><th>Czas</th></tr></thead>
+            <tbody>
+              <tr rv-each-tx="model.walletTxs">
+                <td class="mono text-on-surface-variant text-xs" rv-text="tx.txid | truncate16">…</td>
+                <td rv-class-text-tertiary="tx.category | eq 'receive'"
+                    rv-class-text-error="tx.category | eq 'send'"
+                    rv-class-text-secondary="tx.category | eq 'generate'"
+                    class="font-geist text-xs"
+                    rv-text="tx.category">—</td>
+                <td class="right tabular-nums font-geist"
+                    rv-class-text-tertiary="tx.amount | positive"
+                    rv-class-text-error="tx.amount | negative"
+                    rv-text="tx.amount | btc8">0</td>
+                <td class="right font-geist" rv-text="tx.confirmations">0</td>
+                <td class="mono text-on-surface-variant text-xs" rv-text="tx.address | truncate20 | defaultStr '—'">—</td>
+                <td class="text-on-surface-variant text-xs" rv-text="tx.time | unixdate">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p rv-show="model.walletTxs | isEmpty" class="text-center text-on-surface-variant text-sm py-6">Brak transakcji.</p>
       </div>
     </div>
 
     <!-- ── Console ── -->
     <div rv-show="model.btcSubtab | eq 'console'">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="card">
-          <h3 class="text-sm font-semibold text-white mb-4">Komenda RPC</h3>
-          <div class="space-y-3">
-            <div><label class="label">Metoda</label><input type="text" rv-value="model.console.method" class="input mono" placeholder="np. getblockchaininfo"></div>
-            <div><label class="label">Params (JSON array)</label><input type="text" rv-value="model.console.params" class="input mono" placeholder='np. ["bcrt1q...", 0.01]'></div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+        <div class="glass-card rounded-xl p-md">
+          <h4 class="font-geist font-semibold text-on-surface mb-4">Komenda RPC</h4>
+          <div class="space-y-4">
+            <div>
+              <label class="form-label">Metoda</label>
+              <input type="text" rv-value="model.console.method" class="gl-input mono" placeholder="np. getblockchaininfo">
+            </div>
+            <div>
+              <label class="form-label">Params (JSON array)</label>
+              <input type="text" rv-value="model.console.params" class="gl-input mono" placeholder='np. ["bcrt1q...", 0.01]'>
+            </div>
             <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+              <label class="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
                 <input type="checkbox" rv-checked="model.console.useWallet" class="rounded">
                 Używaj endpointu wallet
               </label>
             </div>
-            <button rv-on-click="ctrl.executeConsole" class="btn-btc w-full">Wykonaj</button>
+            <button rv-on-click="ctrl.executeConsole" class="btn-primary w-full">Wykonaj</button>
           </div>
-          <div class="mt-4 border-t border-gray-800 pt-4">
-            <div class="text-xs text-gray-400 mb-2">Skróty:</div>
+          <div class="mt-5 border-t border-white/5 pt-4">
+            <div class="text-xs text-on-surface-variant mb-2 font-geist uppercase tracking-wide">Skróty:</div>
             <div class="flex flex-wrap gap-1">
               <button rv-each-s="model.consoleShortcuts" rv-on-click="ctrl.fillConsole"
                 rv-attr-data-method="s.method" rv-attr-data-params="s.params" rv-attr-data-wallet="s.wallet"
-                class="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition-colors"
+                class="text-xs px-2 py-1 bg-surface-container hover:bg-surface-container-high rounded text-on-surface-variant transition-colors"
                 rv-text="s.label"></button>
             </div>
           </div>
         </div>
-        <div class="card flex flex-col">
+
+        <div class="glass-card rounded-xl p-md flex flex-col">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-semibold text-white">Wynik</h3>
+            <h4 class="font-geist font-semibold text-on-surface">Wynik</h4>
             <button rv-on-click="ctrl.clearConsole" class="btn-ghost text-xs">Wyczyść</button>
           </div>
-          <div class="flex-1 overflow-auto bg-gray-950 rounded-lg p-3 min-h-64 max-h-96">
-            <pre rv-text="model.console.output" class="text-green-300">—</pre>
+          <div class="flex-1 overflow-auto bg-surface-container-lowest rounded-lg p-3 min-h-64 max-h-96">
+            <pre rv-text="model.console.output" class="text-tertiary">—</pre>
           </div>
-          <div class="mt-3 border-t border-gray-800 pt-3">
-            <div class="text-xs text-gray-400 mb-2">Historia</div>
+          <div class="mt-3 border-t border-white/5 pt-3">
+            <div class="text-xs text-on-surface-variant mb-2 font-geist uppercase tracking-wide">Historia</div>
             <div class="space-y-1 max-h-32 overflow-y-auto">
               <div rv-each-h="model.console.history"
-                class="text-xs mono text-gray-400 hover:text-white cursor-pointer px-1 py-0.5 hover:bg-gray-800 rounded transition-colors"
+                class="text-xs mono text-on-surface-variant hover:text-on-surface cursor-pointer px-2 py-1 hover:bg-surface-container rounded transition-colors"
                 rv-on-click="ctrl.fillFromHistory"
                 rv-attr-data-method="h.method" rv-attr-data-params="h.params" rv-attr-data-wallet="h.wallet">
-                <span class="text-gray-600">$</span> <span rv-text="h.method"></span>
-                <span class="text-gray-600" rv-text="h.params"></span>
+                <span class="text-outline">$</span> <span rv-text="h.method"></span>
+                <span class="text-outline" rv-text="h.params"></span>
               </div>
             </div>
           </div>
@@ -1270,13 +1604,14 @@ docker compose up -d   # restart proxy</pre>
 
   </div><!-- /btc tab -->
 
-</div><!-- /max-w -->
+</div><!-- /p-8 -->
+</main>
 
 <!-- FOOTER -->
-<footer class="border-t border-gray-800 mt-12 py-4 px-6">
-  <div class="max-w-screen-2xl mx-auto text-xs text-gray-700 flex flex-wrap gap-4">
-    <span>Bitcoin Core (regtest): <code class="text-gray-600">localhost:18443</code></span>
-    <span>chain-api: <code class="text-gray-600">localhost:3000</code></span>
+<footer class="lg:ml-[260px] border-t border-white/5 py-3 px-8">
+  <div class="text-[11px] text-on-surface-variant font-geist flex flex-wrap gap-4">
+    <span>Bitcoin Core (regtest): <code class="text-outline">localhost:18443</code></span>
+    <span>chain-api: <code class="text-outline">localhost:3000</code></span>
     <span class="ml-auto">chain-api test environment</span>
   </div>
 </footer>

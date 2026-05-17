@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+        }
+        .inner-glow {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #070d1f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #191f31;
+            border-radius: 4px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#e78603",
+                        "on-tertiary-container": "#00a472",
+                        "inverse-surface": "#dce1fb",
+                        "on-tertiary": "#003824",
+                        "on-primary-fixed-variant": "#3c475a",
+                        "inverse-primary": "#545f73",
+                        "on-secondary-container": "#522c00",
+                        "surface": "#0c1324",
+                        "primary-fixed-dim": "#bcc7de",
+                        "on-secondary-fixed-variant": "#6b3b00",
+                        "surface-container-high": "#23293c",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "tertiary": "#4edea3",
+                        "surface-container-low": "#151b2d",
+                        "secondary-fixed": "#ffdcbf",
+                        "on-surface": "#dce1fb",
+                        "on-tertiary-fixed": "#002113",
+                        "surface-container-lowest": "#070d1f",
+                        "on-primary-container": "#8590a6",
+                        "error-container": "#93000a",
+                        "on-primary": "#263143",
+                        "surface-dim": "#0c1324",
+                        "surface-bright": "#33394c",
+                        "secondary": "#ffb874",
+                        "inverse-on-surface": "#2a3043",
+                        "tertiary-container": "#00301e",
+                        "surface-container": "#191f31",
+                        "outline": "#8f9097",
+                        "surface-tint": "#bcc7de",
+                        "secondary-fixed-dim": "#ffb874",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-secondary-fixed": "#2d1600",
+                        "surface-variant": "#2e3447",
+                        "on-primary-fixed": "#111c2d",
+                        "on-background": "#dce1fb",
+                        "tertiary-fixed": "#6ffbbe",
+                        "error": "#ffb4ab",
+                        "outline-variant": "#45474c",
+                        "background": "#0c1324",
+                        "surface-container-highest": "#2e3447",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#d8e3fb",
+                        "primary-container": "#1e293b",
+                        "on-secondary": "#4b2800",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#c5c6cd",
+                        "primary": "#bcc7de"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "24px",
+                        "lg": "40px",
+                        "gutter": "24px",
+                        "base": "8px",
+                        "margin-desktop": "32px",
+                        "xl": "64px",
+                        "margin-mobile": "16px",
+                        "sm": "12px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "body-sm": ["Inter"],
+                        "label-md": ["Geist"],
+                        "mono-data": ["Geist"],
+                        "headline-sm": ["Geist"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Geist"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "mono-data": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-x-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen w-[280px] z-50 bg-surface-container-lowest border-r border-white/5 shadow-2xl hidden lg:flex flex-col py-8 px-4">
+<div class="flex items-center gap-3 px-2 mb-10">
+<div class="w-10 h-10 rounded bg-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-surface-container-lowest font-bold" style="font-variation-settings: 'FILL' 1;">router</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-black text-secondary tracking-tighter">BITCORE</h1>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Enterprise Node</p>
+</div>
+</div>
+<nav class="flex-grow space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span> Deposits
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">payments</span> Payments
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">menu_book</span> Ledger
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">group</span> Customers
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">account_balance</span> Wallets
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">webhook</span> Webhooks
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-secondary border-r-2 border-secondary bg-secondary/5 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span> Admin
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">router</span> BTC Node
+            </a>
+</nav>
+<div class="mt-auto pt-8 border-t border-white/5 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">help</span> Support
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">logout</span> Sign Out
+            </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="lg:ml-[280px] min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-sm flex justify-between items-center w-full px-margin-desktop h-16">
+<div class="flex items-center gap-8">
+<div class="flex items-center bg-surface-container-low rounded-lg px-3 py-1.5 border border-white/5">
+<span class="material-symbols-outlined text-on-surface-variant text-sm mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-64 placeholder-on-surface-variant/50" placeholder="Search tenants..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="font-label-md text-label-md text-on-surface-variant">Regtest • 840,002</span>
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+</div>
+<div class="h-8 w-px bg-white/10"></div>
+<div class="font-headline-sm text-headline-sm text-secondary font-bold">0.4285 BTC</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-white/5 p-1 rounded-full transition-colors">notifications</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-white/5 p-1 rounded-full transition-colors">settings</span>
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden border border-white/10">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC28Hj_hZBz9pwK6IG8a2JV1uGsk4dNo2B3K7GluIvGmxHjQC6R2XidZVD_H3ayQUCSfooqUzGrzB-x43213FQFReqLzfb9nJ2EqXgkmr5HKiYfvDzU0HYHxEC9FraxWgP_6blXqsInxXX_CHeWwqiJARrzhZVlW97CGG7f58TP5j8xBx40NbP-jf6vY8p-2Y0niuIKbpNaEd-E9qqRepd4HSGeqU9PyOadWelFslAb9EY49ikMUOzCd4N73qUUzgQAWU5AgPl88V4"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Dashboard Canvas -->
+<div class="p-margin-desktop space-y-gutter max-w-[1600px] mx-auto">
+<header class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Admin Configuration</h2>
+<p class="text-on-surface-variant font-body-md">Global control panel for multi-tenant node management and security protocols.</p>
+</div>
+<button class="bg-secondary text-surface-container-lowest font-label-md text-label-md px-6 py-3 rounded-lg font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-secondary/10">
+                    CREATE NEW TENANT
+                </button>
+</header>
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Tenant Configuration (Confirmations & Finality) -->
+<section class="col-span-12 lg:col-span-4 glass-card rounded-xl p-6 flex flex-col">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Consensus Rules</h3>
+<span class="material-symbols-outlined text-secondary">security</span>
+</div>
+<div class="space-y-6 flex-grow">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-3">Required Confirmations</label>
+<div class="grid grid-cols-3 gap-2">
+<button class="py-2 px-4 rounded border border-white/10 bg-white/5 font-mono-data text-on-surface-variant hover:border-secondary transition-colors">1</button>
+<button class="py-2 px-4 rounded border border-secondary bg-secondary/10 font-mono-data text-secondary">3</button>
+<button class="py-2 px-4 rounded border border-white/10 bg-white/5 font-mono-data text-on-surface-variant hover:border-secondary transition-colors">6</button>
+</div>
+<p class="mt-2 text-xs text-on-surface-variant/60">Minimum blocks before transaction visibility.</p>
+</div>
+<div class="h-px bg-white/5"></div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-3">Finality Threshold</label>
+<div class="flex items-center gap-4">
+<input class="flex-grow accent-secondary h-1.5 bg-surface-container-high rounded-lg appearance-none cursor-pointer" max="100" min="1" type="range" value="75"/>
+<span class="font-mono-data text-headline-sm text-secondary">75%</span>
+</div>
+<p class="mt-2 text-xs text-on-surface-variant/60">Confidence score required for high-value settlement.</p>
+</div>
+<div class="h-px bg-white/5"></div>
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<span class="font-body-md text-on-surface">RBF Protection</span>
+<div class="w-10 h-5 bg-secondary rounded-full relative cursor-pointer">
+<div class="absolute right-0.5 top-0.5 w-4 h-4 bg-surface rounded-full shadow-sm"></div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-on-surface">Mempool Prioritization</span>
+<div class="w-10 h-5 bg-white/10 rounded-full relative cursor-pointer">
+<div class="absolute left-0.5 top-0.5 w-4 h-4 bg-on-surface-variant rounded-full shadow-sm"></div>
+</div>
+</div>
+</div>
+</div>
+<button class="mt-8 w-full border border-white/10 hover:bg-white/5 text-on-surface font-label-md text-label-md py-3 rounded transition-colors">
+                        SAVE GLOBAL DEFAULTS
+                    </button>
+</section>
+<!-- API Key Management -->
+<section class="col-span-12 lg:col-span-8 glass-card rounded-xl p-6 overflow-hidden">
+<div class="flex items-center justify-between mb-8">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">API Key Management</h3>
+<p class="text-xs text-on-surface-variant mt-1">Manage bearer tokens for institutional integration.</p>
+</div>
+<button class="flex items-center gap-2 text-secondary font-label-md text-label-md hover:underline">
+<span class="material-symbols-outlined text-sm">add</span> GENERATE KEY
+                        </button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="border-b border-white/5">
+<th class="pb-4 font-label-md text-label-md text-on-surface-variant uppercase">Key Name</th>
+<th class="pb-4 font-label-md text-label-md text-on-surface-variant uppercase">Token</th>
+<th class="pb-4 font-label-md text-label-md text-on-surface-variant uppercase">Created</th>
+<th class="pb-4 font-label-md text-label-md text-on-surface-variant uppercase">Status</th>
+<th class="pb-4 font-label-md text-label-md text-on-surface-variant uppercase text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-white/5">
+<tr class="hover:bg-white/5 transition-colors group">
+<td class="py-4 font-body-md text-on-surface">Main_Production_V2</td>
+<td class="py-4 font-mono-data text-xs text-on-surface-variant">bit_pk_••••••••7r9A</td>
+<td class="py-4 font-mono-data text-xs text-on-surface-variant">Oct 12, 2023</td>
+<td class="py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">ACTIVE</span>
+</td>
+<td class="py-4 text-right">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer group-hover:text-on-surface">content_copy</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer group-hover:text-error ml-2">delete</span>
+</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors group">
+<td class="py-4 font-body-md text-on-surface">Staging_Testnet_Mirror</td>
+<td class="py-4 font-mono-data text-xs text-on-surface-variant">bit_pk_••••••••3n2L</td>
+<td class="py-4 font-mono-data text-xs text-on-surface-variant">Nov 04, 2023</td>
+<td class="py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">ACTIVE</span>
+</td>
+<td class="py-4 text-right">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer group-hover:text-on-surface">content_copy</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer group-hover:text-error ml-2">delete</span>
+</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors group opacity-60">
+<td class="py-4 font-body-md text-on-surface">Legacy_Integration_DO_NOT_USE</td>
+<td class="py-4 font-mono-data text-xs text-on-surface-variant">bit_pk_••••••••9z1P</td>
+<td class="py-4 font-mono-data text-xs text-on-surface-variant">Jan 15, 2023</td>
+<td class="py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-white/10 text-on-surface-variant border border-white/20">REVOKED</span>
+</td>
+<td class="py-4 text-right">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer group-hover:text-on-surface">restore_from_trash</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Tenant Overview Bento -->
+<div class="col-span-12 grid grid-cols-12 gap-gutter">
+<!-- Analytics Summary -->
+<div class="col-span-12 lg:col-span-3 glass-card rounded-xl p-6">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase mb-4 block">Active Tenants</span>
+<div class="flex items-baseline gap-2">
+<span class="font-display-lg text-display-lg text-secondary">24</span>
+<span class="text-emerald-400 text-sm font-mono-data flex items-center">
+<span class="material-symbols-outlined text-sm">arrow_upward</span> +2
+                            </span>
+</div>
+<div class="mt-4 h-12 w-full overflow-hidden flex items-end gap-1">
+<div class="flex-1 bg-secondary/20 h-4 rounded-t-sm"></div>
+<div class="flex-1 bg-secondary/20 h-8 rounded-t-sm"></div>
+<div class="flex-1 bg-secondary/40 h-6 rounded-t-sm"></div>
+<div class="flex-1 bg-secondary/30 h-10 rounded-t-sm"></div>
+<div class="flex-1 bg-secondary/60 h-7 rounded-t-sm"></div>
+<div class="flex-1 bg-secondary h-12 rounded-t-sm"></div>
+</div>
+</div>
+<!-- Main Tenants List -->
+<div class="col-span-12 lg:col-span-9 glass-card rounded-xl p-6">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">System Tenants</h3>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant">filter_list</button>
+<button class="material-symbols-outlined text-on-surface-variant">download</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+<!-- Tenant Item 1 -->
+<div class="bg-surface-container-low border border-white/5 rounded-lg p-4 hover:border-secondary/30 transition-all cursor-pointer group">
+<div class="flex items-start justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center font-bold text-secondary">A</div>
+<div>
+<h4 class="font-body-md font-semibold text-on-surface">Alpha Asset Mgmt</h4>
+<p class="text-xs text-on-surface-variant">ID: tenant_84x229</p>
+</div>
+</div>
+<span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs">
+<span class="text-on-surface-variant">Transactions (24h)</span>
+<span class="text-on-surface font-mono-data">1,204</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-3/4"></div>
+</div>
+<div class="flex justify-between text-xs pt-1">
+<span class="text-on-surface-variant">Storage Util</span>
+<span class="text-on-surface font-mono-data">75%</span>
+</div>
+</div>
+</div>
+<!-- Tenant Item 2 -->
+<div class="bg-surface-container-low border border-white/5 rounded-lg p-4 hover:border-secondary/30 transition-all cursor-pointer group">
+<div class="flex items-start justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center font-bold text-secondary">B</div>
+<div>
+<h4 class="font-body-md font-semibold text-on-surface">Blueberry Custody</h4>
+<p class="text-xs text-on-surface-variant">ID: tenant_31q012</p>
+</div>
+</div>
+<span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs">
+<span class="text-on-surface-variant">Transactions (24h)</span>
+<span class="text-on-surface font-mono-data">482</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-1/4"></div>
+</div>
+<div class="flex justify-between text-xs pt-1">
+<span class="text-on-surface-variant">Storage Util</span>
+<span class="text-on-surface font-mono-data">22%</span>
+</div>
+</div>
+</div>
+<!-- Tenant Item 3 -->
+<div class="bg-surface-container-low border border-white/5 rounded-lg p-4 hover:border-secondary/30 transition-all cursor-pointer group">
+<div class="flex items-start justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center font-bold text-secondary">C</div>
+<div>
+<h4 class="font-body-md font-semibold text-on-surface">Core Infrastructure</h4>
+<p class="text-xs text-on-surface-variant">ID: tenant_99k004</p>
+</div>
+</div>
+<span class="w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs">
+<span class="text-on-surface-variant">Transactions (24h)</span>
+<span class="text-on-surface font-mono-data">3,450</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-9/12"></div>
+</div>
+<div class="flex justify-between text-xs pt-1">
+<span class="text-on-surface-variant">Storage Util</span>
+<span class="text-on-surface font-mono-data">89%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Global Activity Feed -->
+<section class="col-span-12 glass-card rounded-xl overflow-hidden border-none p-0">
+<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Global Audit Log</h3>
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">history</span> Live Feed
+                        </span>
+</div>
+<div class="p-0">
+<div class="grid grid-cols-1 divide-y divide-white/5 font-mono-data text-xs">
+<div class="px-6 py-3 flex items-center gap-4 hover:bg-white/5 transition-colors">
+<span class="text-on-surface-variant">14:22:04</span>
+<span class="text-secondary">[AUTH]</span>
+<span class="text-on-surface">Tenant Alpha_Asset_Mgmt updated API Key permissions</span>
+<span class="ml-auto text-on-surface-variant/50">IP: 192.168.1.42</span>
+</div>
+<div class="px-6 py-3 flex items-center gap-4 hover:bg-white/5 transition-colors">
+<span class="text-on-surface-variant">14:21:58</span>
+<span class="text-on-tertiary-container">[NODE]</span>
+<span class="text-on-surface">Global finality threshold confirmed for block 840,002</span>
+<span class="ml-auto text-on-surface-variant/50">Node: bitcore-01</span>
+</div>
+<div class="px-6 py-3 flex items-center gap-4 hover:bg-white/5 transition-colors">
+<span class="text-on-surface-variant">14:19:12</span>
+<span class="text-error">[SECURITY]</span>
+<span class="text-on-surface">Failed login attempt detected from unknown region</span>
+<span class="ml-auto text-on-surface-variant/50">IP: 45.12.99.201</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile only) -->
+<nav class="lg:hidden fixed bottom-0 left-0 w-full rounded-t-xl z-50 bg-surface-container-high/90 backdrop-blur-2xl border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] flex justify-around items-center h-16 px-4 pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-label-md text-[10px] uppercase">Ledger</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-[10px] uppercase">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5" href="#">
+<span class="material-symbols-outlined">account_balance</span>
+<span class="font-label-md text-[10px] uppercase">Wallets</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5" href="#">
+<span class="material-symbols-outlined">router</span>
+<span class="font-label-md text-[10px] uppercase">Node</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary font-bold active:bg-white/5" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-[10px] uppercase">Admin</span>
+</a>
+</nav>
+</body></html>

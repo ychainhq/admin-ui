@@ -42,7 +42,7 @@ services:
       - BITCOIN_RPC_URL=http://bitcoin-core:18443
       - BITCOIN_RPC_USER=bitcoin
       - BITCOIN_RPC_PASSWORD=bitcoin
-      - BITCOIN_WALLET=testwallet
+      - BITCOIN_WALLET=btcminer
       # chain-api engine — auto-loaded from .env (copy .env.example → .env)
       - CHAIN_API_URL=${CHAIN_API_URL:-http://host.docker.internal:3000}
       - CHAIN_API_KEY=${CHAIN_API_KEY:-}

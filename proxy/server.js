@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3001;
 const BITCOIN_RPC_URL      = process.env.BITCOIN_RPC_URL      || 'http://localhost:18443';
 const BITCOIN_RPC_USER     = process.env.BITCOIN_RPC_USER     || 'bitcoin';
 const BITCOIN_RPC_PASSWORD = process.env.BITCOIN_RPC_PASSWORD || 'bitcoin';
-const BITCOIN_WALLET       = process.env.BITCOIN_WALLET       || 'testwallet';
+const BITCOIN_WALLET       = process.env.BITCOIN_WALLET       || 'btcminer';
 
 const CHAIN_API_URL       = process.env.CHAIN_API_URL       || 'http://localhost:3000';
 const CHAIN_API_ADMIN_KEY = process.env.CHAIN_API_ADMIN_KEY || '';

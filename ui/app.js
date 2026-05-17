@@ -125,21 +125,21 @@ rivets.formatters.defaultStr = (v, fallback) =>
 
 rivets.formatters.statusColor = v => {
   const m = {
-    active:               'text-green-400',
-    suspended:            'text-yellow-400',
-    disabled:             'text-red-400',
-    frozen:               'text-red-400',
-    detected:             'text-yellow-400',
-    pending_confirmation: 'text-blue-400',
-    confirmed:            'text-green-400',
-    finalized:            'text-emerald-300 font-semibold',
-    created:              'text-gray-300',
-    pending:              'text-yellow-400',
-    paid:                 'text-green-400',
-    expired:              'text-red-400',
-    cancelled:            'text-red-400',
+    active:               'sp sp-active',
+    suspended:            'sp sp-warning',
+    disabled:             'sp sp-error',
+    frozen:               'sp sp-error',
+    detected:             'sp sp-warning',
+    pending_confirmation: 'sp sp-pending',
+    confirmed:            'sp sp-success',
+    finalized:            'sp sp-success',
+    created:              'sp sp-neutral',
+    pending:              'sp sp-warning',
+    paid:                 'sp sp-success',
+    expired:              'sp sp-error',
+    cancelled:            'sp sp-error',
   };
-  return m[v] || 'text-gray-300';
+  return m[v] || 'sp sp-neutral';
 };
 
 rivets.formatters.statusLabel = v => {
@@ -491,14 +491,15 @@ async function loadTenantInfo() {
 
   if (model.tenant.id) {
     try {
-      const cfg = await adminApi('GET', `/tenants/${model.tenant.id}/config`);
+      const resp = await adminApi('GET', `/tenants/${model.tenant.id}/config`);
+      const cfg = resp?.data || resp || {};
       Object.assign(model.tenant.config, {
-        btcConfirmationsRequired: cfg.btcConfirmationsRequired ?? 1,
-        btcFinalityConfirmations: cfg.btcFinalityConfirmations ?? 6,
-        custodyMode:              cfg.custodyMode              ?? 'external_signer',
+        btcConfirmationsRequired: cfg.btc_confirmations_required ?? 1,
+        btcFinalityConfirmations: cfg.btc_finality_confirmations ?? 6,
+        custodyMode:              cfg.custody_mode               ?? 'external_signer',
       });
-      model.tenantConfigForm.btcConfirmationsRequired = String(cfg.btcConfirmationsRequired ?? 1);
-      model.tenantConfigForm.btcFinalityConfirmations = String(cfg.btcFinalityConfirmations ?? 6);
+      model.tenantConfigForm.btcConfirmationsRequired = String(cfg.btc_confirmations_required ?? 1);
+      model.tenantConfigForm.btcFinalityConfirmations = String(cfg.btc_finality_confirmations ?? 6);
     } catch { /* optional */ }
   }
 }
@@ -543,7 +544,7 @@ async function loadPaymentRequests() {
     const data = await api('GET', '/payment-requests', null, q);
     model.paymentRequests = list(data).map(pr => ({
       ...pr,
-      amountDisplay: pr.amountDisplay || amountBtc(pr.amountRaw),
+      amountDisplay: pr.amount_display || pr.amountDisplay || amountBtc(pr.amount_raw || pr.amountRaw),
     }));
   } catch (e) {
     toast('Payment requests: ' + e.message, 'error');
@@ -556,8 +557,8 @@ async function loadDeposits() {
     const data = await api('GET', '/deposits', null, q);
     model.deposits = list(data).map(d => ({
       ...d,
-      amountDisplay: d.amountDisplay || amountBtc(d.amountRaw),
-      customerRef: model.customers.find(c => c.id === d.customerId)?.reference || '',
+      amountDisplay: d.amount_display || d.amountDisplay || amountBtc(d.amount_raw || d.amountRaw),
+      customerRef: model.customers.find(c => c.id === (d.customer_id || d.customerId))?.reference || '',
     }));
   } catch (e) {
     toast('Deposits: ' + e.message, 'error');
@@ -578,7 +579,12 @@ async function loadLedgerEntries(accountId) {
   if (!accountId) return;
   try {
     const data = await api('GET', `/ledger/accounts/${accountId}/entries`);
-    model.ledgerEntries = list(data);
+    model.ledgerEntries = list(data).map(le => ({
+      ...le,
+      amountRaw:         le.amount_raw          || le.amountRaw         || '0',
+      balanceSettledRaw: le.balance_settled_raw  || le.balanceSettledRaw || '0',
+      createdAt:         le.created_at           || le.createdAt         || '',
+    }));
   } catch (e) {
     toast('Ledger entries: ' + e.message, 'error');
   }
@@ -705,7 +711,7 @@ const ctrl = {
     model.quickTenantForm.loading = true;
     try {
       const data = await adminApi('POST', '/tenants', { name });
-      const tenantId = data.id || data.tenant?.id;
+      const tenantId = data?.data?.id || data?.id;
       model.quickTenantForm.name = '';
       await loadAdminTenants();
 
@@ -766,7 +772,7 @@ const ctrl = {
     model.quickCustomerForm.loading = true;
     try {
       const data = await api('POST', '/customers', { reference: ref });
-      const customerId = data.id || data.customer?.id;
+      const customerId = data?.data?.id || data?.id;
       model.quickCustomerForm.reference = '';
       model.customerCreateOpen = false;
       await loadCustomers();
@@ -947,7 +953,7 @@ const ctrl = {
 
     try {
       await api('POST', '/monitors/addresses', {
-        chainId:    'bitcoin',
+        chain:      'bitcoin',
         address:    addr,
         label:      'auto-scenario',
         customerId: model.customerId || undefined,
@@ -1053,17 +1059,16 @@ const ctrl = {
     if (!addr)   { toast('Adres wymagany', 'error'); return; }
     if (!amount) { toast('Kwota wymagana', 'error'); return; }
     if (!wid)    { toast('Wybierz wallet', 'error'); return; }
-    const amountSats = Math.round(parseFloat(amount) * 1e8);
     const expiresAt  = model.payReqForm.expiresMinutes
       ? new Date(Date.now() + Number(model.payReqForm.expiresMinutes) * 60000).toISOString()
       : undefined;
     try {
       await api('POST', '/payment-requests', {
-        chainId:               'bitcoin',
-        assetId:               'bitcoin:BTC',
+        chain:                 'bitcoin',
+        asset:                 'BTC',
         walletId:              wid,
         address:               addr,
-        amountRaw:             String(amountSats),
+        amount:                amount,          // BTC display units, e.g. "0.001"
         reference:             model.payReqForm.reference || undefined,
         customerId:            model.customerId || undefined,
         expiresAt,
@@ -1173,7 +1178,8 @@ const ctrl = {
     const name = model.generateKeyForm.name.trim() || 'dev-key';
     try {
       const data = await adminApi('POST', `/tenants/${model.tenant.id}/api-keys`, { name });
-      toast('Nowy klucz API: ' + (data.key || data.apiKey || JSON.stringify(data)), 'info');
+      const key = data?.data?.apiKey || data?.data?.key || data?.apiKey || data?.key;
+      toast('Nowy klucz API: ' + (key || JSON.stringify(data?.data || data)), 'info');
       await loadAdminApiKeys();
     } catch (e) { toast(e.message, 'error'); }
   },
@@ -1193,7 +1199,7 @@ const ctrl = {
     const id = e.target.dataset.id || e.currentTarget.dataset.id;
     if (!id) return;
     try {
-      await adminApi('POST', `/tenants/${id}/disable`);
+      await adminApi('PATCH', `/tenants/${id}`, { status: 'disabled' });
       await loadAdminTenants();
       toast('Tenant wyłączony');
     } catch (e) { toast(e.message, 'error'); }
@@ -1207,6 +1213,15 @@ const ctrl = {
 setInterval(async () => {
   if (!model.autoRefresh) return;
   await refreshAll();
+
+  const wasConnected = model.chainApiConnected;
+  await checkChainApiHealth();
+
+  // On reconnect: load tenant info and current tab data
+  if (!wasConnected && model.chainApiConnected) {
+    await Promise.all([loadTenantInfo(), loadCustomers(), loadWallets()]);
+  }
+
   if (model.tab === 'btc') {
     if (model.btcSubtab === 'mempool')   await loadMempool();
     if (model.btcSubtab === 'overview')  await loadRecentBlocks();

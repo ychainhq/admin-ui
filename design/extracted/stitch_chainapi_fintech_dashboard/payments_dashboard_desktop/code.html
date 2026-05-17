@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .inner-glow {
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#e78603",
+                        "on-tertiary-container": "#00a472",
+                        "inverse-surface": "#dce1fb",
+                        "on-tertiary": "#003824",
+                        "on-primary-fixed-variant": "#3c475a",
+                        "inverse-primary": "#545f73",
+                        "on-secondary-container": "#522c00",
+                        "surface": "#0c1324",
+                        "primary-fixed-dim": "#bcc7de",
+                        "on-secondary-fixed-variant": "#6b3b00",
+                        "surface-container-high": "#23293c",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "tertiary": "#4edea3",
+                        "surface-container-low": "#151b2d",
+                        "secondary-fixed": "#ffdcbf",
+                        "on-surface": "#dce1fb",
+                        "on-tertiary-fixed": "#002113",
+                        "surface-container-lowest": "#070d1f",
+                        "on-primary-container": "#8590a6",
+                        "error-container": "#93000a",
+                        "on-primary": "#263143",
+                        "surface-dim": "#0c1324",
+                        "surface-bright": "#33394c",
+                        "secondary": "#ffb874",
+                        "inverse-on-surface": "#2a3043",
+                        "tertiary-container": "#00301e",
+                        "surface-container": "#191f31",
+                        "outline": "#8f9097",
+                        "surface-tint": "#bcc7de",
+                        "secondary-fixed-dim": "#ffb874",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-secondary-fixed": "#2d1600",
+                        "surface-variant": "#2e3447",
+                        "on-primary-fixed": "#111c2d",
+                        "on-background": "#dce1fb",
+                        "tertiary-fixed": "#6ffbbe",
+                        "error": "#ffb4ab",
+                        "outline-variant": "#45474c",
+                        "background": "#0c1324",
+                        "surface-container-highest": "#2e3447",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#d8e3fb",
+                        "primary-container": "#1e293b",
+                        "on-secondary": "#4b2800",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#c5c6cd",
+                        "primary": "#bcc7de"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "24px",
+                        "lg": "40px",
+                        "gutter": "24px",
+                        "base": "8px",
+                        "margin-desktop": "32px",
+                        "xl": "64px",
+                        "margin-mobile": "16px",
+                        "sm": "12px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "body-sm": ["Inter"],
+                        "label-md": ["Geist"],
+                        "mono-data": ["Geist"],
+                        "headline-sm": ["Geist"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Geist"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "mono-data": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-x-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen w-[280px] z-50 bg-surface-container-lowest border-r border-white/5 hidden lg:flex flex-col py-8 px-4 transition-all duration-200 ease-in-out">
+<div class="flex items-center gap-3 px-2 mb-10">
+<div class="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary" style="font-variation-settings: 'FILL' 1;">router</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-black text-secondary leading-tight">BITCORE</h1>
+<p class="font-label-md text-label-md text-on-surface-variant opacity-60">Enterprise Node</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-md text-label-md">Deposits</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-secondary border-r-2 border-secondary bg-secondary/5 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-md text-label-md font-bold">Payments</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-label-md text-label-md">Ledger</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-md text-label-md">Customers</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance">account_balance</span>
+<span class="font-label-md text-label-md">Wallets</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="webhook">webhook</span>
+<span class="font-label-md text-label-md">Webhooks</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span class="font-label-md text-label-md">Admin</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="router">router</span>
+<span class="font-label-md text-label-md">BTC Node</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-white/5 pt-6 space-y-1">
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-label-md text-label-md">Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="lg:ml-[280px] min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 w-full h-16 bg-surface/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-margin-desktop shadow-sm">
+<div class="flex items-center gap-8">
+<div class="hidden md:flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" data-icon="payments">payments</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Payments</h2>
+</div>
+<div class="relative group">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant text-[20px]" data-icon="search">search</span>
+<input class="bg-surface-container-high border-none rounded-full py-2 pl-10 pr-4 w-64 text-body-sm focus:ring-1 focus:ring-secondary/50 transition-all" placeholder="Search transactions..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="hidden xl:flex flex-col items-end">
+<span class="font-mono-data text-secondary text-sm font-bold">0.4285 BTC</span>
+<span class="font-label-md text-[10px] text-on-surface-variant opacity-70">Regtest • 840,002</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-full hover:bg-white/5 transition-colors cursor-pointer active:scale-95">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 rounded-full hover:bg-white/5 transition-colors cursor-pointer active:scale-95">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border border-white/10 overflow-hidden ml-2">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional close-up profile avatar of a tech executive in a dark navy suit against a soft-focus architectural background with cool blue lighting. The style is sharp, corporate, and modern, fitting a high-end financial dashboard interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCa1hA30bqniWDN3EhKCUYYJk-uez8nurXK8-zCbRF5F2QYQocbsdHbVazhu82kSPWMIK06NTGuBgF9uFS6hODIgyP90j1vit734P7XVFfPBX4jufHegxTSZqRSJ-s45ZwHPtM6NVvRsUKr_ioWjhtPizscCDG-LRHZ8KIhohJCXJa9wnwiQZ-GMHII69Oat3J2Vl_ef5W6wG4EVV5KASnAx48tyzy3v7u5IAyYDgyyrQB3bQ9VB1cjXpyQQLp98Sr_BtlxLsl4jnk"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Dashboard Canvas -->
+<section class="p-margin-desktop grid grid-cols-12 gap-gutter flex-1">
+<!-- Left Column: New Payment Request Form -->
+<div class="col-span-12 xl:col-span-4 space-y-gutter">
+<div class="glass-card inner-glow rounded-xl p-6 shadow-2xl">
+<div class="flex items-center justify-between mb-8">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">New Payment Request</h3>
+<span class="material-symbols-outlined text-secondary opacity-50" data-icon="add_circle">add_circle</span>
+</div>
+<form class="space-y-6">
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-on-surface-variant">SELECT WALLET</label>
+<div class="relative">
+<select class="w-full bg-surface-container-highest border border-white/5 rounded-lg py-3 px-4 text-on-surface appearance-none focus:ring-1 focus:ring-secondary/50 font-body-md">
+<option>Institutional Hot Wallet (0.4285 BTC)</option>
+<option>Cold Storage Vault (12.5000 BTC)</option>
+<option>Operations Pool (1.2040 BTC)</option>
+</select>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined pointer-events-none text-on-surface-variant" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-on-surface-variant">DESTINATION BTC ADDRESS</label>
+<input class="w-full bg-surface-container-highest border border-white/5 rounded-lg py-3 px-4 text-on-surface placeholder:text-on-surface-variant/30 focus:ring-1 focus:ring-secondary/50 font-mono-data" placeholder="bc1q..." type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-on-surface-variant">AMOUNT (BTC)</label>
+<input class="w-full bg-surface-container-highest border border-white/5 rounded-lg py-3 px-4 text-on-surface focus:ring-1 focus:ring-secondary/50 font-mono-data" placeholder="0.0000" step="0.0001" type="number"/>
+</div>
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-on-surface-variant">NETWORK FEE</label>
+<div class="bg-surface-container-highest border border-white/5 rounded-lg py-3 px-4 text-secondary/70 font-mono-data text-center">
+                                    12 sat/vB
+                                </div>
+</div>
+</div>
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-on-surface-variant">REFERENCE / NOTE</label>
+<input class="w-full bg-surface-container-highest border border-white/5 rounded-lg py-3 px-4 text-on-surface focus:ring-1 focus:ring-secondary/50 font-body-md" placeholder="e.g. Invoice #8402" type="text"/>
+</div>
+<button class="w-full bg-secondary text-on-secondary font-bold py-4 rounded-lg shadow-lg hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4" type="submit">
+<span class="material-symbols-outlined" data-icon="send">send</span>
+                            CREATE REQUEST
+                        </button>
+</form>
+</div>
+<!-- Network Status Micro-card -->
+<div class="glass-card rounded-xl p-6 border-l-4 border-tertiary">
+<div class="flex justify-between items-start">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Network Health</p>
+<h4 class="font-headline-sm text-headline-sm text-tertiary mt-1">Operational</h4>
+</div>
+<div class="w-12 h-12 bg-tertiary/10 rounded-full flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</div>
+<div class="mt-4 flex gap-4">
+<div class="flex-1">
+<p class="text-[10px] text-on-surface-variant">Mem-pool Size</p>
+<p class="font-mono-data text-sm">4.2 MB</p>
+</div>
+<div class="flex-1">
+<p class="text-[10px] text-on-surface-variant">Next Block</p>
+<p class="font-mono-data text-sm">~8.4 min</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Payment Requests Table -->
+<div class="col-span-12 xl:col-span-8">
+<div class="glass-card inner-glow rounded-xl flex flex-col h-full shadow-2xl overflow-hidden">
+<div class="p-6 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Payment Requests</h3>
+<p class="text-body-sm text-on-surface-variant">Manage and monitor outgoing transaction lifecycle</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-high border border-white/10 px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-white/5 transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="filter_list">filter_list</span>
+                                FILTER
+                            </button>
+<button class="bg-surface-container-high border border-white/10 px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-white/5 transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="download">download</span>
+                                EXPORT
+                            </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-white/2">
+<th class="px-6 py-4 font-label-md text-label-md text-on-surface-variant border-b border-white/5">DATE / TIME</th>
+<th class="px-6 py-4 font-label-md text-label-md text-on-surface-variant border-b border-white/5">DESTINATION</th>
+<th class="px-6 py-4 font-label-md text-label-md text-on-surface-variant border-b border-white/5">AMOUNT</th>
+<th class="px-6 py-4 font-label-md text-label-md text-on-surface-variant border-b border-white/5">STATUS</th>
+<th class="px-6 py-4 font-label-md text-label-md text-on-surface-variant border-b border-white/5 text-right">ACTIONS</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-white/5">
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="font-body-md text-on-surface">Oct 24, 2023</span>
+<span class="text-[10px] text-on-surface-variant">14:22:10 UTC</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]" data-icon="content_copy">content_copy</span>
+<span class="font-mono-data text-sm">bc1q...u8f2</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">Institutional Payout #901</span>
+</td>
+<td class="px-6 py-5">
+<div class="font-mono-data font-bold text-on-surface">0.12500000 BTC</div>
+<span class="text-[11px] text-on-surface-variant">≈ $4,285.50</span>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-tertiary/10 text-tertiary text-[11px] font-bold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                            Confirmed
+                                        </span>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="p-2 rounded-lg hover:bg-white/10 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="font-body-md text-on-surface">Oct 24, 2023</span>
+<span class="text-[10px] text-on-surface-variant">13:05:44 UTC</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]" data-icon="content_copy">content_copy</span>
+<span class="font-mono-data text-sm">bc1p...z9q1</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">Wallet Rebalancing</span>
+</td>
+<td class="px-6 py-5">
+<div class="font-mono-data font-bold text-on-surface">0.05000000 BTC</div>
+<span class="text-[11px] text-on-surface-variant">≈ $1,714.20</span>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary/10 text-secondary text-[11px] font-bold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+                                            Pending
+                                        </span>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="p-2 rounded-lg hover:bg-white/10 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="font-body-md text-on-surface">Oct 23, 2023</span>
+<span class="text-[10px] text-on-surface-variant">22:15:01 UTC</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]" data-icon="content_copy">content_copy</span>
+<span class="font-mono-data text-sm">3Kj...Lp9</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">API Withdrawal Hook</span>
+</td>
+<td class="px-6 py-5">
+<div class="font-mono-data font-bold text-on-surface">1.42000000 BTC</div>
+<span class="text-[11px] text-on-surface-variant">≈ $48,650.00</span>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-tertiary/10 text-tertiary text-[11px] font-bold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                            Confirmed
+                                        </span>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="p-2 rounded-lg hover:bg-white/10 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="font-body-md text-on-surface">Oct 23, 2023</span>
+<span class="text-[10px] text-on-surface-variant">19:40:12 UTC</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]" data-icon="content_copy">content_copy</span>
+<span class="font-mono-data text-sm">bc1q...m0k8</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">Client Settlement</span>
+</td>
+<td class="px-6 py-5">
+<div class="font-mono-data font-bold text-on-surface">0.00450000 BTC</div>
+<span class="text-[11px] text-on-surface-variant">≈ $154.21</span>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-error/10 text-error text-[11px] font-bold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                                            Failed
+                                        </span>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="p-2 rounded-lg hover:bg-white/10 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-5 border-none">
+<div class="flex flex-col">
+<span class="font-body-md text-on-surface">Oct 23, 2023</span>
+<span class="text-[10px] text-on-surface-variant">15:10:00 UTC</span>
+</div>
+</td>
+<td class="px-6 py-5 border-none">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]" data-icon="content_copy">content_copy</span>
+<span class="font-mono-data text-sm">bc1q...x2y3</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">Infrastructure Payment</span>
+</td>
+<td class="px-6 py-5 border-none">
+<div class="font-mono-data font-bold text-on-surface">0.08200000 BTC</div>
+<span class="text-[11px] text-on-surface-variant">≈ $2,810.00</span>
+</td>
+<td class="px-6 py-5 border-none">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-tertiary/10 text-tertiary text-[11px] font-bold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                            Confirmed
+                                        </span>
+</td>
+<td class="px-6 py-5 text-right border-none">
+<button class="p-2 rounded-lg hover:bg-white/10 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="mt-auto p-6 border-t border-white/5 flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">Showing 5 of 124 requests</span>
+<div class="flex gap-1">
+<button class="p-2 rounded hover:bg-white/5 text-on-surface-variant disabled:opacity-30" disabled="">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="p-2 rounded bg-secondary/10 text-secondary font-bold font-mono-data px-4">1</button>
+<button class="p-2 rounded hover:bg-white/5 text-on-surface-variant font-mono-data px-4">2</button>
+<button class="p-2 rounded hover:bg-white/5 text-on-surface-variant font-mono-data px-4">3</button>
+<button class="p-2 rounded hover:bg-white/5 text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer Visual Hint (Glass Overlay) -->
+<div class="mt-auto p- margin-desktop">
+<div class="glass-card rounded-xl p-4 flex items-center justify-center gap-12 text-on-surface-variant/40">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="security">security</span>
+<span class="font-label-md text-[10px] tracking-widest uppercase">AES-256 Encrypted</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="account_tree">account_tree</span>
+<span class="font-label-md text-[10px] tracking-widest uppercase">HD Wallet Derivation</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="verified_user">verified_user</span>
+<span class="font-label-md text-[10px] tracking-widest uppercase">Multi-Sig Enabled</span>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Hidden on Desktop) -->
+<nav class="lg:hidden fixed bottom-0 left-0 w-full bg-surface-container-high/90 backdrop-blur-2xl border-t border-white/10 flex justify-around items-center h-16 px-4 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.4)]">
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-label-md text-[10px]">Ledger</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary font-bold active:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-md text-[10px]">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance">account_balance</span>
+<span class="font-label-md text-[10px]">Wallets</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="router">router</span>
+<span class="font-label-md text-[10px]">Node</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-[10px]">Admin</span>
+</a>
+</nav>
+</body></html>

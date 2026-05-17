@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bitcore | Wallets Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#e78603",
+                        "on-tertiary-container": "#00a472",
+                        "inverse-surface": "#dce1fb",
+                        "on-tertiary": "#003824",
+                        "on-primary-fixed-variant": "#3c475a",
+                        "inverse-primary": "#545f73",
+                        "on-secondary-container": "#522c00",
+                        "surface": "#0c1324",
+                        "primary-fixed-dim": "#bcc7de",
+                        "on-secondary-fixed-variant": "#6b3b00",
+                        "surface-container-high": "#23293c",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "tertiary": "#4edea3",
+                        "surface-container-low": "#151b2d",
+                        "secondary-fixed": "#ffdcbf",
+                        "on-surface": "#dce1fb",
+                        "on-tertiary-fixed": "#002113",
+                        "surface-container-lowest": "#070d1f",
+                        "on-primary-container": "#8590a6",
+                        "error-container": "#93000a",
+                        "on-primary": "#263143",
+                        "surface-dim": "#0c1324",
+                        "surface-bright": "#33394c",
+                        "secondary": "#ffb874",
+                        "inverse-on-surface": "#2a3043",
+                        "tertiary-container": "#00301e",
+                        "surface-container": "#191f31",
+                        "outline": "#8f9097",
+                        "surface-tint": "#bcc7de",
+                        "secondary-fixed-dim": "#ffb874",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-secondary-fixed": "#2d1600",
+                        "surface-variant": "#2e3447",
+                        "on-primary-fixed": "#111c2d",
+                        "on-background": "#dce1fb",
+                        "tertiary-fixed": "#6ffbbe",
+                        "error": "#ffb4ab",
+                        "outline-variant": "#45474c",
+                        "background": "#0c1324",
+                        "surface-container-highest": "#2e3447",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#d8e3fb",
+                        "primary-container": "#1e293b",
+                        "on-secondary": "#4b2800",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#c5c6cd",
+                        "primary": "#bcc7de"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "24px",
+                        "lg": "40px",
+                        "gutter": "24px",
+                        "base": "8px",
+                        "margin-desktop": "32px",
+                        "xl": "64px",
+                        "margin-mobile": "16px",
+                        "sm": "12px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "body-sm": ["Inter"],
+                        "label-md": ["Geist"],
+                        "mono-data": ["Geist"],
+                        "headline-sm": ["Geist"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Geist"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "mono-data": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+        }
+        body {
+            background-color: #020617;
+            color: #dce1fb;
+        }
+    </style>
+</head>
+<body class="font-body-md overflow-x-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen w-[280px] z-50 bg-surface-container-lowest border-r border-white/5 shadow-2xl hidden lg:flex flex-col py-8 px-4">
+<div class="flex items-center gap-3 px-4 mb-10">
+<div class="w-10 h-10 bg-secondary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary" style="font-variation-settings: 'FILL' 1;">currency_bitcoin</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-black text-secondary tracking-tighter">BITCORE</h1>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Enterprise Node</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-md text-label-md">Deposits</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-md text-label-md">Payments</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-label-md text-label-md">Ledger</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-md text-label-md">Customers</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-secondary border-r-2 border-secondary bg-secondary/5 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance">account_balance</span>
+<span class="font-label-md text-label-md">Wallets</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="webhook">webhook</span>
+<span class="font-label-md text-label-md">Webhooks</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span class="font-label-md text-label-md">Admin</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="router">router</span>
+<span class="font-label-md text-label-md">BTC Node</span>
+</a>
+</nav>
+<div class="mt-auto space-y-1 pt-8 border-t border-white/5">
+<button class="w-full flex items-center justify-center gap-2 bg-secondary text-on-secondary font-headline-sm text-[14px] py-3 rounded-lg font-bold hover:brightness-110 active:scale-95 transition-all mb-4">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Transaction
+            </button>
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-on-surface transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-label-md text-label-md">Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Stage -->
+<main class="lg:ml-[280px] min-h-screen pb-20">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-white/10 h-16 flex justify-between items-center w-full px-margin-desktop shadow-sm">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 bg-surface-container-high px-3 py-1.5 rounded-full border border-white/5">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="font-label-md text-label-md text-on-surface-variant">Regtest • 840,002</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex flex-col items-end">
+<span class="font-headline-sm text-headline-sm text-secondary">0.4285 BTC</span>
+<span class="font-label-md text-label-md text-on-surface-variant">$28,492.12 USD</span>
+</div>
+<div class="flex items-center gap-2 ml-4">
+<button class="p-2 text-on-surface-variant hover:bg-white/5 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-white/5 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-secondary/50">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional close-up portrait of a high-net-worth individual in a sharp tailored suit, set against a blurred background of a modern glass skyscraper. The lighting is sophisticated and directional, highlighting a clean-cut aesthetic. The overall color palette is muted and cool, reflecting the high-performance and secure environment of institutional finance." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEpTn2tY5TylydeFGC3jjOszSOZSTmgw4kT-ovmsrBk1o03gp3gLa3MaeXo6QnC_tBEMQJQj80hxTU3ekXfK32zqsMGYruBd5CFwlNnKg1tgGwBR1xMmwlfNAAdcxqybb9UdEz5JLMZf-AsWI4kDsKJLCCDOvCFxUmpyE3uRRVm9VzTLs4eJGoUZX_grw71L9zHdZkhU-OeEE-I60z6VtjXPNFCv6X92P4LVNaTo3DuqajL8IespEJqlEhF-Flg3oAmrHcGxtGB44"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Dashboard Body -->
+<div class="p-margin-desktop space-y-gutter">
+<!-- Headline Section -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Wallets Inventory</h2>
+<p class="font-body-md text-on-surface-variant mt-1">Manage institutional keys and operational liquidity.</p>
+</div>
+<div class="flex gap-3">
+<div class="flex items-center gap-1 bg-surface-container-low border border-white/5 px-4 py-2 rounded-lg">
+<span class="font-label-md text-label-md text-on-surface-variant">Active Nodes:</span>
+<span class="font-label-md text-label-md text-tertiary">08 / 08</span>
+</div>
+</div>
+</div>
+<!-- Bento Grid - Wallet Types -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Hot Wallet (Operational) -->
+<div class="glass-card p-6 rounded-xl flex flex-col relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4">
+<span class="material-symbols-outlined text-secondary opacity-20 group-hover:opacity-40 transition-opacity text-5xl">bolt</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<span class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_8px_rgba(78,222,163,0.5)]"></span>
+<h3 class="font-label-md text-label-md text-on-surface-variant tracking-widest uppercase">Hot Wallet</h3>
+</div>
+<div class="mb-6">
+<div class="font-headline-lg text-headline-lg text-on-surface">0.0241 BTC</div>
+<div class="font-label-md text-label-md text-on-surface-variant">$1,604.12 USD</div>
+</div>
+<div class="mt-auto flex items-center justify-between border-t border-white/5 pt-4">
+<div class="flex flex-col">
+<span class="font-label-md text-[10px] text-on-surface-variant uppercase">Health</span>
+<span class="text-tertiary font-bold text-sm">OPTIMAL</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-md text-[10px] text-on-surface-variant uppercase">Last Sync</span>
+<span class="text-on-surface text-sm">2 min ago</span>
+</div>
+</div>
+</div>
+<!-- Cold Storage (Treasury) -->
+<div class="glass-card p-6 rounded-xl flex flex-col relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4">
+<span class="material-symbols-outlined text-secondary opacity-20 group-hover:opacity-40 transition-opacity text-5xl">ac_unit</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<span class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_8px_rgba(78,222,163,0.5)]"></span>
+<h3 class="font-label-md text-label-md text-on-surface-variant tracking-widest uppercase">Cold Vault</h3>
+</div>
+<div class="mb-6">
+<div class="font-headline-lg text-headline-lg text-on-surface">0.3840 BTC</div>
+<div class="font-label-md text-label-md text-on-surface-variant">$25,561.12 USD</div>
+</div>
+<div class="mt-auto flex items-center justify-between border-t border-white/5 pt-4">
+<div class="flex flex-col">
+<span class="font-label-md text-[10px] text-on-surface-variant uppercase">Signers</span>
+<span class="text-on-surface font-bold text-sm">3 of 5</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-md text-[10px] text-on-surface-variant uppercase">Security</span>
+<span class="text-tertiary text-sm">AIR-GAPPED</span>
+</div>
+</div>
+</div>
+<!-- Customer Pooled -->
+<div class="glass-card p-6 rounded-xl flex flex-col relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4">
+<span class="material-symbols-outlined text-secondary opacity-20 group-hover:opacity-40 transition-opacity text-5xl">group</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<span class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(255,184,116,0.5)]"></span>
+<h3 class="font-label-md text-label-md text-on-surface-variant tracking-widest uppercase">Customer Pooled</h3>
+</div>
+<div class="mb-6">
+<div class="font-headline-lg text-headline-lg text-on-surface">0.0204 BTC</div>
+<div class="font-label-md text-label-md text-on-surface-variant">$1,326.88 USD</div>
+</div>
+<div class="mt-auto flex items-center justify-between border-t border-white/5 pt-4">
+<div class="flex flex-col">
+<span class="font-label-md text-[10px] text-on-surface-variant uppercase">Accounts</span>
+<span class="text-on-surface font-bold text-sm">1,248 active</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-md text-[10px] text-on-surface-variant uppercase">Yield</span>
+<span class="text-secondary text-sm">+2.4% APY</span>
+</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Import/Create Form -->
+<div class="lg:col-span-1 space-y-gutter">
+<div class="glass-card p-6 rounded-xl">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-secondary">add_circle</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Connect New Wallet</h3>
+</div>
+<form class="space-y-4">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-2 uppercase">Wallet Type</label>
+<select class="w-full bg-surface-container-high border border-white/10 rounded-lg py-2.5 px-4 text-on-surface focus:ring-1 focus:ring-secondary focus:border-secondary outline-none appearance-none">
+<option>BIP84 (Native SegWit)</option>
+<option>BIP49 (Nested SegWit)</option>
+<option>Multi-Signature (M-of-N)</option>
+<option>Watch-Only (xPub/zPub)</option>
+</select>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-2 uppercase">Alias / Name</label>
+<input class="w-full bg-surface-container-high border border-white/10 rounded-lg py-2.5 px-4 text-on-surface focus:ring-1 focus:ring-secondary focus:border-secondary outline-none placeholder:text-white/20" placeholder="e.g. Treasury Reserve 04" type="text"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-2 uppercase">Extended Public Key (xPub)</label>
+<textarea class="w-full bg-surface-container-high border border-white/10 rounded-lg py-2.5 px-4 text-on-surface focus:ring-1 focus:ring-secondary focus:border-secondary outline-none placeholder:text-white/20 font-mono-data text-xs" placeholder="vpub..." rows="3"></textarea>
+</div>
+<div class="pt-2">
+<button class="w-full bg-secondary text-on-secondary font-bold py-3 rounded-lg hover:brightness-110 active:scale-95 transition-all" type="submit">
+                                    Initialize Wallet
+                                </button>
+</div>
+</form>
+</div>
+<!-- Security Info -->
+<div class="glass-card p-6 rounded-xl bg-secondary-container/10 border-secondary/20">
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">security</span>
+<div>
+<h4 class="font-label-md text-label-md text-secondary font-bold mb-1 uppercase">Governance Protocol</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                                    All wallet operations require two-party authorization (2PA). Institutional cold storage remains air-gapped with HSM verification.
+                                </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Wallets Table -->
+<div class="lg:col-span-2">
+<div class="glass-card rounded-xl overflow-hidden">
+<div class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Operational Entities</h3>
+<button class="text-secondary font-label-md text-label-md uppercase hover:underline">View All</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider border-b border-white/5">
+<th class="px-6 py-4 font-medium">Entity</th>
+<th class="px-6 py-4 font-medium">Network Address</th>
+<th class="px-6 py-4 font-medium">Current Balance</th>
+<th class="px-6 py-4 font-medium">Status</th>
+<th class="px-6 py-4 font-medium"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-white/[0.03]">
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">account_balance</span>
+</div>
+<div>
+<div class="text-on-surface font-semibold">Corporate Liquidity</div>
+<div class="text-[10px] text-on-surface-variant font-mono-data">ID: WL-842-X</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="text-xs font-mono-data text-on-surface-variant">bc1q...x9p3</div>
+</td>
+<td class="px-6 py-4">
+<div class="text-on-surface font-mono-data">0.0124 BTC</div>
+<div class="text-[10px] text-on-surface-variant">$824.12</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20 uppercase tracking-tighter">
+                                                Synced
+                                            </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">lock</span>
+</div>
+<div>
+<div class="text-on-surface font-semibold">Legacy Cold Vault</div>
+<div class="text-[10px] text-on-surface-variant font-mono-data">ID: WL-102-Z</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="text-xs font-mono-data text-on-surface-variant">3J98...k4m5</div>
+</td>
+<td class="px-6 py-4">
+<div class="text-on-surface font-mono-data">0.3400 BTC</div>
+<div class="text-[10px] text-on-surface-variant">$22,610.00</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/5 text-on-surface-variant border border-white/10 uppercase tracking-tighter">
+                                                Offline
+                                            </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">person</span>
+</div>
+<div>
+<div class="text-on-surface font-semibold">Client Segregated 01</div>
+<div class="text-[10px] text-on-surface-variant font-mono-data">ID: WL-559-A</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="text-xs font-mono-data text-on-surface-variant">bc1p...v9z2</div>
+</td>
+<td class="px-6 py-4">
+<div class="text-on-surface font-mono-data">0.0041 BTC</div>
+<div class="text-[10px] text-on-surface-variant">$272.65</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-secondary/10 text-secondary border border-secondary/20 uppercase tracking-tighter">
+                                                Action Required
+                                            </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.03] transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">monitoring</span>
+</div>
+<div>
+<div class="text-on-surface font-semibold">Yield Distribution</div>
+<div class="text-[10px] text-on-surface-variant font-mono-data">ID: WL-022-L</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="text-xs font-mono-data text-on-surface-variant">bc1q...m4r0</div>
+</td>
+<td class="px-6 py-4">
+<div class="text-on-surface font-mono-data">0.0008 BTC</div>
+<div class="text-[10px] text-on-surface-variant">$53.20</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20 uppercase tracking-tighter">
+                                                Synced
+                                            </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="lg:hidden fixed bottom-0 left-0 w-full rounded-t-xl z-50 bg-surface-container-high/90 backdrop-blur-2xl border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] flex justify-around items-center h-16 px-4 pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-label-md text-label-md-mobile">Ledger</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-md text-label-md-mobile">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary font-bold active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance">account_balance</span>
+<span class="font-label-md text-label-md-mobile">Wallets</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="router">router</span>
+<span class="font-label-md text-label-md-mobile">Node</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md-mobile">Admin</span>
+</a>
+</nav>
+</body></html>

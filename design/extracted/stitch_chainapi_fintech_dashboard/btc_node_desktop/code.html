@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#e78603",
+                    "on-tertiary-container": "#00a472",
+                    "inverse-surface": "#dce1fb",
+                    "on-tertiary": "#003824",
+                    "on-primary-fixed-variant": "#3c475a",
+                    "inverse-primary": "#545f73",
+                    "on-secondary-container": "#522c00",
+                    "surface": "#0c1324",
+                    "primary-fixed-dim": "#bcc7de",
+                    "on-secondary-fixed-variant": "#6b3b00",
+                    "surface-container-high": "#23293c",
+                    "tertiary-fixed-dim": "#4edea3",
+                    "tertiary": "#4edea3",
+                    "surface-container-low": "#151b2d",
+                    "secondary-fixed": "#ffdcbf",
+                    "on-surface": "#dce1fb",
+                    "on-tertiary-fixed": "#002113",
+                    "surface-container-lowest": "#070d1f",
+                    "on-primary-container": "#8590a6",
+                    "error-container": "#93000a",
+                    "on-primary": "#263143",
+                    "surface-dim": "#0c1324",
+                    "surface-bright": "#33394c",
+                    "secondary": "#ffb874",
+                    "inverse-on-surface": "#2a3043",
+                    "tertiary-container": "#00301e",
+                    "surface-container": "#191f31",
+                    "outline": "#8f9097",
+                    "surface-tint": "#bcc7de",
+                    "secondary-fixed-dim": "#ffb874",
+                    "on-tertiary-fixed-variant": "#005236",
+                    "on-secondary-fixed": "#2d1600",
+                    "surface-variant": "#2e3447",
+                    "on-primary-fixed": "#111c2d",
+                    "on-background": "#dce1fb",
+                    "tertiary-fixed": "#6ffbbe",
+                    "error": "#ffb4ab",
+                    "outline-variant": "#45474c",
+                    "background": "#0c1324",
+                    "surface-container-highest": "#2e3447",
+                    "on-error-container": "#ffdad6",
+                    "primary-fixed": "#d8e3fb",
+                    "primary-container": "#1e293b",
+                    "on-secondary": "#4b2800",
+                    "on-error": "#690005",
+                    "on-surface-variant": "#c5c6cd",
+                    "primary": "#bcc7de"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "md": "24px",
+                    "lg": "40px",
+                    "gutter": "24px",
+                    "base": "8px",
+                    "margin-desktop": "32px",
+                    "xl": "64px",
+                    "margin-mobile": "16px",
+                    "sm": "12px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Geist"],
+                    "headline-md": ["Geist"],
+                    "body-sm": ["Inter"],
+                    "label-md": ["Geist"],
+                    "mono-data": ["Geist"],
+                    "headline-sm": ["Geist"],
+                    "body-md": ["Inter"],
+                    "display-lg": ["Geist"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "mono-data": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #020617;
+            color: #dce1fb;
+        }
+    </style>
+</head>
+<body class="font-body-md">
+<!-- TopAppBar -->
+<header class="fixed top-0 z-40 flex justify-between items-center w-full px-margin-desktop h-16 bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-sm">
+<div class="flex items-center gap-base">
+<span class="font-headline-md text-headline-md font-bold tracking-tighter text-secondary">BITCORE</span>
+<span class="ml-4 font-label-md text-label-md text-on-surface-variant bg-surface-container-high px-2 py-1 rounded">NODE_v26.0</span>
+</div>
+<div class="flex items-center gap-gutter">
+<div class="hidden md:flex items-center gap-md font-mono-data text-on-surface-variant">
+<span class="text-secondary font-bold">Regtest • 840,002</span>
+<span class="text-on-surface">0.4285 BTC</span>
+</div>
+<div class="flex gap-sm">
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-white/5 p-2 rounded transition-colors">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-white/5 p-2 rounded transition-colors">settings</button>
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0TMY9Dn6h2eV9jAmrGTinp_Yae2jXeMJwHGiwsIKwPV7-eGhoZe89SozA6B_j7tWQ6eVAhPhL7ZW0dZ59-HZc0hhQqzciXgz4qUFYYOrKyBloV3AH5d7IUnyUjTAV6NA45J7lnnl0XzWm3ZQ6GvLWtTLk1BbKEF16kJVOU0JY0PoNwFcZJ_pvZd-08FqlBxIxc6Dgl9gEBTmhzmFbjG37Lds3Yvtkr6jRuUGcNKjhrc4VY3aQMd6jCz_lTdAs1qJ_Z7W4PYk4tAs"/>
+</div>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen w-[280px] z-50 bg-surface-container-lowest border-r border-white/5 shadow-2xl hidden lg:flex flex-col py-8 px-4">
+<div class="mb-10 px-4">
+<div class="flex items-center gap-sm mb-2">
+<div class="w-8 h-8 bg-secondary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-surface font-black" style="font-variation-settings: 'FILL' 1;">router</span>
+</div>
+<span class="font-headline-md text-headline-md font-black text-secondary">BITCORE</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant opacity-60">Enterprise Node Control</span>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-md text-label-md">Deposits</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-label-md">Payments</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-label-md text-label-md">Ledger</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-md text-label-md">Customers</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">account_balance</span>
+<span class="font-label-md text-label-md">Wallets</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">webhook</span>
+<span class="font-label-md text-label-md">Webhooks</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-on-surface-variant hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span>
+<span class="font-label-md text-label-md">Admin</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 rounded-lg text-secondary border-r-2 border-secondary bg-secondary/5 transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">router</span>
+<span class="font-label-md text-label-md">BTC Node</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-white/5 pt-6 space-y-1">
+<button class="flex items-center gap-sm w-full px-4 py-3 bg-secondary text-surface rounded-lg font-bold transition-transform active:scale-95">
+<span class="material-symbols-outlined">add</span>
+<span class="font-label-md text-label-md">New Transaction</span>
+</button>
+<a class="flex items-center gap-sm px-4 py-3 mt-4 text-on-surface-variant hover:text-on-surface" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+<a class="flex items-center gap-sm px-4 py-3 text-on-surface-variant hover:text-on-surface" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-md text-label-md">Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="lg:ml-[280px] pt-24 px-margin-desktop pb-xl">
+<div class="max-w-[1440px] mx-auto space-y-gutter">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">BTC Node Terminal</h1>
+<p class="text-on-surface-variant opacity-70">Mainnet Synchronization Status: Healthy</p>
+</div>
+<div class="flex gap-base">
+<button class="bg-surface-container-high border border-white/10 px-4 py-2 rounded-lg flex items-center gap-xs text-on-surface-variant hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined text-sm">refresh</span>
+<span class="font-label-md text-label-md">RESCAN</span>
+</button>
+<button class="bg-secondary text-surface px-4 py-2 rounded-lg flex items-center gap-xs font-bold transition-transform active:scale-95">
+<span class="material-symbols-outlined text-sm">stop_circle</span>
+<span class="font-label-md text-label-md">STOP NODE</span>
+</button>
+</div>
+</div>
+<!-- Bento Grid: Top Section (Chain Info & Mempool) -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Chain Info Bento -->
+<div class="col-span-12 md:col-span-8 glass-card rounded-xl p-md flex flex-col justify-between min-h-[220px]">
+<div class="flex justify-between items-start">
+<div>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Chain Metrics</span>
+<div class="flex items-baseline gap-sm mt-xs">
+<span class="font-headline-lg text-headline-lg font-mono-data">840,002</span>
+<span class="font-label-md text-on-tertiary-container bg-on-tertiary-container/10 px-2 py-0.5 rounded">SYNCHRONIZED</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-label-md text-on-surface-variant">Last Block</span>
+<p class="font-mono-data text-body-sm opacity-60">5 mins ago</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-md mt-lg border-t border-white/5 pt-md">
+<div>
+<span class="font-label-md text-on-surface-variant block mb-1">Difficulty</span>
+<span class="font-mono-data text-headline-sm">83.12 T</span>
+</div>
+<div>
+<span class="font-label-md text-on-surface-variant block mb-1">Hash Rate</span>
+<span class="font-mono-data text-headline-sm text-tertiary">612.4 EH/s</span>
+</div>
+<div>
+<span class="font-label-md text-on-surface-variant block mb-1">Network Version</span>
+<span class="font-mono-data text-headline-sm">70016</span>
+</div>
+</div>
+</div>
+<!-- Mempool Bento -->
+<div class="col-span-12 md:col-span-4 glass-card rounded-xl p-md flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest block mb-4">Mempool Status</span>
+<div class="flex-1 flex flex-col justify-center gap-base">
+<div class="flex justify-between items-end">
+<span class="font-label-md text-on-surface-variant">Unconfirmed Txs</span>
+<span class="font-mono-data text-headline-md">14,281</span>
+</div>
+<div class="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-[65%]"></div>
+</div>
+<div class="flex justify-between font-label-md mt-2">
+<div class="flex flex-col">
+<span class="text-on-surface-variant">Fee Rate (Avg)</span>
+<span class="text-secondary font-bold">42 sat/vB</span>
+</div>
+<div class="flex flex-col text-right">
+<span class="text-on-surface-variant">Total Size</span>
+<span class="text-on-surface">184 MB</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Dashboard Middle Content: Recent Blocks & Peers -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Recent Blocks Table -->
+<div class="col-span-12 md:col-span-9 glass-card rounded-xl overflow-hidden">
+<div class="p-md border-b border-white/5 flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm">Recent Blocks</h3>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">filter_list</span>
+</div>
+<table class="w-full text-left">
+<thead class="bg-white/5">
+<tr class="font-label-md text-on-surface-variant border-b border-white/5">
+<th class="px-md py-3 font-medium">Height</th>
+<th class="px-md py-3 font-medium">Hash</th>
+<th class="px-md py-3 font-medium">Txs</th>
+<th class="px-md py-3 font-medium">Size</th>
+<th class="px-md py-3 font-medium">Time</th>
+<th class="px-md py-3 font-medium text-right">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-white/5 font-mono-data text-body-sm">
+<tr class="hover:bg-white/5 transition-colors">
+<td class="px-md py-4 text-secondary">840002</td>
+<td class="px-md py-4 opacity-60">0000000000000...4d2e</td>
+<td class="px-md py-4">2,841</td>
+<td class="px-md py-4">1.42 MB</td>
+<td class="px-md py-4">2m ago</td>
+<td class="px-md py-4 text-right">
+<span class="text-tertiary bg-tertiary/10 px-2 py-0.5 rounded text-[10px] font-bold">CONFIRMED</span>
+</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors">
+<td class="px-md py-4 text-secondary">840001</td>
+<td class="px-md py-4 opacity-60">0000000000000...8a1c</td>
+<td class="px-md py-4">3,120</td>
+<td class="px-md py-4">1.68 MB</td>
+<td class="px-md py-4">12m ago</td>
+<td class="px-md py-4 text-right">
+<span class="text-tertiary bg-tertiary/10 px-2 py-0.5 rounded text-[10px] font-bold">CONFIRMED</span>
+</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors">
+<td class="px-md py-4 text-secondary">840000</td>
+<td class="px-md py-4 opacity-60">0000000000000...9f22</td>
+<td class="px-md py-4">2,455</td>
+<td class="px-md py-4">1.22 MB</td>
+<td class="px-md py-4">24m ago</td>
+<td class="px-md py-4 text-right">
+<span class="text-tertiary bg-tertiary/10 px-2 py-0.5 rounded text-[10px] font-bold">CONFIRMED</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Peer Stats -->
+<div class="col-span-12 md:col-span-3 space-y-gutter">
+<div class="glass-card rounded-xl p-md">
+<span class="font-label-md text-on-surface-variant block mb-4">Node Connections</span>
+<div class="flex items-center gap-md">
+<div class="flex-1">
+<span class="font-mono-data text-display-lg text-secondary">24</span>
+<span class="font-label-md text-on-surface-variant block">Active Peers</span>
+</div>
+<div class="w-16 h-16 rounded-full border-4 border-tertiary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">swap_horiz</span>
+</div>
+</div>
+</div>
+<div class="glass-card rounded-xl p-md">
+<span class="font-label-md text-on-surface-variant block mb-4">Traffic (24h)</span>
+<div class="space-y-sm">
+<div class="flex justify-between font-mono-data text-body-sm">
+<span class="text-on-surface-variant">Inbound:</span>
+<span class="text-tertiary">1.2 GB</span>
+</div>
+<div class="flex justify-between font-mono-data text-body-sm">
+<span class="text-on-surface-variant">Outbound:</span>
+<span class="text-secondary">4.8 GB</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- RPC Console Section -->
+<div class="glass-card rounded-xl flex flex-col min-h-[400px]">
+<div class="p-md border-b border-white/5 flex justify-between items-center">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary">terminal</span>
+<h3 class="font-headline-sm text-headline-sm">RPC Console</h3>
+</div>
+<div class="flex gap-base">
+<span class="font-label-md text-on-surface-variant bg-white/5 px-3 py-1 rounded">REST enabled</span>
+<span class="font-label-md text-on-surface-variant bg-white/5 px-3 py-1 rounded">Auth: basic</span>
+</div>
+</div>
+<div class="flex-1 p-md font-mono-data text-body-sm overflow-y-auto space-y-2 max-h-[300px]">
+<p class="text-on-surface-variant opacity-50"># Welcome to Bitcore Node v26.0 Console</p>
+<p class="text-on-surface-variant opacity-50"># Type 'help' for available commands.</p>
+<div class="mt-4">
+<p class="text-secondary mb-1">&gt; getblockcount</p>
+<p class="text-on-surface ml-4">840002</p>
+</div>
+<div class="mt-4">
+<p class="text-secondary mb-1">&gt; getnetworkinfo</p>
+<pre class="text-on-surface ml-4 bg-white/5 p-4 rounded-lg border border-white/10 overflow-x-auto">{
+  "version": 260000,
+  "subversion": "/Satoshi:26.0.0/",
+  "protocolversion": 70016,
+  "localservices": "0000000000000409",
+  "localrelay": true,
+  "timeoffset": 0,
+  "connections": 24,
+  "connections_in": 8,
+  "connections_out": 16,
+  "networkactive": true,
+  "networks": [ ... ],
+  "relayfee": 0.00001000,
+  "incrementalfee": 0.00001000,
+  "warnings": ""
+}</pre>
+</div>
+</div>
+<div class="p-md border-t border-white/10 bg-surface-container-lowest flex items-center gap-base">
+<span class="font-mono-data text-secondary">$</span>
+<input autofocus="" class="flex-1 bg-transparent border-none focus:ring-0 font-mono-data text-body-md text-on-surface placeholder:opacity-30" placeholder="Enter RPC command..." type="text"/>
+<button class="material-symbols-outlined text-secondary-container hover:text-secondary transition-colors">keyboard_return</button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="lg:hidden fixed bottom-0 left-0 w-full rounded-t-xl z-50 bg-surface-container-high/90 backdrop-blur-2xl border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] flex justify-around items-center h-16 px-4 pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-label-md text-label-md">Ledger</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-label-md">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">account_balance</span>
+<span class="font-label-md text-label-md">Wallets</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary font-bold active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">router</span>
+<span class="font-label-md text-label-md">Node</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Admin</span>
+</a>
+</nav>
+</body></html>

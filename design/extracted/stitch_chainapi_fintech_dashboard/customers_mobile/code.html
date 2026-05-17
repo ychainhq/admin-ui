@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#e78603",
+                        "on-tertiary-container": "#00a472",
+                        "inverse-surface": "#dce1fb",
+                        "on-tertiary": "#003824",
+                        "on-primary-fixed-variant": "#3c475a",
+                        "inverse-primary": "#545f73",
+                        "on-secondary-container": "#522c00",
+                        "surface": "#0c1324",
+                        "primary-fixed-dim": "#bcc7de",
+                        "on-secondary-fixed-variant": "#6b3b00",
+                        "surface-container-high": "#23293c",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "tertiary": "#4edea3",
+                        "surface-container-low": "#151b2d",
+                        "secondary-fixed": "#ffdcbf",
+                        "on-surface": "#dce1fb",
+                        "on-tertiary-fixed": "#002113",
+                        "surface-container-lowest": "#070d1f",
+                        "on-primary-container": "#8590a6",
+                        "error-container": "#93000a",
+                        "on-primary": "#263143",
+                        "surface-dim": "#0c1324",
+                        "surface-bright": "#33394c",
+                        "secondary": "#ffb874",
+                        "inverse-on-surface": "#2a3043",
+                        "tertiary-container": "#00301e",
+                        "surface-container": "#191f31",
+                        "outline": "#8f9097",
+                        "surface-tint": "#bcc7de",
+                        "secondary-fixed-dim": "#ffb874",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-secondary-fixed": "#2d1600",
+                        "surface-variant": "#2e3447",
+                        "on-primary-fixed": "#111c2d",
+                        "on-background": "#dce1fb",
+                        "tertiary-fixed": "#6ffbbe",
+                        "error": "#ffb4ab",
+                        "outline-variant": "#45474c",
+                        "background": "#0c1324",
+                        "surface-container-highest": "#2e3447",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#d8e3fb",
+                        "primary-container": "#1e293b",
+                        "on-secondary": "#4b2800",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#c5c6cd",
+                        "primary": "#bcc7de"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "24px",
+                        "lg": "40px",
+                        "gutter": "24px",
+                        "base": "8px",
+                        "margin-desktop": "32px",
+                        "xl": "64px",
+                        "margin-mobile": "16px",
+                        "sm": "12px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "body-sm": ["Inter"],
+                        "label-md": ["Geist"],
+                        "mono-data": ["Geist"],
+                        "headline-sm": ["Geist"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Geist"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "mono-data": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="bg-surface/50 backdrop-blur-xl text-primary docked full-width top-0 border-b border-white/10 shadow-2xl flex justify-between items-center w-full px-margin-mobile h-20 sticky z-40">
+<div class="flex items-center gap-base">
+<span class="material-symbols-outlined text-secondary" data-icon="account_balance_wallet">account_balance_wallet</span>
+<h1 class="font-headline-md text-headline-md font-bold tracking-tighter text-secondary">BITCORE</h1>
+</div>
+<div class="bg-white/5 px-sm py-xs rounded-full border border-white/10">
+<span class="font-label-md text-label-md text-on-surface-variant">Regtest | 840,321</span>
+</div>
+</header>
+<main class="px-margin-mobile pt-base space-y-md">
+<!-- Search & Filter Area -->
+<div class="space-y-base">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<input class="w-full bg-surface-container-low border border-white/10 rounded-xl py-3 pl-12 pr-4 font-body-md text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-secondary/50" placeholder="Search customers by name, ID or wallet..." type="text"/>
+</div>
+<div class="flex gap-base overflow-x-auto pb-xs">
+<button class="bg-secondary text-on-secondary font-label-md text-label-md px-4 py-2 rounded-full whitespace-nowrap">All Customers</button>
+<button class="glass-card text-on-surface-variant font-label-md text-label-md px-4 py-2 rounded-full whitespace-nowrap">Institutional</button>
+<button class="glass-card text-on-surface-variant font-label-md text-label-md px-4 py-2 rounded-full whitespace-nowrap">Retail High-Cap</button>
+<button class="glass-card text-on-surface-variant font-label-md text-label-md px-4 py-2 rounded-full whitespace-nowrap">Flagged</button>
+</div>
+</div>
+<!-- Customer List -->
+<div class="space-y-base">
+<div class="flex justify-between items-end">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Directory</h2>
+<span class="font-label-md text-label-md text-on-surface-variant">1,248 Records</span>
+</div>
+<!-- Customer Card 1 -->
+<div class="glass-card p-md rounded-xl space-y-md">
+<div class="flex justify-between items-start">
+<div class="flex gap-md">
+<div class="w-12 h-12 rounded-lg bg-primary-container flex items-center justify-center border border-white/5 overflow-hidden">
+<img alt="Aria Profile" data-alt="A professional, high-fidelity 3D avatar of a sophisticated business executive. The avatar has subtle facial features and is set against a dark, minimalist background that complements a sleek financial dashboard aesthetic. The lighting is soft and cinematic, highlighting the clean lines and modern corporate feel. The color palette uses deep navy and subtle gold accents to maintain a premium identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAipcVqlGbXYTv0ODOTC3fCqLQ64ZJ8uuk_-EGF4G_Td2jG1Sth2lnsiYWtLla5B1uyW0ZgMiAEMuup9aTIx4L4BQHSnc-S2CBcJSHLnkuHuo7SIKk-r2Rx2NV4ef8XQPeHUlosZS34qzT03YREkHftm2ZKLZo4EIAEX9Y4hP5LJoNBco1pcB3MJ0Ara2wXlU7qqzdRUFrTFIg1H6UrrLAtju3RTfloZ6Cgn65XEvn1nPLozPz-61NhXJcfbG56R8W3wL5vxRHbxxM"/>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Aria Blackwood</h3>
+<p class="font-label-md text-label-md text-on-surface-variant">ID: BTC-9921-A</p>
+</div>
+</div>
+<span class="bg-tertiary/10 text-tertiary font-label-md text-label-md px-3 py-1 rounded-full">ACTIVE</span>
+</div>
+<div class="grid grid-cols-2 gap-md pt-base border-t border-white/5">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Balance</p>
+<p class="font-mono-data text-mono-data text-on-surface">14.8210 BTC</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Last Activity</p>
+<p class="font-mono-data text-mono-data text-on-surface">2m ago</p>
+</div>
+</div>
+<button class="w-full bg-white/5 hover:bg-white/10 text-on-surface font-label-md text-label-md py-3 rounded-lg transition-colors border border-white/5">View Wallet Profile</button>
+</div>
+<!-- Customer Card 2 -->
+<div class="glass-card p-md rounded-xl space-y-md">
+<div class="flex justify-between items-start">
+<div class="flex gap-md">
+<div class="w-12 h-12 rounded-lg bg-primary-container flex items-center justify-center border border-white/5 overflow-hidden">
+<img alt="Marcus Profile" data-alt="A detailed digital 3D avatar of an institutional investor with a sharp, professional look. The character is portrayed with a confident expression, set within a dark mode interface environment. High-end rendering style with soft global illumination. The visual theme is consistent with high-performance financial software, utilizing a palette of slate, obsidian, and hints of Bitcoin gold." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXMhEK81HunxF0KPDPQSJpubMDnqgaSHF9hd7E3zIoHV9adm4LaavAaWVeUK4xhnKFj-bI3s4rRqaSK2dEq_w72ZyDWahSQ3y1ghhKKxqk8nnWNd0T1TiqKJLaXeCQgYmkkWUo2BgvTpASmvSyfwm-1NLKK1SR8eE9nBmWJfXDqf7yjgeWYgB6yt3cEGq4Rs6Sh9DkVlN__9Uf4f7Sum_wpSJtPd4hK9m0ZuNRPuE7JT5VuYS1FfA9Ugil7_19vMZC7seiz_-bVys"/>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Marcus Sterling</h3>
+<p class="font-label-md text-label-md text-on-surface-variant">ID: BTC-4402-B</p>
+</div>
+</div>
+<span class="bg-secondary/10 text-secondary font-label-md text-label-md px-3 py-1 rounded-full">PENDING</span>
+</div>
+<div class="grid grid-cols-2 gap-md pt-base border-t border-white/5">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Balance</p>
+<p class="font-mono-data text-mono-data text-on-surface">240.0000 BTC</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Last Activity</p>
+<p class="font-mono-data text-mono-data text-on-surface">1h ago</p>
+</div>
+</div>
+<button class="w-full bg-white/5 hover:bg-white/10 text-on-surface font-label-md text-label-md py-3 rounded-lg transition-colors border border-white/5">View Wallet Profile</button>
+</div>
+<!-- Customer Card 3 -->
+<div class="glass-card p-md rounded-xl space-y-md opacity-75">
+<div class="flex justify-between items-start">
+<div class="flex gap-md">
+<div class="w-12 h-12 rounded-lg bg-primary-container flex items-center justify-center border border-white/5 overflow-hidden">
+<img alt="Elias Profile" data-alt="A minimalist 3D character avatar representing a technical analyst. The style is clean and modern, designed for a high-fidelity dark mode UI. Lighting is directional and dramatic, creating depth. The color scheme is dominated by cool grays and deep blacks, with a focus on precision and technical accuracy to match an institutional financial platform's visual identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEM3WPkkeccgjO4v9nkZ9dE636VfnS6VApWhalfo6IQcr9xlHIy80yrELHg4c8kR0z1J2xHZKbjRqdg5K4Pmlpl25DaEoKNugQvBFyde3CWOIIiCRqmK0Q3dBkzvs9s2JO582nlQA1OBn7qCXrF1X981k8Oi7av8akIzY2xTtMfb9DkCqd0TNYWJlt6eWdRqOjJoNC4JmNiMFc0yjk08JyVC8qowfHcqUv0uRXzsAZkYcg20YhkcGUuUZ1AJ_MWrDxckSpxXJ9NL4"/>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Elias Thorne</h3>
+<p class="font-label-md text-label-md text-on-surface-variant">ID: BTC-1108-C</p>
+</div>
+</div>
+<span class="bg-white/5 text-on-surface-variant font-label-md text-label-md px-3 py-1 rounded-full">INACTIVE</span>
+</div>
+<div class="grid grid-cols-2 gap-md pt-base border-t border-white/5">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Balance</p>
+<p class="font-mono-data text-mono-data text-on-surface">0.0542 BTC</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Last Activity</p>
+<p class="font-mono-data text-mono-data text-on-surface">14d ago</p>
+</div>
+</div>
+<button class="w-full bg-white/5 hover:bg-white/10 text-on-surface font-label-md text-label-md py-3 rounded-lg transition-colors border border-white/5">View Wallet Profile</button>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-24 right-6 w-14 h-14 bg-secondary text-on-secondary-fixed rounded-full shadow-2xl flex items-center justify-center z-50 active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-3xl" data-icon="person_add">person_add</span>
+</button>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface-container/80 backdrop-blur-lg border-t border-white/10 shadow-xl rounded-t-xl">
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-white/5">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md mt-1">Status</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-white/5">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-md text-label-md mt-1">Pay</span>
+</div>
+<div class="flex flex-col items-center justify-center text-secondary bg-secondary/10 rounded-xl p-2">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-md text-label-md mt-1">Users</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-white/5">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-md text-label-md mt-1">Wallets</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-white/5">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md mt-1">System</span>
+</div>
+</nav>
+</body></html>
