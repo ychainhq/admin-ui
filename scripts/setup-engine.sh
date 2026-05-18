@@ -79,7 +79,7 @@ RESP=$(curl -sf -X POST "$ENGINE_URL/v1/customers" \
   -d '{"reference":"dev-customer-1","metadata":{"name":"Dev Customer 1"}}' 2>/dev/null) || RESP=""
 
 if [ -n "$RESP" ]; then
-  CUST_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id','?'))" 2>/dev/null || echo "?")
+  CUST_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('id','?'))" 2>/dev/null || echo "?")
   echo "  Created: $CUST_ID"
 else
   echo "  Skipped (already exists or API key invalid)"

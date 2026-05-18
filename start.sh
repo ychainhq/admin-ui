@@ -199,9 +199,10 @@ ENVEOF
     # Extract newly generated keys (seed only prints them when freshly created).
     # Match the exact console.log format "  API_KEY=cak_xxx" / "  ADMIN_KEY=aak_xxx"
     # to avoid picking up the short logger IDs (aak_XXXXXXXXXXXXXXXX = 16 chars).
-    local new_api new_admin
-    new_api=$(echo "$seed_out"   | grep -oE 'API_KEY=cak_[a-f0-9]+'   | head -1 | cut -d= -f2 || true)
-    new_admin=$(echo "$seed_out" | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+' | head -1 | cut -d= -f2 || true)
+    local new_api new_admin new_xpub
+    new_api=$(echo "$seed_out"   | grep -oE 'API_KEY=cak_[a-f0-9]+'        | head -1 | cut -d= -f2 || true)
+    new_admin=$(echo "$seed_out" | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+'      | head -1 | cut -d= -f2 || true)
+    new_xpub=$(echo "$seed_out"  | grep -oE 'BTC_DEV_XPUB=[A-Za-z0-9]+'   | head -1 | cut -d= -f2 || true)
 
     if [ -n "$new_api" ]; then
       env_set "$ENGINE_ENV" "API_KEY" "$new_api"
@@ -212,6 +213,10 @@ ENVEOF
       env_set "$ENGINE_ENV" "ADMIN_KEY" "$new_admin"
       engine_admin_key="$new_admin"
       ok "New admin key saved → engine/.env"
+    fi
+    if [ -n "$new_xpub" ]; then
+      env_set "$ENGINE_ENV" "BTC_DEV_XPUB" "$new_xpub"
+      ok "BTC xpub saved → engine/.env"
     fi
 
     if [ -z "$engine_api_key" ] || [ -z "$engine_admin_key" ]; then
@@ -271,9 +276,15 @@ ENVEOF
       || true
   fi
 
+  local dev_xpub
+  dev_xpub=$(env_get "$ENGINE_ENV" "BTC_DEV_XPUB")
+
   echo ""
   echo -e "  ${C_CYAN}API key${C_RESET}    ${engine_api_key}"
   echo -e "  ${C_CYAN}Admin key${C_RESET}  ${engine_admin_key}"
+  if [ -n "$dev_xpub" ]; then
+    echo -e "  ${C_CYAN}BTC xpub${C_RESET}   ${dev_xpub}"
+  fi
 }
 
 # ─── step 3: start engine (foreground) ───────────────────────────────────────
