@@ -4,7 +4,7 @@ export const template = `
     <button rv-on-click="topBar.onBack" class="material-symbols-outlined text-primary active:scale-95 transition-transform duration-150 p-xs">arrow_back</button>
     <div class="flex flex-col">
       <span rv-text="topBar.title" class="font-headline-sm text-headline-sm-mobile text-primary"></span>
-      <span rv-text="topBar.breadcrumb" class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant -mt-1"></span>
+      <span rv-text="topBar.breadcrumb" class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant -mt-1"></span>
     </div>
   </div>
   <button rv-on-click="topBar.onMenuOpen" class="material-symbols-outlined text-primary hover:bg-surface-container-highest/50 active:scale-95 transition-transform duration-150 p-sm rounded-full">account_circle</button>

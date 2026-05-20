@@ -17,6 +17,8 @@ export const template = `
 
 const PAGE_BTN_ACTIVE = 'w-10 h-10 rounded-lg flex items-center justify-center border border-secondary bg-secondary/10 text-secondary font-bold';
 const PAGE_BTN_NORMAL = 'w-10 h-10 rounded-lg flex items-center justify-center border border-white/10 text-on-surface-variant hover:bg-white/5';
+const DESKTOP_PAGE_BTN_ACTIVE = 'w-8 h-8 rounded bg-secondary text-on-secondary-fixed text-label-md font-bold';
+const DESKTOP_PAGE_BTN_NORMAL = 'w-8 h-8 rounded hover:bg-white/5 text-on-surface-variant text-label-md transition-colors';
 
 export function createPaginationController({ page, total, perPage = 10, onPageChange }) {
   const totalPages = Math.ceil(total / perPage);
@@ -29,12 +31,16 @@ export function createPaginationController({ page, total, perPage = 10, onPageCh
     pages.push({
       label: String(i),
       btnClass: i === page ? PAGE_BTN_ACTIVE : PAGE_BTN_NORMAL,
+      desktopBtnClass: i === page ? DESKTOP_PAGE_BTN_ACTIVE : DESKTOP_PAGE_BTN_NORMAL,
       go: () => onPageChange(current),
     });
   }
 
   return {
     showingText: total === 0 ? 'No results' : `Showing ${from} to ${to} of ${total} results`,
+    from,
+    to,
+    totalCount: total,
     hasPages: totalPages > 1,
     prevDisabled: page <= 1 ? true : null,
     nextDisabled: page >= totalPages ? true : null,

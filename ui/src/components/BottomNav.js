@@ -1,8 +1,10 @@
 export const template = `
 <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-dim/80 backdrop-blur-xl border-t border-white/10 flex justify-around items-center h-20 px-4">
   <a rv-each-item="bottomNav.items" rv-attr-class="item.itemClass" rv-on-click="item.navigate" href="#">
-    <span rv-text="item.icon" class="material-symbols-outlined"></span>
-    <span rv-text="item.label" class="font-label-md text-label-md"></span>
+    <span class="flex flex-col items-center justify-center pointer-events-none">
+      <span rv-text="item.icon" class="material-symbols-outlined"></span>
+      <span rv-text="item.label" class="font-label-md text-label-md"></span>
+    </span>
   </a>
 </nav>
 `;

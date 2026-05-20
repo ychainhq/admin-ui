@@ -1,5 +1,4 @@
-// Template for a single tenant card — used inside rv-each-tenant="tenants"
-// Within rv-each, Rivets scope is the tenant item, so properties are accessed as tenant.name etc.
+// Template for a single tenant card — used inside rv-each-tenant="tenants" (mobile only)
 export const template = `
 <div rv-each-tenant="tenants" rv-attr-class="tenant.cardClass">
   <div class="flex justify-between items-start">
@@ -51,19 +50,32 @@ const CARD_BASE = 'glass-card rounded-xl p-md flex flex-col gap-sm relative over
 const WORK_BTN_ACTIVE = 'bg-secondary text-on-secondary-fixed px-6 py-2 rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all';
 const WORK_BTN_GHOST = 'border border-white/20 text-on-surface px-6 py-2 rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all hover:bg-white/5';
 
+const TABLE_BADGE_ACTIVE = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20';
+const TABLE_BADGE_SUSPENDED = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-error/10 text-error border border-error/20';
+const TABLE_WORK_BTN_ACTIVE = 'px-4 py-2 rounded bg-secondary text-on-secondary-fixed text-label-md font-bold hover:brightness-110 active:scale-95 transition-all';
+const TABLE_WORK_BTN_GHOST = 'px-4 py-2 rounded text-on-surface-variant text-label-md font-bold hover:bg-white/5 transition-all border border-white/10';
+
 export function createTenantViewModel(raw, { router }) {
   const isActive = raw.status === 'active';
+  const custodyMode = raw.config?.custody_mode || raw.custody_mode || raw.custodyMode || '—';
   return {
     id:            raw.id,
     name:          raw.name,
     status:        raw.status,
-    custodyMode:   raw.custody_mode || raw.custodyMode || '—',
-    custodyIcon:   (raw.custody_mode === 'internal_hsm' || raw.custodyMode === 'internal_hsm') ? 'key' : 'security',
-    createdAt:     (raw.created_at || raw.createdAt || '').slice(0, 10),
+    custodyMode,
+    custodyIcon:   custodyMode === 'internal_hsm' ? 'key' : 'security',
+    createdAt:     (() => { const v = raw.created_at ?? raw.createdAt; if (!v) return '—'; try { const ms = v < 1e10 ? v * 1000 : v; return new Date(ms).toISOString().slice(0, 10); } catch (_) { return '—'; } })(),
     isActive,
-    cardClass:     isActive ? `${CARD_BASE} border-l-4 border-l-secondary` : CARD_BASE,
+    // mobile card
+    cardClass:        isActive ? `${CARD_BASE} border-l-4 border-l-secondary` : CARD_BASE,
     workWithBtnClass: isActive ? WORK_BTN_ACTIVE : WORK_BTN_GHOST,
-    viewConfig:    () => router.navigate(`#/tenants/${encodeURIComponent(raw.id)}/config`),
-    workWith:      () => router.navigate(`#/tenants/${encodeURIComponent(raw.id)}/config`),
+    // desktop table
+    rowClass:         'hover:bg-white/[0.03] transition-colors group',
+    tableBadgeClass:  isActive ? TABLE_BADGE_ACTIVE : TABLE_BADGE_SUSPENDED,
+    statusLabel:      isActive ? 'ACTIVE' : 'SUSPENDED',
+    tableWorkBtnClass: isActive ? TABLE_WORK_BTN_ACTIVE : TABLE_WORK_BTN_GHOST,
+    // actions
+    viewConfig: () => router.navigate(`#/tenants/${encodeURIComponent(raw.id)}/config`),
+    workWith:   () => router.navigate(`#/tenants/${encodeURIComponent(raw.id)}/config`),
   };
 }
