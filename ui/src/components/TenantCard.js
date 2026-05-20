@@ -1,6 +1,5 @@
 // Template for a single tenant card — used inside rv-each-tenant="tenants" (mobile only)
-export const template = `
-<div rv-each-tenant="tenants" rv-attr-class="tenant.cardClass">
+const CARD_INNER = `
   <div class="flex justify-between items-start">
     <div class="min-w-0">
       <h3 rv-text="tenant.name" class="font-headline-sm text-headline-sm text-on-surface truncate"></h3>
@@ -41,7 +40,18 @@ export const template = `
       View Config
       <span class="material-symbols-outlined text-[14px]">open_in_new</span>
     </button>
-    <button rv-on-click="tenant.workWith" rv-attr-class="tenant.workWithBtnClass">Work with</button>
+    <button rv-show="tenant.isActive" rv-on-click="tenant.workWith" class="bg-secondary text-on-secondary-fixed px-6 py-2 rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all">Work with</button>
+    <button rv-hide="tenant.isActive" rv-on-click="tenant.workWith" class="border border-white/20 text-on-surface px-6 py-2 rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all hover:bg-white/5">Work with</button>
+  </div>
+`;
+
+export const template = `
+<div rv-each-tenant="tenants">
+  <div rv-show="tenant.isActive" class="glass-card rounded-xl p-md flex flex-col gap-sm relative overflow-hidden border-l-4 border-l-secondary">
+    ${CARD_INNER}
+  </div>
+  <div rv-hide="tenant.isActive" class="glass-card rounded-xl p-md flex flex-col gap-sm relative overflow-hidden">
+    ${CARD_INNER}
   </div>
 </div>
 `;
@@ -55,7 +65,7 @@ const TABLE_BADGE_SUSPENDED = 'inline-flex items-center px-2.5 py-0.5 rounded-fu
 const TABLE_WORK_BTN_ACTIVE = 'px-4 py-2 rounded bg-secondary text-on-secondary-fixed text-label-md font-bold hover:brightness-110 active:scale-95 transition-all';
 const TABLE_WORK_BTN_GHOST = 'px-4 py-2 rounded text-on-surface-variant text-label-md font-bold hover:bg-white/5 transition-all border border-white/10';
 
-export function createTenantViewModel(raw, { router }) {
+export function createTenantViewModel(raw, { router, api }) {
   const isActive = raw.status === 'active';
   const custodyMode = raw.config?.custody_mode || raw.custody_mode || raw.custodyMode || '—';
   return {
@@ -76,6 +86,6 @@ export function createTenantViewModel(raw, { router }) {
     tableWorkBtnClass: isActive ? TABLE_WORK_BTN_ACTIVE : TABLE_WORK_BTN_GHOST,
     // actions
     viewConfig: () => router.navigate(`#/tenants/${encodeURIComponent(raw.id)}/config`),
-    workWith:   () => router.navigate(`#/tenants/${encodeURIComponent(raw.id)}/config`),
+    workWith:   async () => { await api.switchTenant(raw.id); },
   };
 }

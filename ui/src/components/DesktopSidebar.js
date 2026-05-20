@@ -15,10 +15,16 @@ export const template = `
   </div>
 
   <nav class="flex-1 overflow-y-auto hide-scrollbar py-sm flex flex-col gap-1">
-    <a rv-each-item="sidebar.navItems" rv-attr-class="item.itemClass" rv-on-click="item.navigate" href="#">
-      <span rv-text="item.icon" class="material-symbols-outlined"></span>
-      <span rv-text="item.label" class="text-label-md font-label-md"></span>
-    </a>
+    <span rv-each-item="sidebar.navItems" class="contents">
+      <a rv-show="item.isActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-sm py-2 rounded-lg transition-all cursor-pointer text-secondary border-r-2 border-secondary bg-secondary/10 font-bold">
+        <span rv-text="item.icon" class="material-symbols-outlined"></span>
+        <span rv-text="item.label" class="text-label-md font-label-md"></span>
+      </a>
+      <a rv-hide="item.isActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-sm py-2 rounded-lg transition-all cursor-pointer text-on-surface-variant hover:text-on-surface hover:bg-white/5">
+        <span rv-text="item.icon" class="material-symbols-outlined"></span>
+        <span rv-text="item.label" class="text-label-md font-label-md"></span>
+      </a>
+    </span>
   </nav>
 
   <div class="mt-auto border-t border-white/5 pt-md px-sm pb-md space-y-1">
@@ -63,6 +69,7 @@ export function createSidebarController({ activeRoute, router, onCreateTenant })
       const isActive = activeRoute === item.route || activeRoute.startsWith(item.route + '/');
       return {
         ...item,
+        isActive,
         itemClass: isActive ? ACTIVE_NAV_CLASS : INACTIVE_NAV_CLASS,
         drawerItemClass: isActive ? ACTIVE_DRAWER_CLASS : INACTIVE_DRAWER_CLASS,
         navigate: () => router.navigate(`#${item.route}`),

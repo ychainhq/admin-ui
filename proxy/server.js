@@ -56,9 +56,12 @@ app.post('/switch-tenant', async (req, res) => {
       },
       body: JSON.stringify({ name: 'ui-session' }),
     });
-    const data = await r.json();
-    const key = data.data?.apiKey;
-    if (!key) throw new Error('API key not in response: ' + JSON.stringify(data));
+    const body = await r.json();
+    if (!r.ok) {
+      throw new Error(body?.error?.message || body?.message || `Engine error ${r.status}`);
+    }
+    const key = body.data?.apiKey || body.key;
+    if (!key) throw new Error('API key not in response: ' + JSON.stringify(body));
     tenantKeyCache[tenantId] = key;
     res.json({ key });
   } catch (err) {

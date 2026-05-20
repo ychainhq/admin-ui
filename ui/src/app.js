@@ -9,10 +9,10 @@ const deps = { api, router };
 const appEl = () => document.getElementById('app');
 
 router
-  .on('/', () => {
-    router.navigate('#/tenants');
-    return null;
-  })
+  .on('/', () => { router.navigate('#/tenants'); return null; })
+  .on('/dashboard', () => { router.navigate('#/tenants'); return null; })
+  .on('/assets',   () => { router.navigate('#/tenants'); return null; })
+  .on('/activity', () => { router.navigate('#/tenants'); return null; })
   .on('/tenants', (params) => TenantListView.mount(appEl(), params, deps))
   .on('/tenants/new', (params) => TenantCreateView.mount(appEl(), params, deps))
   .on('/tenants/:id/config', (params) => TenantConfigView.mount(appEl(), params, deps));

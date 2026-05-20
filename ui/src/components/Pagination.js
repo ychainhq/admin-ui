@@ -30,6 +30,7 @@ export function createPaginationController({ page, total, perPage = 10, onPageCh
     const current = i;
     pages.push({
       label: String(i),
+      isActive: i === page,
       btnClass: i === page ? PAGE_BTN_ACTIVE : PAGE_BTN_NORMAL,
       desktopBtnClass: i === page ? DESKTOP_PAGE_BTN_ACTIVE : DESKTOP_PAGE_BTN_NORMAL,
       go: () => onPageChange(current),

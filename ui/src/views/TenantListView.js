@@ -83,7 +83,8 @@ const desktopTableTpl = `
               </div>
             </td>
             <td class="px-md py-4">
-              <span rv-attr-class="tenant.tableBadgeClass" rv-text="tenant.statusLabel"></span>
+              <span rv-show="tenant.isActive" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20">ACTIVE</span>
+              <span rv-hide="tenant.isActive" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-error/10 text-error border border-error/20">SUSPENDED</span>
             </td>
             <td class="px-md py-4">
               <div class="flex items-center gap-xs">
@@ -97,7 +98,8 @@ const desktopTableTpl = `
                 <button rv-on-click="tenant.viewConfig" class="flex items-center gap-1 px-3 py-2 rounded text-primary hover:text-on-primary-fixed-variant hover:bg-primary/10 text-label-md transition-all">
                   <span class="material-symbols-outlined text-[18px]">settings_ethernet</span>View Config
                 </button>
-                <button rv-on-click="tenant.workWith" rv-attr-class="tenant.tableWorkBtnClass">Work with</button>
+                <button rv-show="tenant.isActive" rv-on-click="tenant.workWith" class="px-4 py-2 rounded bg-secondary text-on-secondary-fixed text-label-md font-bold hover:brightness-110 active:scale-95 transition-all">Work with</button>
+                <button rv-hide="tenant.isActive" rv-on-click="tenant.workWith" class="px-4 py-2 rounded border border-white/10 text-on-surface-variant text-label-md font-bold hover:bg-white/5 transition-all">Work with</button>
               </div>
             </td>
           </tr>
@@ -114,7 +116,10 @@ const desktopTableTpl = `
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <div class="flex gap-1">
-          <button rv-each-pg="pagination.pages" rv-on-click="pg.go" rv-attr-class="pg.desktopBtnClass" rv-text="pg.label"></button>
+          <span rv-each-pg="pagination.pages" class="contents">
+            <button rv-show="pg.isActive" rv-on-click="pg.go" rv-text="pg.label" class="w-8 h-8 rounded bg-secondary text-on-secondary-fixed text-label-md font-bold"></button>
+            <button rv-hide="pg.isActive" rv-on-click="pg.go" rv-text="pg.label" class="w-8 h-8 rounded hover:bg-white/5 text-on-surface-variant text-label-md transition-colors"></button>
+          </span>
         </div>
         <button rv-on-click="pagination.nextPage" rv-attr-disabled="pagination.nextDisabled"
           class="p-2 rounded hover:bg-white/5 text-on-surface-variant transition-colors">
@@ -221,10 +226,16 @@ const template = `
       </div>
     </div>
     <nav class="flex-1 flex flex-col gap-1 overflow-y-auto">
-      <a rv-each-item="sidebar.navItems" rv-attr-class="item.drawerItemClass" rv-on-click="item.navigate" href="#">
-        <span rv-text="item.icon" class="material-symbols-outlined"></span>
-        <span rv-text="item.label" class="font-body-sm text-body-sm"></span>
-      </a>
+      <span rv-each-item="sidebar.navItems" class="contents">
+        <a rv-show="item.isActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-4 py-3 transition-colors duration-200 cursor-pointer bg-secondary/10 text-secondary font-bold border-l-4 border-secondary">
+          <span rv-text="item.icon" class="material-symbols-outlined"></span>
+          <span rv-text="item.label" class="font-body-sm text-body-sm"></span>
+        </a>
+        <a rv-hide="item.isActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-4 py-3 transition-colors duration-200 cursor-pointer text-on-surface-variant hover:bg-white/5">
+          <span rv-text="item.icon" class="material-symbols-outlined"></span>
+          <span rv-text="item.label" class="font-body-sm text-body-sm"></span>
+        </a>
+      </span>
     </nav>
     <div class="mt-auto px-gutter pt-lg border-t border-white/5">
       <button rv-on-click="closeDrawer" class="w-full flex items-center justify-center gap-xs py-3 text-on-surface-variant hover:text-white transition-colors">
@@ -301,7 +312,7 @@ export function createController({ api, router }) {
         const items = data.data || [];
         self._nextCursor = data.pagination?.nextCursor || undefined;
         self._total = items.length;
-        self.tenants = items.map(t => createTenantViewModel(t, { router }));
+        self.tenants = items.map(t => createTenantViewModel(t, { router, api }));
         self.isEmpty = self.tenants.length === 0;
         const currentPage = self._prevCursors.length + 1;
         self.pagination = createPaginationController({
