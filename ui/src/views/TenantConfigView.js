@@ -1,0 +1,207 @@
+import rivets from '../rivets.js';
+import { template as topBarTpl } from '../components/TopAppBar.js';
+import { createTopBarController } from '../components/TopAppBar.js';
+import { template as bottomNavTpl } from '../components/BottomNav.js';
+import { createBottomNavController } from '../components/BottomNav.js';
+import { template as sidebarTpl } from '../components/DesktopSidebar.js';
+import { createSidebarController } from '../components/DesktopSidebar.js';
+import { template as configFieldTpl } from '../components/ConfigField.js';
+import { createConfigFieldsController, collectConfigValues } from '../components/ConfigField.js';
+
+const ROUTE = '/tenants';
+
+const template = `
+<div class="min-h-screen">
+
+  ${sidebarTpl}
+
+  <div class="lg:ml-[280px]">
+
+    ${topBarTpl}
+
+    <!-- Desktop top bar -->
+    <div class="hidden lg:flex fixed top-0 left-[280px] right-0 z-40 bg-surface-dim/80 backdrop-blur-xl border-b border-white/10 items-center justify-between px-margin-desktop h-16">
+      <div class="flex flex-col">
+        <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant">Platform &gt; Tenants &gt; Config</span>
+        <span rv-text="tenantId" class="font-mono-data text-on-surface-variant text-[12px]"></span>
+      </div>
+      <div class="flex items-center gap-sm">
+        <button rv-on-click="cancelConfig" class="border border-white/20 text-on-surface px-md py-sm rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all hover:bg-white/5">
+          Cancel
+        </button>
+        <button rv-on-click="saveConfig" rv-attr-disabled="saving" class="bg-secondary text-on-secondary-fixed px-md py-sm rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all hover:brightness-110 disabled:opacity-50">
+          <span rv-hide="saving">Save Configuration</span>
+          <span rv-show="saving">Saving…</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <main class="pt-20 lg:pt-16 pb-28 lg:pb-8 px-margin-mobile lg:px-margin-desktop">
+      <div class="max-w-3xl mx-auto lg:max-w-none">
+
+        <!-- Page heading -->
+        <div class="pt-gutter mb-gutter">
+          <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-md">
+            <div>
+              <h1 class="font-headline-md text-headline-md text-on-surface">Tenant Configuration</h1>
+              <p class="font-body-sm text-on-surface-variant mt-xs">Configure security protocols and transactional constraints for this environment.</p>
+            </div>
+            <!-- Mobile save/cancel -->
+            <div class="lg:hidden flex gap-sm">
+              <button rv-on-click="cancelConfig" class="flex-1 border border-white/20 text-on-surface px-md py-sm rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all">Cancel</button>
+              <button rv-on-click="saveConfig" rv-attr-disabled="saving" class="flex-1 bg-secondary text-on-secondary-fixed px-md py-sm rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all disabled:opacity-50">
+                <span rv-hide="saving">Save</span>
+                <span rv-show="saving">Saving…</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        <div rv-show="loading" class="flex justify-center py-lg">
+          <div class="w-8 h-8 rounded-full border-2 border-secondary border-t-transparent animate-spin"></div>
+        </div>
+
+        <!-- Error state -->
+        <div rv-show="error" class="glass-card rounded-xl p-md bg-error/10 border border-error/30 mb-gutter">
+          <div class="flex items-center gap-sm">
+            <span class="material-symbols-outlined text-error">error</span>
+            <span rv-text="error" class="font-body-sm text-error"></span>
+          </div>
+        </div>
+
+        <!-- Success state -->
+        <div rv-show="saveSuccess" class="glass-card rounded-xl p-md bg-tertiary/10 border border-tertiary/30 mb-gutter">
+          <div class="flex items-center gap-sm">
+            <span class="material-symbols-outlined text-tertiary">check_circle</span>
+            <span class="font-body-sm text-tertiary">Configuration saved successfully.</span>
+          </div>
+        </div>
+
+        <!-- Config fields form -->
+        <div rv-hide="loading" class="glass-card rounded-xl overflow-hidden">
+          ${configFieldTpl}
+        </div>
+
+        <!-- Info cards -->
+        <div rv-hide="loading" class="grid grid-cols-1 lg:grid-cols-3 gap-gutter mt-gutter">
+          <div class="glass-card rounded-xl p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-secondary shrink-0">verified_user</span>
+            <div>
+              <p class="font-label-md text-on-surface-variant text-[10px] uppercase mb-xs">Security Audit</p>
+              <p class="font-body-sm text-on-surface-variant">Changes are logged and require an administrator signature to take effect.</p>
+            </div>
+          </div>
+          <div class="glass-card rounded-xl p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-secondary shrink-0">source_environment</span>
+            <div>
+              <p class="font-label-md text-on-surface-variant text-[10px] uppercase mb-xs">Version Control</p>
+              <p rv-text="versionLabel" class="font-body-sm text-on-surface-variant"></p>
+            </div>
+          </div>
+          <div class="glass-card rounded-xl p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-tertiary shrink-0">bolt</span>
+            <div>
+              <p class="font-label-md text-on-surface-variant text-[10px] uppercase mb-xs">Live Propagation</p>
+              <p class="font-body-sm text-on-surface-variant">Changes to BTC parameters propagate to the engine within 60 seconds.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    ${bottomNavTpl}
+
+  </div>
+
+</div>
+`;
+
+export function createController({ tenantId, api, router }) {
+  const self = {
+    tenantId,
+    topBar: createTopBarController({
+      title: 'Tenant Config',
+      breadcrumb: `Platform > Tenants > ${tenantId}`,
+      onBack: () => router.navigate('#/tenants'),
+    }),
+    sidebar: createSidebarController({ activeRoute: ROUTE, router }),
+    bottomNav: createBottomNavController({ activeRoute: ROUTE, router }),
+
+    config: { fields: [] },
+    loading: false,
+    saving: false,
+    error: null,
+    saveSuccess: false,
+    versionLabel: 'Loading…',
+
+    _rawConfig: {},
+
+    _onFieldChange(key, value) {
+      self._rawConfig[key] = value;
+      // Sync displayValue back to the matching field object
+      const field = self.config.fields.find(f => f.key === key);
+      if (field) field.displayValue = value;
+    },
+
+    async load() {
+      self.loading = true;
+      self.error = null;
+      try {
+        const data = await api.getTenantConfig(tenantId);
+        self._rawConfig = { ...data };
+        self.config = {
+          fields: createConfigFieldsController(data, (k, v) => self._onFieldChange(k, v)),
+        };
+        self.versionLabel = data._updatedAt
+          ? `Last updated on ${new Date(data._updatedAt).toLocaleString()}.`
+          : 'Not yet modified.';
+      } catch (e) {
+        self.error = e.message;
+      } finally {
+        self.loading = false;
+      }
+    },
+
+    async saveConfig() {
+      self.saving = true;
+      self.error = null;
+      self.saveSuccess = false;
+      try {
+        const payload = collectConfigValues(self.config.fields);
+        await api.saveTenantConfig(tenantId, payload);
+        self.saveSuccess = true;
+        setTimeout(() => { self.saveSuccess = false; }, 4000);
+      } catch (e) {
+        self.error = e.message;
+      } finally {
+        self.saving = false;
+      }
+    },
+
+    cancelConfig() {
+      router.navigate('#/tenants');
+    },
+
+    init() {
+      self.load();
+    },
+  };
+  return self;
+}
+
+export const TenantConfigView = {
+  mount(el, { id }, { api, router }) {
+    el.innerHTML = template;
+    const scope = createController({ tenantId: id, api, router });
+    const binding = rivets.bind(el, scope);
+    scope.init();
+    return {
+      unbind() {
+        binding.unbind();
+      },
+    };
+  },
+};

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Platform Admin | Tenant List</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            background-color: #0c1324;
+            color: #dce1fb;
+            -webkit-font-smoothing: antialiased;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#191f31",
+                        "surface-container-lowest": "#070d1f",
+                        "tertiary": "#4edea3",
+                        "surface-container-highest": "#2e3447",
+                        "secondary-container": "#e78603",
+                        "inverse-on-surface": "#2a3043",
+                        "tertiary-fixed": "#6ffbbe",
+                        "surface-dim": "#0c1324",
+                        "primary-fixed-dim": "#bcc7de",
+                        "on-tertiary-fixed": "#002113",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-fixed-variant": "#6b3b00",
+                        "on-secondary-container": "#522c00",
+                        "surface-tint": "#bcc7de",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-tertiary": "#003824",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "primary-fixed": "#d8e3fb",
+                        "on-error": "#690005",
+                        "surface-container-low": "#151b2d",
+                        "secondary-fixed-dim": "#ffb874",
+                        "on-primary-fixed": "#111c2d",
+                        "secondary-fixed": "#ffdcbf",
+                        "on-surface-variant": "#c5c6cd",
+                        "error-container": "#93000a",
+                        "on-secondary": "#4b2800",
+                        "on-primary-fixed-variant": "#3c475a",
+                        "primary-container": "#1e293b",
+                        "on-tertiary-container": "#00a472",
+                        "secondary": "#ffb874",
+                        "on-background": "#dce1fb",
+                        "error": "#ffb4ab",
+                        "on-primary": "#263143",
+                        "background": "#0c1324",
+                        "surface-variant": "#2e3447",
+                        "on-primary-container": "#8590a6",
+                        "on-secondary-fixed": "#2d1600",
+                        "tertiary-container": "#00301e",
+                        "surface-container-high": "#23293c",
+                        "outline": "#8f9097",
+                        "outline-variant": "#45474c",
+                        "inverse-primary": "#545f73",
+                        "surface-bright": "#33394c",
+                        "on-surface": "#dce1fb",
+                        "primary": "#bcc7de",
+                        "surface": "#0c1324",
+                        "inverse-surface": "#dce1fb"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "xl": "64px",
+                        "md": "24px",
+                        "sm": "12px",
+                        "xs": "4px",
+                        "lg": "40px",
+                        "base": "8px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "mono-data": ["Geist"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Geist"],
+                        "headline-sm": ["Geist"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "mono-data": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-sm-mobile": ["18px", {"lineHeight": "24px", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="font-body-md text-body-md selection:bg-secondary/30">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface-dim/80 dark:bg-surface-dim/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-margin-mobile h-16 w-full">
+<div class="flex items-center gap-sm">
+<button class="material-symbols-outlined text-primary active:scale-95 transition-transform duration-150 p-xs" data-icon="arrow_back">arrow_back</button>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm-mobile text-primary">Platform Admin</span>
+<span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant -mt-1">Platform &gt; Tenants</span>
+</div>
+</div>
+<div class="flex items-center">
+<button class="material-symbols-outlined text-primary hover:bg-surface-container-highest/50 active:scale-95 transition-transform duration-150 p-sm rounded-full" data-icon="account_circle">account_circle</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="pt-20 pb-28 px-margin-mobile min-h-screen">
+<!-- Search & Filter Area -->
+<div class="mb-gutter">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-secondary transition-colors" data-icon="search">search</span>
+<input class="w-full bg-surface-container-low border-white/10 rounded-xl py-4 pl-12 pr-4 text-on-surface placeholder:text-on-surface-variant focus:ring-1 focus:ring-secondary focus:border-secondary transition-all font-body-md" placeholder="Search by Name or ID..." type="text"/>
+</div>
+</div>
+<!-- Tenant List -->
+<div class="space-y-4">
+<!-- Tenant Card 1 (Active Context) -->
+<div class="glass-card rounded-xl p-md flex flex-col gap-sm relative overflow-hidden border-l-4 border-l-secondary">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Dev Tenant</h3>
+<p class="font-mono-data text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]" data-icon="fingerprint">fingerprint</span>
+                            tenant_default
+                        </p>
+</div>
+<div class="bg-tertiary/10 px-2 py-0.5 rounded-full flex items-center gap-xs">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+<span class="font-label-md text-tertiary text-[10px]">ACTIVE</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm my-xs">
+<div class="flex flex-col">
+<span class="font-label-md text-on-surface-variant text-[10px] uppercase">Custody</span>
+<span class="font-mono-data text-on-surface flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px] text-secondary" data-icon="security">security</span>
+                            external_signer
+                        </span>
+</div>
+<div class="flex flex-col"><span class="font-label-md text-on-surface-variant text-[10px] uppercase">Created Date</span><span class="font-mono-data text-on-surface flex items-center gap-xs"><span class="material-symbols-outlined text-[16px] text-secondary" data-icon="calendar_today">calendar_today</span>2023-01-15</span></div>
+</div>
+<div class="flex items-center justify-between mt-sm pt-sm border-t border-white/5">
+<button class="font-label-md text-on-surface-variant hover:text-white transition-colors flex items-center gap-xs">
+                        View Config
+                        <span class="material-symbols-outlined text-[14px]" data-icon="open_in_new">open_in_new</span>
+</button>
+<button class="bg-secondary text-on-secondary-fixed px-6 py-2 rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all">Work with</button>
+</div>
+</div>
+<!-- Tenant Card 2 -->
+<div class="glass-card rounded-xl p-md flex flex-col gap-sm">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Alpha Ops</h3>
+<p class="font-mono-data text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]" data-icon="fingerprint">fingerprint</span>
+                            tenant_alpha_33
+                        </p>
+</div>
+<div class="bg-tertiary/10 px-2 py-0.5 rounded-full flex items-center gap-xs">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span class="font-label-md text-tertiary text-[10px]">ACTIVE</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm my-xs">
+<div class="flex flex-col">
+<span class="font-label-md text-on-surface-variant text-[10px] uppercase">Custody</span>
+<span class="font-mono-data text-on-surface flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px] text-secondary" data-icon="key">key</span>
+                            internal_hsm
+                        </span>
+</div>
+<div class="flex flex-col"><span class="font-label-md text-on-surface-variant text-[10px] uppercase">Created Date</span><span class="font-mono-data text-on-surface flex items-center gap-xs"><span class="material-symbols-outlined text-[16px] text-secondary" data-icon="calendar_today">calendar_today</span>2023-02-10</span></div>
+</div>
+<div class="flex items-center justify-between mt-sm pt-sm border-t border-white/5">
+<button class="font-label-md text-on-surface-variant hover:text-white transition-colors flex items-center gap-xs">
+                        View Config
+                        <span class="material-symbols-outlined text-[14px]" data-icon="open_in_new">open_in_new</span>
+</button>
+<button class="border border-white/20 text-on-surface px-6 py-2 rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all hover:bg-white/5">Work with</button>
+</div>
+</div>
+<!-- Tenant Card 3 -->
+<div class="glass-card rounded-xl p-md flex flex-col gap-sm opacity-80">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Beta Custody</h3>
+<p class="font-mono-data text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]" data-icon="fingerprint">fingerprint</span>
+                            tenant_beta_v2
+                        </p>
+</div>
+<div class="bg-outline/10 px-2 py-0.5 rounded-full flex items-center gap-xs">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span class="font-label-md text-on-surface-variant text-[10px]">SUSPENDED</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm my-xs">
+<div class="flex flex-col">
+<span class="font-label-md text-on-surface-variant text-[10px] uppercase">Custody</span>
+<span class="font-mono-data text-on-surface flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px] text-secondary" data-icon="security">security</span>
+                            hybrid_multi
+                        </span>
+</div>
+<div class="flex flex-col"><span class="font-label-md text-on-surface-variant text-[10px] uppercase">Created Date</span><span class="font-mono-data text-on-surface flex items-center gap-xs"><span class="material-symbols-outlined text-[16px] text-secondary" data-icon="calendar_today">calendar_today</span>2022-12-05</span></div>
+</div>
+<div class="flex items-center justify-between mt-sm pt-sm border-t border-white/5">
+<button class="font-label-md text-on-surface-variant hover:text-white transition-colors flex items-center gap-xs">
+                        View Config
+                        <span class="material-symbols-outlined text-[14px]" data-icon="open_in_new">open_in_new</span>
+</button>
+<button class="border border-white/20 text-on-surface px-6 py-2 rounded-lg font-headline-sm text-[14px] font-bold active:scale-95 transition-all hover:bg-white/5">Work with</button>
+</div>
+</div>
+</div>
+<!-- Pagination Footer -->
+<div class="mt-lg flex flex-col items-center gap-sm">
+<span class="font-label-md text-on-surface-variant">Showing 1 to 3 of 20 results</span>
+<div class="flex gap-xs">
+<button class="w-10 h-10 rounded-lg flex items-center justify-center border border-white/10 text-on-surface-variant hover:bg-white/5 transition-colors disabled:opacity-30" disabled="">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="w-10 h-10 rounded-lg flex items-center justify-center border border-secondary bg-secondary/10 text-secondary font-bold">1</button>
+<button class="w-10 h-10 rounded-lg flex items-center justify-center border border-white/10 text-on-surface-variant hover:bg-white/5">2</button>
+<button class="w-10 h-10 rounded-lg flex items-center justify-center border border-white/10 text-on-surface-variant hover:bg-white/5">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</main>
+<!-- FAB -->
+<button class="fixed bottom-24 right-6 w-14 h-14 bg-secondary text-on-secondary rounded-full shadow-lg shadow-black/40 flex items-center justify-center active:scale-90 transition-all z-50 group">
+<span class="material-symbols-outlined text-[32px] font-bold" data-icon="add">add</span>
+<span class="absolute right-full mr-4 bg-surface-container px-3 py-1.5 rounded-lg text-secondary font-label-md whitespace-nowrap opacity-0 group-active:opacity-100 transition-opacity pointer-events-none shadow-xl border border-white/10">Create Tenant</span>
+</button>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface-dim/80 dark:bg-surface-dim/80 backdrop-blur-xl border-t border-white/10 flex justify-around items-center h-20 pb-safe px-4">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-md text-label-md">Assets</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-label-md text-label-md">Activity</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container/20 text-secondary rounded-xl py-1 px-3 transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">System</span>
+</a>
+</nav>
+<!-- Drawer Trigger (Invisible or edge-based for demo) -->
+<div class="fixed inset-0 bg-black/60 z-[55] hidden opacity-0 transition-opacity duration-300" id="drawer-overlay"></div>
+<aside class="fixed inset-y-0 left-0 w-[280px] z-[60] bg-surface-container-low dark:bg-surface-container-low border-r border-white/5 shadow-xl -translate-x-full transition-transform duration-300 flex flex-col h-full py-lg" id="nav-drawer">
+<div class="px-gutter mb-lg">
+<div class="flex items-center gap-sm mb-sm">
+<div class="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary border border-secondary/20 overflow-hidden">
+<span class="material-symbols-outlined text-[32px]" data-icon="admin_panel_settings">admin_panel_settings</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-primary leading-tight">Console Admin</span>
+<span class="font-body-sm text-on-surface-variant">Super User</span>
+</div>
+</div>
+<div class="px-2 py-1 bg-white/5 rounded-md inline-block">
+<span class="font-label-md text-[10px] text-on-surface-variant">NODE: NODE-01</span>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-sm bg-secondary/10 text-secondary font-bold border-l-4 border-secondary px-4 py-3 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span class="font-body-md text-body-md">Platform Admin</span>
+</a>
+<a class="flex items-center gap-sm text-on-surface-variant px-4 py-3 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="business">business</span>
+<span class="font-body-md text-body-md">Tenant Operations</span>
+</a>
+<a class="flex items-center gap-sm text-on-surface-variant px-4 py-3 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="person_search">person_search</span>
+<span class="font-body-md text-body-md">Customer Context</span>
+</a>
+</nav>
+<div class="mt-auto px-gutter pt-lg border-t border-white/5">
+<button class="w-full flex items-center justify-center gap-xs py-3 text-on-surface-variant hover:text-white transition-colors" id="close-drawer">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+                Close Menu
+            </button>
+</div>
+</aside>
+<script>
+        // Simple micro-interactions for the drawer
+        const drawer = document.getElementById('nav-drawer');
+        const overlay = document.getElementById('drawer-overlay');
+        const openBtn = document.querySelector('[data-icon="account_circle"]');
+        const closeBtn = document.getElementById('close-drawer');
+
+        function toggleDrawer() {
+            const isOpen = !drawer.classList.contains('-translate-x-full');
+            if (isOpen) {
+                drawer.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+                overlay.classList.remove('opacity-100');
+            } else {
+                drawer.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.classList.add('opacity-100'), 10);
+            }
+        }
+
+        openBtn.addEventListener('click', toggleDrawer);
+        closeBtn.addEventListener('click', toggleDrawer);
+        overlay.addEventListener('click', toggleDrawer);
+
+        // Hover animation logic for cards (subtle scale)
+        const cards = document.querySelectorAll('.glass-card');
+        cards.forEach(card => {
+            card.addEventListener('touchstart', () => {
+                card.style.transform = 'scale(0.98)';
+                card.style.transition = 'transform 0.1s ease-out';
+            });
+            card.addEventListener('touchend', () => {
+                card.style.transform = 'scale(1)';
+            });
+        });
+    </script>
+</body></html>

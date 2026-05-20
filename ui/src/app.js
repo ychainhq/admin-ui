@@ -1,0 +1,20 @@
+import { createRouter } from './router.js';
+import { api } from './api.js';
+import { TenantListView } from './views/TenantListView.js';
+import { TenantConfigView } from './views/TenantConfigView.js';
+import { TenantCreateView } from './views/TenantCreateView.js';
+
+const router = createRouter();
+const deps = { api, router };
+const appEl = () => document.getElementById('app');
+
+router
+  .on('/', () => {
+    router.navigate('#/tenants');
+    return null;
+  })
+  .on('/tenants', (params) => TenantListView.mount(appEl(), params, deps))
+  .on('/tenants/new', (params) => TenantCreateView.mount(appEl(), params, deps))
+  .on('/tenants/:id/config', (params) => TenantConfigView.mount(appEl(), params, deps));
+
+router.start();
