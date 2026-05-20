@@ -96,6 +96,7 @@ const FIELD_DEFINITIONS = [
     description: 'Balance trigger for sweeping UTXOs into cold storage.',
     inputType: 'number',
     placeholder: 'e.g. 100000',
+    keepAsString: true,
   },
   {
     key: 'customer_session_ttl_seconds',
@@ -126,6 +127,7 @@ export function createConfigFieldsController(rawConfig, onFieldChange) {
       notInput:     isSelect || isTextarea,
       displayValue,
       nullable:     def.nullable || false,
+      keepAsString: def.keepAsString || false,
       options: isSelect ? def.options.map(o => ({ value: o, label: o })) : [],
       onInput(e) { onFieldChange(def.key, e.target.value); },
       onChange(e) { onFieldChange(def.key, e.target.value); },
@@ -139,7 +141,7 @@ export function collectConfigValues(fields) {
     const raw = field.displayValue;
     if (field.nullable && (raw === '' || raw === 'null')) {
       result[field.key] = null;
-    } else if (field.inputType === 'number' && raw !== '') {
+    } else if (field.inputType === 'number' && !field.keepAsString && raw !== '') {
       result[field.key] = Number(raw);
     } else {
       result[field.key] = raw;
