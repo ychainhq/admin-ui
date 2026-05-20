@@ -159,7 +159,9 @@ export function createController({ api, router }) {
     drawerOpen: false,
     drawerClass: 'fixed inset-y-0 left-0 w-[280px] z-[60] bg-surface-container-low border-r border-white/5 shadow-xl flex flex-col py-lg transition-transform duration-300 lg:hidden -translate-x-full',
 
-    _page: 1,
+    _cursor: undefined,
+    _prevCursors: [],
+    _nextCursor: undefined,
     _total: 0,
 
     _syncDrawer() {
@@ -182,15 +184,26 @@ export function createController({ api, router }) {
       self.error = null;
       self.isEmpty = false;
       try {
-        const data = await api.getTenants({ search: self.search.value, page: self._page });
-        const items = data.items || data.tenants || data.data || [];
-        self._total = data.total || data.count || items.length;
+        const data = await api.getTenants({ limit: PER_PAGE, cursor: self._cursor });
+        const items = data.data || [];
+        self._nextCursor = data.pagination?.nextCursor || undefined;
+        self._total = items.length;
         self.tenants = items.map(t => createTenantViewModel(t, { router }));
         self.isEmpty = self.tenants.length === 0;
+        const currentPage = self._prevCursors.length + 1;
         self.pagination = createPaginationController({
-          page: self._page,
-          total: self._total,
-          onPageChange: (p) => { self._page = p; self.load(); },
+          page: currentPage,
+          total: self._nextCursor ? currentPage * PER_PAGE + 1 : (currentPage - 1) * PER_PAGE + items.length,
+          onPageChange: (p) => {
+            if (p > currentPage && self._nextCursor) {
+              self._prevCursors.push(self._cursor);
+              self._cursor = self._nextCursor;
+              self.load();
+            } else if (p < currentPage && self._prevCursors.length > 0) {
+              self._cursor = self._prevCursors.pop();
+              self.load();
+            }
+          },
         });
       } catch (e) {
         self.error = e.message;

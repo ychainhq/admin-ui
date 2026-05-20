@@ -2,15 +2,15 @@ import { createController } from '../../src/views/TenantConfigView.js';
 import { makeMockApi, makeRouter } from '../mocks/api.js';
 
 const RAW_CONFIG = {
-  btc_confirmations_required: 1,
-  btc_finality_confirmations: 6,
-  custody_mode: 'external_signer',
-  withdrawal_mode: 'manual',
-  daily_withdrawal_limit_sats: null,
-  per_tx_limit_sats: null,
-  btc_xpub: 'xpub6CUGRUo...',
-  btc_sweep_threshold_sats: 100000,
-  customer_session_ttl_seconds: 3600,
+  btcConfirmationsRequired: 1,
+  btcFinalityConfirmations: 6,
+  custodyMode: 'external_signer',
+  withdrawalMode: 'manual_approval',
+  dailyWithdrawalLimitSats: null,
+  perTxLimitSats: null,
+  btcXpub: 'xpub6CUGRUo...',
+  btcSweepThresholdSats: 100000,
+  customerSessionTtlSeconds: 3600,
 };
 
 function makeCtrl(apiOverrides = {}, tenantId = 'tenant_default') {
@@ -79,7 +79,7 @@ describe('TenantConfigView — createController', () => {
     await ctrl.saveConfig();
     expect(api.saveTenantConfig).toHaveBeenCalledWith(
       'tenant_default',
-      expect.objectContaining({ btc_confirmations_required: 1 })
+      expect.objectContaining({ btcConfirmationsRequired: 1 })
     );
   });
 
@@ -116,15 +116,15 @@ describe('TenantConfigView — createController', () => {
   test('field change updates _rawConfig via _onFieldChange', async () => {
     const { ctrl } = makeCtrl();
     await ctrl.load();
-    ctrl._onFieldChange('btc_sweep_threshold_sats', '200000');
-    expect(ctrl._rawConfig.btc_sweep_threshold_sats).toBe('200000');
+    ctrl._onFieldChange('btcSweepThresholdSats', '200000');
+    expect(ctrl._rawConfig.btcSweepThresholdSats).toBe('200000');
   });
 
   test('field change syncs displayValue on matching field', async () => {
     const { ctrl } = makeCtrl();
     await ctrl.load();
-    ctrl._onFieldChange('btc_xpub', 'newxpub123');
-    const xpubField = ctrl.config.fields.find(f => f.key === 'btc_xpub');
+    ctrl._onFieldChange('btcXpub', 'newxpub123');
+    const xpubField = ctrl.config.fields.find(f => f.key === 'btcXpub');
     expect(xpubField.displayValue).toBe('newxpub123');
   });
 

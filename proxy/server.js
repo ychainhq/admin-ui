@@ -44,8 +44,7 @@ app.post('/switch-tenant', async (req, res) => {
   if (!CHAIN_API_ADMIN_KEY) return res.status(400).json({ error: { message: 'Admin key not configured' } });
 
   if (tenantKeyCache[tenantId]) {
-    activeTenantKey = tenantKeyCache[tenantId];
-    return res.json({ success: true });
+    return res.json({ key: tenantKeyCache[tenantId] });
   }
 
   try {
@@ -58,11 +57,10 @@ app.post('/switch-tenant', async (req, res) => {
       body: JSON.stringify({ name: 'ui-session' }),
     });
     const data = await r.json();
-    const key = data.key || data.apiKey;
+    const key = data.data?.apiKey;
     if (!key) throw new Error('API key not in response: ' + JSON.stringify(data));
     tenantKeyCache[tenantId] = key;
-    activeTenantKey = key;
-    res.json({ success: true });
+    res.json({ key });
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
   }
@@ -119,12 +117,16 @@ app.all('/api/*', async (req, res) => {
   const qs = new URLSearchParams(req.query).toString();
   if (qs) url += '?' + qs;
 
+  // UI passes the active tenant key via X-Tenant-Key header (set after switch-tenant).
+  // Fall back to the env-configured key for backward compatibility.
+  const tenantKey = req.headers['x-tenant-key'] || activeTenantKey;
+
   try {
     const opts = {
       method:  req.method,
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${activeTenantKey}`,
+        'Authorization': `Bearer ${tenantKey}`,
       },
     };
     if (['POST', 'PATCH', 'PUT'].includes(req.method) && req.body && Object.keys(req.body).length > 0) {

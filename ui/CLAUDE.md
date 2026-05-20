@@ -33,21 +33,30 @@
 - Szczegóły endpointów: patrz `../docs/chain_api_mcp_mini_hld_and_agent_prompt.md` rozdział 7 (API Reference)
 - Kolekcja Postman: `../docs/btc-chain-api.postman_collection.json`
 - `src/rivets.js` = thin wrapper (`export default window.rivets`) — mockowany w testach przez `moduleNameMapper`
+- `getActiveTenantKey()` — eksportowana funkcja zwracająca klucz tenanta z `sessionStorage`
+- `api.tenantRequest(path, opts)` — wrapper do `/api/*` calls, automatycznie dodaje `X-Tenant-Key` header
+- `api.switchTenant(tenantId)` — generuje klucz przez proxy i zapisuje go w `sessionStorage`
 
 ## Integracja z backendem
 
 API endpointy backendu (przez proxy):
 
-| Zasób | Metoda | URL |
-|---|---|---|
-| Lista tenantów | GET | `/admin-api/tenants?search=&page=` |
-| Szczegóły tenanta | GET | `/admin-api/tenants/:id` |
-| Utwórz tenanta | POST | `/admin-api/tenants` |
-| Konfiguracja tenanta | GET | `/admin-api/tenants/:id/config` |
-| Zapisz konfigurację | PUT | `/admin-api/tenants/:id/config` |
-| Przełącz aktywny tenant | POST | `/switch-tenant { tenantId }` |
-| Konfiguracja proxy | GET | `/config` |
-| RPC Bitcoin Core | POST | `/rpc { method, params }` |
+| Zasób | Metoda | URL | Uwagi |
+|---|---|---|---|
+| Lista tenantów | GET | `/admin-api/tenants?limit=&cursor=` | cursor-based pagination |
+| Szczegóły tenanta | GET | `/admin-api/tenants/:id` | |
+| Utwórz tenanta | POST | `/admin-api/tenants` | body: `{ name, assets: [{ chain, hotAddress }] }` |
+| Konfiguracja tenanta | GET | `/admin-api/tenants/:id/config` | odpowiedź unwrapowana z `{ data }` |
+| Zapisz konfigurację | PATCH | `/admin-api/tenants/:id/config` | klucze camelCase (engine Zod schema) |
+| Przełącz aktywny tenant | POST | `/switch-tenant { tenantId }` | zwraca `{ key }` → zapisywany w sessionStorage |
+| Konfiguracja proxy | GET | `/config` | |
+| RPC Bitcoin Core | POST | `/rpc { method, params }` | |
+| Tenant API (przyszłe ekrany) | * | `/api/*` | wymaga aktywnego klucza z switchTenant |
+
+### Konwencje odpowiedzi engine
+- Wszystkie odpowiedzi engine są opakowane w `{ data: ... }` — `api.getTenantConfig` unwrapuje automatycznie
+- Lista tenantów: `{ data: [...], pagination: { limit, cursor, nextCursor } }` — **brak pola `total`**
+- Config fields: klucze **camelCase** (np. `btcConfirmationsRequired`, `custodyMode`) — nie snake_case
 
 Przed rozszerzeniem API — sprawdź kolekcję Postman i HLD sekcja 7 po aktualny schemat requestów i responsów.
 

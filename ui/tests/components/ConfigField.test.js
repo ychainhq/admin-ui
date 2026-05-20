@@ -1,15 +1,15 @@
 import { createConfigFieldsController, collectConfigValues } from '../../src/components/ConfigField.js';
 
 const rawConfig = {
-  btc_confirmations_required: 1,
-  btc_finality_confirmations: 6,
-  custody_mode: 'external_signer',
-  withdrawal_mode: 'manual',
-  daily_withdrawal_limit_sats: null,
-  per_tx_limit_sats: null,
-  btc_xpub: 'xpub6CUGRUo...',
-  btc_sweep_threshold_sats: 100000,
-  customer_session_ttl_seconds: 3600,
+  btcConfirmationsRequired: 1,
+  btcFinalityConfirmations: 6,
+  custodyMode: 'external_signer',
+  withdrawalMode: 'manual_approval',
+  dailyWithdrawalLimitSats: null,
+  perTxLimitSats: null,
+  btcXpub: 'xpub6CUGRUo...',
+  btcSweepThresholdSats: 100000,
+  customerSessionTtlSeconds: 3600,
 };
 
 describe('createConfigFieldsController', () => {
@@ -38,43 +38,53 @@ describe('createConfigFieldsController', () => {
   });
 
   test('numeric fields render correct displayValue', () => {
-    const confirmations = fields.find(f => f.key === 'btc_confirmations_required');
+    const confirmations = fields.find(f => f.key === 'btcConfirmationsRequired');
     expect(confirmations.displayValue).toBe('1');
   });
 
   test('select field has isSelect = true', () => {
-    const custody = fields.find(f => f.key === 'custody_mode');
+    const custody = fields.find(f => f.key === 'custodyMode');
     expect(custody.isSelect).toBe(true);
   });
 
   test('select field options include the right values', () => {
-    const custody = fields.find(f => f.key === 'custody_mode');
+    const custody = fields.find(f => f.key === 'custodyMode');
     const optValues = custody.options.map(o => o.value);
     expect(optValues).toContain('external_signer');
-    expect(optValues).toContain('internal_hsm');
+    expect(optValues).toContain('platform_custody');
+    expect(optValues).toContain('hybrid_custody');
   });
 
   test('current value option is selected', () => {
-    const custody = fields.find(f => f.key === 'custody_mode');
+    const custody = fields.find(f => f.key === 'custodyMode');
     const selected = custody.options.find(o => o.selected === true);
     expect(selected?.value).toBe('external_signer');
   });
 
   test('null value renders as empty string', () => {
-    const limit = fields.find(f => f.key === 'daily_withdrawal_limit_sats');
+    const limit = fields.find(f => f.key === 'dailyWithdrawalLimitSats');
     expect(limit.displayValue).toBe('');
   });
 
   test('onInput calls onFieldChange with key and value', () => {
-    const field = fields.find(f => f.key === 'btc_sweep_threshold_sats');
+    const field = fields.find(f => f.key === 'btcSweepThresholdSats');
     field.onInput({ target: { value: '200000' } });
-    expect(onFieldChange).toHaveBeenCalledWith('btc_sweep_threshold_sats', '200000');
+    expect(onFieldChange).toHaveBeenCalledWith('btcSweepThresholdSats', '200000');
   });
 
   test('onChange calls onFieldChange with key and value', () => {
-    const field = fields.find(f => f.key === 'custody_mode');
-    field.onChange({ target: { value: 'internal_hsm' } });
-    expect(onFieldChange).toHaveBeenCalledWith('custody_mode', 'internal_hsm');
+    const field = fields.find(f => f.key === 'custodyMode');
+    field.onChange({ target: { value: 'platform_custody' } });
+    expect(onFieldChange).toHaveBeenCalledWith('custodyMode', 'platform_custody');
+  });
+
+  test('withdrawalMode options include all four values', () => {
+    const withdrawal = fields.find(f => f.key === 'withdrawalMode');
+    const optValues = withdrawal.options.map(o => o.value);
+    expect(optValues).toContain('external_signer');
+    expect(optValues).toContain('automatic');
+    expect(optValues).toContain('manual_approval');
+    expect(optValues).toContain('threshold_based');
   });
 });
 
@@ -83,23 +93,23 @@ describe('collectConfigValues', () => {
     const onFieldChange = jest.fn();
     const fields = createConfigFieldsController(rawConfig, onFieldChange);
     const result = collectConfigValues(fields);
-    expect(typeof result.btc_confirmations_required).toBe('number');
-    expect(result.btc_confirmations_required).toBe(1);
+    expect(typeof result.btcConfirmationsRequired).toBe('number');
+    expect(result.btcConfirmationsRequired).toBe(1);
   });
 
   test('converts nullable empty-string fields to null', () => {
     const onFieldChange = jest.fn();
     const fields = createConfigFieldsController(rawConfig, onFieldChange);
     const result = collectConfigValues(fields);
-    expect(result.daily_withdrawal_limit_sats).toBeNull();
-    expect(result.per_tx_limit_sats).toBeNull();
+    expect(result.dailyWithdrawalLimitSats).toBeNull();
+    expect(result.perTxLimitSats).toBeNull();
   });
 
   test('preserves string xpub value', () => {
     const onFieldChange = jest.fn();
     const fields = createConfigFieldsController(rawConfig, onFieldChange);
     const result = collectConfigValues(fields);
-    expect(result.btc_xpub).toBe('xpub6CUGRUo...');
+    expect(result.btcXpub).toBe('xpub6CUGRUo...');
   });
 
   test('collects all 9 config keys', () => {

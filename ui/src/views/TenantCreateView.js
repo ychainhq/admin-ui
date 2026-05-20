@@ -48,14 +48,6 @@ const template = `
         </div>
 
         <div class="glass-card rounded-xl p-md space-y-md">
-          <!-- Tenant ID -->
-          <div>
-            <label class="block font-label-md text-on-surface-variant text-[10px] uppercase mb-xs">Tenant ID</label>
-            <input rv-on-input="onIdInput"
-              class="w-full bg-surface-container-low border border-white/10 rounded-lg px-4 py-3 text-on-surface font-mono-data focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
-              type="text" placeholder="e.g. tenant_my_org" autocomplete="off" />
-            <p class="font-body-sm text-on-surface-variant mt-xs">Lowercase letters, digits and underscores only.</p>
-          </div>
           <!-- Tenant Name -->
           <div>
             <label class="block font-label-md text-on-surface-variant text-[10px] uppercase mb-xs">Display Name</label>
@@ -63,15 +55,13 @@ const template = `
               class="w-full bg-surface-container-low border border-white/10 rounded-lg px-4 py-3 text-on-surface font-body-md focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
               type="text" placeholder="e.g. My Organisation" autocomplete="off" />
           </div>
-          <!-- Custody mode -->
+          <!-- BTC Hot Wallet Address -->
           <div>
-            <label class="block font-label-md text-on-surface-variant text-[10px] uppercase mb-xs">Custody Mode</label>
-            <select rv-on-change="onCustodyChange"
-              class="w-full bg-surface-container-low border border-white/10 rounded-lg px-4 py-3 text-on-surface font-mono-data focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none appearance-none">
-              <option value="external_signer">external_signer</option>
-              <option value="internal_hsm">internal_hsm</option>
-              <option value="hybrid_multi">hybrid_multi</option>
-            </select>
+            <label class="block font-label-md text-on-surface-variant text-[10px] uppercase mb-xs">BTC Hot Address</label>
+            <input rv-on-input="onHotAddressInput"
+              class="w-full bg-surface-container-low border border-white/10 rounded-lg px-4 py-3 text-on-surface font-mono-data focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
+              type="text" placeholder="bc1q... or tb1q..." autocomplete="off" />
+            <p class="font-body-sm text-on-surface-variant mt-xs">Bitcoin address for the tenant hot wallet (receives sweeps).</p>
           </div>
 
           <!-- Mobile actions -->
@@ -108,25 +98,20 @@ export function createController({ api, router }) {
     error: null,
 
     _form: {
-      id: '',
       name: '',
-      custody_mode: 'external_signer',
+      hotAddress: '',
     },
 
-    onIdInput(e) {
-      self._form.id = e.target.value.trim();
-    },
     onNameInput(e) {
       self._form.name = e.target.value.trim();
     },
-    onCustodyChange(e) {
-      self._form.custody_mode = e.target.value;
+    onHotAddressInput(e) {
+      self._form.hotAddress = e.target.value.trim();
     },
 
     validate() {
-      if (!self._form.id) return 'Tenant ID is required.';
-      if (!/^[a-z0-9_]+$/.test(self._form.id)) return 'Tenant ID may only contain lowercase letters, digits and underscores.';
       if (!self._form.name) return 'Display name is required.';
+      if (!self._form.hotAddress) return 'BTC hot address is required.';
       return null;
     },
 
@@ -136,7 +121,10 @@ export function createController({ api, router }) {
       self.submitting = true;
       self.error = null;
       try {
-        await api.createTenant(self._form);
+        await api.createTenant({
+          name: self._form.name,
+          assets: [{ chain: 'bitcoin', hotAddress: self._form.hotAddress }],
+        });
         router.navigate('#/tenants');
       } catch (e) {
         self.error = e.message;
