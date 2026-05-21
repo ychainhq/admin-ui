@@ -82,8 +82,8 @@ app.post('/register-tenant-key', (req, res) => {
 // ─── Bitcoin Core RPC proxy ───────────────────────────────────────────────────
 
 app.post('/rpc', async (req, res) => {
-  const { useWallet, ...rpcBody } = req.body;
-  const walletPath = useWallet ? `/wallet/${BITCOIN_WALLET}` : '';
+  const { useWallet, wallet, ...rpcBody } = req.body;
+  const walletPath = wallet ? `/wallet/${encodeURIComponent(wallet)}` : (useWallet ? `/wallet/${BITCOIN_WALLET}` : '');
   const url = `${BITCOIN_RPC_URL}${walletPath}`;
 
   try {

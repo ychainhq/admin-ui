@@ -227,11 +227,14 @@ const template = `
     </div>
     <nav class="flex-1 flex flex-col gap-1 overflow-y-auto">
       <span rv-each-item="sidebar.navItems" class="contents">
-        <a rv-show="item.isActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-4 py-3 transition-colors duration-200 cursor-pointer bg-secondary/10 text-secondary font-bold border-l-4 border-secondary">
+        <div rv-show="item.separator" class="px-4 pt-md pb-xs">
+          <p rv-text="item.label" class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold"></p>
+        </div>
+        <a rv-show="item.showActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-4 py-3 transition-colors duration-200 cursor-pointer bg-secondary/10 text-secondary font-bold border-l-4 border-secondary">
           <span rv-text="item.icon" class="material-symbols-outlined"></span>
           <span rv-text="item.label" class="font-body-sm text-body-sm"></span>
         </a>
-        <a rv-hide="item.isActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-4 py-3 transition-colors duration-200 cursor-pointer text-on-surface-variant hover:bg-white/5">
+        <a rv-show="item.showInactive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-4 py-3 transition-colors duration-200 cursor-pointer text-on-surface-variant hover:bg-white/5">
           <span rv-text="item.icon" class="material-symbols-outlined"></span>
           <span rv-text="item.label" class="font-body-sm text-body-sm"></span>
         </a>

@@ -7,6 +7,7 @@ export function makeMockApi(overrides = {}) {
     getTenantConfig: jest.fn().mockResolvedValue({}),
     saveTenantConfig: jest.fn().mockResolvedValue({}),
     switchTenant: jest.fn().mockResolvedValue({ success: true }),
+    rpc: jest.fn().mockResolvedValue({ result: null }),
     ...overrides,
   };
 }

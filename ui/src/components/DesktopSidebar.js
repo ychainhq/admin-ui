@@ -16,11 +16,14 @@ export const template = `
 
   <nav class="flex-1 overflow-y-auto hide-scrollbar py-sm flex flex-col gap-1">
     <span rv-each-item="sidebar.navItems" class="contents">
-      <a rv-show="item.isActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-sm py-2 rounded-lg transition-all cursor-pointer text-secondary border-r-2 border-secondary bg-secondary/10 font-bold">
+      <div rv-show="item.separator" class="px-sm pb-xs pt-md">
+        <p rv-text="item.label" class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold"></p>
+      </div>
+      <a rv-show="item.showActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-sm py-2 rounded-lg transition-all cursor-pointer text-secondary border-r-2 border-secondary bg-secondary/10 font-bold">
         <span rv-text="item.icon" class="material-symbols-outlined"></span>
         <span rv-text="item.label" class="text-label-md font-label-md"></span>
       </a>
-      <a rv-hide="item.isActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-sm py-2 rounded-lg transition-all cursor-pointer text-on-surface-variant hover:text-on-surface hover:bg-white/5">
+      <a rv-show="item.showInactive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-sm py-2 rounded-lg transition-all cursor-pointer text-on-surface-variant hover:text-on-surface hover:bg-white/5">
         <span rv-text="item.icon" class="material-symbols-outlined"></span>
         <span rv-text="item.label" class="text-label-md font-label-md"></span>
       </a>
@@ -61,20 +64,28 @@ const NAV_ITEMS = [
   { label: 'Customer Assets',    icon: 'account_balance_wallet', route: '/customer-assets' },
   { label: 'Transactions',       icon: 'swap_horiz',             route: '/transactions' },
   { label: 'Support',            icon: 'contact_support',        route: '/support' },
+  { separator: true,             label: 'Dev Tools' },
+  { label: 'Dev Nodes',          icon: 'hub',                    route: '/nodes' },
 ];
 
 export function createSidebarController({ activeRoute, router, onCreateTenant }) {
   return {
     navItems: NAV_ITEMS.map(item => {
+      if (item.separator) {
+        return { separator: true, label: item.label, icon: '', isActive: false, showActive: false, showInactive: false, itemClass: '', drawerItemClass: '', navigate: () => {} };
+      }
       const isActive = activeRoute === item.route || activeRoute.startsWith(item.route + '/');
       return {
         ...item,
+        separator: false,
         isActive,
+        showActive: isActive,
+        showInactive: !isActive,
         itemClass: isActive ? ACTIVE_NAV_CLASS : INACTIVE_NAV_CLASS,
         drawerItemClass: isActive ? ACTIVE_DRAWER_CLASS : INACTIVE_DRAWER_CLASS,
-        navigate: () => router.navigate(`#${item.route}`),
+        navigate: (e) => { e?.preventDefault(); router.navigate(`#${item.route}`); },
       };
     }),
-    createTenant: onCreateTenant || (() => {}),
+    createTenant: onCreateTenant || (() => router.navigate('#/tenants/new')),
   };
 }

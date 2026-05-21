@@ -65,6 +65,13 @@ export const api = {
     return data;
   },
 
+  rpc: (method, params = [], opts = {}) => {
+    const body = { method, params: params ?? [] };
+    if (opts?.wallet) body.wallet = opts.wallet;
+    if (opts?.useWallet) body.useWallet = true;
+    return request('/rpc', { method: 'POST', body: JSON.stringify(body) });
+  },
+
   // tenantRequest is exposed so future views can call /api/* with the active tenant key.
   tenantRequest,
 };
