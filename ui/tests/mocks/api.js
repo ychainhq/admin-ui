@@ -8,6 +8,20 @@ export function makeMockApi(overrides = {}) {
     saveTenantConfig: jest.fn().mockResolvedValue({}),
     switchTenant: jest.fn().mockResolvedValue({ success: true }),
     rpc: jest.fn().mockResolvedValue({ result: null }),
+    // Customer API
+    getCustomers: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
+    getCustomer: jest.fn().mockResolvedValue({ customerId: 'cust_test', reference: 'ref-1', status: 'active', createdAt: '2026-01-01T00:00:00Z' }),
+    createCustomer: jest.fn().mockResolvedValue({ customerId: 'cust_new' }),
+    disableCustomer: jest.fn().mockResolvedValue({ customerId: 'cust_test', status: 'disabled' }),
+    getCustomerProfile: jest.fn().mockResolvedValue(null),
+    getCustomerIdentifiers: jest.fn().mockResolvedValue({ data: [] }),
+    getCustomerContact: jest.fn().mockResolvedValue(null),
+    getCustomerAmlKyc: jest.fn().mockResolvedValue(null),
+    getCustomerRelationships: jest.fn().mockResolvedValue({ data: [] }),
+    getCustomerDocuments: jest.fn().mockResolvedValue({ data: [] }),
+    getCustomerDataGovernance: jest.fn().mockResolvedValue(null),
+    getCustomerBalances: jest.fn().mockResolvedValue({ customerId: 'cust_test', balances: [] }),
+    getCustomerDeposits: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
     ...overrides,
   };
 }

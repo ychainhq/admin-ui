@@ -16,7 +16,7 @@ const INACTIVE_ITEM_CLASS = `${BASE_ITEM_CLASS} text-on-surface-variant hover:te
 export function createBottomNavController({ activeRoute, router }) {
   const items = [
     { label: 'Dashboard', icon: 'dashboard',              route: '/dashboard' },
-    { label: 'Assets',    icon: 'account_balance_wallet', route: '/assets' },
+    { label: 'Customers', icon: 'group',                  route: '/customers' },
     { label: 'Activity',  icon: 'history',                route: '/activity' },
     { label: 'System',    icon: 'settings',               route: '/tenants' },
   ];

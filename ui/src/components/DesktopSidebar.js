@@ -59,6 +59,7 @@ const NAV_ITEMS = [
   { label: 'Audit Logs',         icon: 'receipt_long',           route: '/audit-logs' },
   { label: 'Global Config',      icon: 'settings_applications',  route: '/global-config' },
   { label: 'Tenant List',        icon: 'corporate_fare',         route: '/tenants' },
+  { label: 'Customers',          icon: 'group',                  route: '/customers' },
   { label: 'Onboarding',         icon: 'person_add',             route: '/onboarding' },
   { label: 'API Keys',           icon: 'key',                    route: '/api-keys' },
   { label: 'Customer Assets',    icon: 'account_balance_wallet', route: '/customer-assets' },

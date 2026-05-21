@@ -72,6 +72,54 @@ export const api = {
     return request('/rpc', { method: 'POST', body: JSON.stringify(body) });
   },
 
+  // --- Customer API (tenant-scoped, /api/* → /v1/*) ---
+
+  getCustomers: ({ limit = 20, cursor, status } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    if (status) params.set('status', status);
+    return tenantRequest(`/api/customers?${params}`);
+  },
+
+  getCustomer: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}`),
+
+  createCustomer: (data) =>
+    tenantRequest('/api/customers', { method: 'POST', body: JSON.stringify(data) }),
+
+  disableCustomer: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/disable`, { method: 'POST' }),
+
+  getCustomerProfile: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/profile`),
+
+  getCustomerIdentifiers: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/identifiers`),
+
+  getCustomerContact: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/contact`),
+
+  getCustomerAmlKyc: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/aml-kyc`),
+
+  getCustomerRelationships: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/relationships`),
+
+  getCustomerDocuments: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/documents`),
+
+  getCustomerDataGovernance: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/data-governance`),
+
+  getCustomerBalances: (id) =>
+    tenantRequest(`/api/customers/${encodeURIComponent(id)}/balances`),
+
+  getCustomerDeposits: (id, { limit = 20, cursor } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return tenantRequest(`/api/customers/${encodeURIComponent(id)}/deposits?${params}`);
+  },
+
   // tenantRequest is exposed so future views can call /api/* with the active tenant key.
   tenantRequest,
 };
