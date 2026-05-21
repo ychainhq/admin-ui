@@ -2,6 +2,9 @@ import rivets from '../rivets.js';
 import { template as topBarTpl, createTopBarController } from '../components/TopAppBar.js';
 import { template as bottomNavTpl, createBottomNavController } from '../components/BottomNav.js';
 import { template as sidebarTpl, createSidebarController } from '../components/DesktopSidebar.js';
+import { template as mobileDrawerTpl, createMobileDrawerController } from '../components/MobileDrawer.js';
+import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
+import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { opCardHtml } from '../components/NodeOpCard.js';
 import { getNode } from '../nodes.js';
 
@@ -63,13 +66,13 @@ const template = `
 
     ${topBarTpl}
 
-    <div class="hidden lg:flex fixed top-0 left-[280px] right-0 z-40 bg-surface-container-low/50 backdrop-blur-xl border-b border-white/10 items-center px-margin-desktop h-16">
-      <nav class="flex items-center gap-2 text-label-md font-label-md">
+    ${desktopTopBarHtml({
+      breadcrumbHtml: `
         <span class="text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors" rv-on-click="backToNodes">Dev Nodes</span>
         <span class="material-symbols-outlined text-[14px] text-outline">chevron_right</span>
         <span rv-text="nodeLabel" class="text-on-surface font-semibold"></span>
-      </nav>
-    </div>
+      `,
+    })}
 
     <main class="pt-20 lg:pt-16 pb-28 lg:pb-8 px-margin-mobile lg:px-margin-desktop">
       <div class="mx-auto">
@@ -156,6 +159,8 @@ const template = `
 
   </div>
 
+  ${mobileDrawerTpl}
+
 </div>
 `;
 
@@ -164,11 +169,13 @@ export function createController({ nodeId, api, router }) {
 
   const self = {
     nodeId,
+    mobileDrawer: createMobileDrawerController(),
+    activeTenant: createActiveTenantController(),
     topBar: createTopBarController({
       title: nodeConfig?.label || nodeId,
       breadcrumb: `Dev Nodes > ${nodeConfig?.label || nodeId}`,
       onBack: () => router.navigate('#/nodes'),
-      onMenuOpen: () => {},
+      onMenuOpen: () => self.mobileDrawer.open(),
     }),
     sidebar: createSidebarController({ activeRoute: ROUTE, router }),
     bottomNav: createBottomNavController({ activeRoute: ROUTE, router }),

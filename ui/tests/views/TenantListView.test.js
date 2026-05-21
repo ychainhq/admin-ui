@@ -148,18 +148,62 @@ describe('TenantListView — createController', () => {
     const { ctrl } = makeCtrl();
     const tenantItem = ctrl.sidebar.navItems.find(i => i.label === 'Tenant List');
     expect(tenantItem).toBeDefined();
-    expect(tenantItem.itemClass).toContain('border-l-secondary');
+    expect(tenantItem.showActive).toBe(true);
+    expect(tenantItem.itemClass).toContain('border-secondary');
   });
 
-  test('drawerOpen starts as false', () => {
+  test('mobileDrawer starts closed', () => {
     const { ctrl } = makeCtrl();
-    expect(ctrl.drawerOpen).toBe(false);
+    expect(ctrl.mobileDrawer.isOpen).toBe(false);
   });
 
-  test('closeDrawer sets drawerOpen to false', () => {
+  test('mobileDrawer.open() opens drawer', () => {
     const { ctrl } = makeCtrl();
-    ctrl.drawerOpen = true;
-    ctrl.closeDrawer();
-    expect(ctrl.drawerOpen).toBe(false);
+    ctrl.mobileDrawer.open();
+    expect(ctrl.mobileDrawer.isOpen).toBe(true);
+  });
+
+  test('mobileDrawer.close() closes drawer', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.mobileDrawer.open();
+    ctrl.mobileDrawer.close();
+    expect(ctrl.mobileDrawer.isOpen).toBe(false);
+  });
+
+  test('topBar.onMenuOpen opens mobileDrawer', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.topBar.onMenuOpen();
+    expect(ctrl.mobileDrawer.isOpen).toBe(true);
+  });
+
+  test('activeTenant.isEmpty when no tenant stored', () => {
+    sessionStorage.clear();
+    const { ctrl } = makeCtrl();
+    expect(ctrl.activeTenant.isEmpty).toBe(true);
+    expect(ctrl.activeTenant.isSet).toBe(false);
+  });
+
+  test('activeTenant.isSet when tenant stored in sessionStorage', () => {
+    sessionStorage.setItem('chain_api_active_tenant', JSON.stringify({ id: 'ten_01', name: 'Acme Corp' }));
+    const { ctrl } = makeCtrl();
+    expect(ctrl.activeTenant.isSet).toBe(true);
+    expect(ctrl.activeTenant.name).toBe('Acme Corp');
+    expect(ctrl.activeTenant.id).toBe('ten_01');
+    sessionStorage.clear();
+  });
+
+  test('activeTenant updates live when workWith is called on a loaded tenant', async () => {
+    sessionStorage.clear();
+    const { ctrl } = makeCtrl({
+      getTenants: jest.fn().mockResolvedValue(PAGE_RESPONSE),
+    });
+    await ctrl.load();
+    expect(ctrl.activeTenant.isEmpty).toBe(true);
+    await ctrl.tenants[1].workWith();
+    expect(ctrl.activeTenant.isSet).toBe(true);
+    expect(ctrl.activeTenant.name).toBe('Alpha Ops');
+    expect(ctrl.activeTenant.id).toBe('tenant_alpha');
+    await ctrl.tenants[0].workWith();
+    expect(ctrl.activeTenant.name).toBe('Dev Tenant');
   });
 });

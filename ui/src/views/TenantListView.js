@@ -11,45 +11,22 @@ import { template as tenantCardTpl } from '../components/TenantCard.js';
 import { createTenantViewModel } from '../components/TenantCard.js';
 import { template as paginationTpl } from '../components/Pagination.js';
 import { createPaginationController } from '../components/Pagination.js';
+import { template as mobileDrawerTpl, createMobileDrawerController } from '../components/MobileDrawer.js';
+import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
+import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 
 const ROUTE = '/tenants';
 const PER_PAGE = 10;
 
-const desktopTopBarTpl = `
-<div class="hidden lg:flex fixed top-0 left-[280px] right-0 z-40 bg-surface-container-low/50 backdrop-blur-xl border-b border-white/10 items-center justify-between px-margin-desktop h-16">
-  <nav class="flex items-center gap-2 text-label-md font-label-md">
+const desktopTopBarTpl = desktopTopBarHtml({
+  breadcrumbHtml: `
     <span class="text-on-surface-variant">Platform</span>
     <span class="material-symbols-outlined text-[14px] text-outline">chevron_right</span>
     <span class="text-on-surface font-semibold">Tenants</span>
-  </nav>
-  <div class="flex items-center gap-md">
-    <div class="relative">
-      <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px] pointer-events-none">search</span>
-      <input rv-on-input="search.onInput" rv-attr-value="search.value"
-        class="bg-surface-container-high border border-white/10 rounded-full pl-10 pr-4 py-1.5 text-body-sm w-72 focus:ring-1 focus:ring-secondary focus:border-secondary transition-all text-on-surface outline-none"
-        placeholder="Search tenants, IDs..." type="text">
-    </div>
-    <div class="flex items-center gap-sm">
-      <button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-white/5 rounded-full transition-colors active:scale-95">
-        <span class="material-symbols-outlined">notifications</span>
-      </button>
-      <button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-white/5 rounded-full transition-colors active:scale-95">
-        <span class="material-symbols-outlined">settings</span>
-      </button>
-    </div>
-    <div class="h-8 w-px bg-white/10"></div>
-    <div class="flex items-center gap-sm">
-      <div class="text-right">
-        <p class="text-label-md font-label-md text-on-surface">Admin Profile</p>
-        <p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Superuser</p>
-      </div>
-      <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center border border-white/20">
-        <span class="material-symbols-outlined text-secondary text-[18px]">admin_panel_settings</span>
-      </div>
-    </div>
-  </div>
-</div>
-`;
+  `,
+  showSearch: true,
+  searchPlaceholder: 'Search tenants, IDs...',
+});
 
 const desktopTableTpl = `
 <div rv-hide="loading" class="hidden lg:block">
@@ -206,47 +183,7 @@ const template = `
 
   </div>
 
-  <!-- Mobile drawer overlay -->
-  <div rv-show="drawerOpen" rv-on-click="closeDrawer" class="fixed inset-0 bg-black/60 z-[55] transition-opacity duration-300"></div>
-
-  <!-- Mobile drawer -->
-  <aside rv-attr-class="drawerClass" class="fixed inset-y-0 left-0 w-[280px] z-[60] bg-surface-container-low border-r border-white/5 shadow-xl flex flex-col py-lg transition-transform duration-300 lg:hidden -translate-x-full">
-    <div class="px-gutter mb-lg">
-      <div class="flex items-center gap-sm mb-sm">
-        <div class="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary border border-secondary/20">
-          <span class="material-symbols-outlined text-[32px]">admin_panel_settings</span>
-        </div>
-        <div class="flex flex-col">
-          <span class="font-headline-sm text-[16px] text-primary leading-tight">Console Admin</span>
-          <span class="font-body-sm text-on-surface-variant">Super User</span>
-        </div>
-      </div>
-      <div class="px-2 py-1 bg-white/5 rounded-md inline-block">
-        <span class="font-label-md text-label-md text-on-surface-variant">NODE: NODE-01</span>
-      </div>
-    </div>
-    <nav class="flex-1 flex flex-col gap-1 overflow-y-auto">
-      <span rv-each-item="sidebar.navItems" class="contents">
-        <div rv-show="item.separator" class="px-4 pt-md pb-xs">
-          <p rv-text="item.label" class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold"></p>
-        </div>
-        <a rv-show="item.showActive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-4 py-3 transition-colors duration-200 cursor-pointer bg-secondary/10 text-secondary font-bold border-l-4 border-secondary">
-          <span rv-text="item.icon" class="material-symbols-outlined"></span>
-          <span rv-text="item.label" class="font-body-sm text-body-sm"></span>
-        </a>
-        <a rv-show="item.showInactive" rv-on-click="item.navigate" href="#" class="flex items-center gap-sm px-4 py-3 transition-colors duration-200 cursor-pointer text-on-surface-variant hover:bg-white/5">
-          <span rv-text="item.icon" class="material-symbols-outlined"></span>
-          <span rv-text="item.label" class="font-body-sm text-body-sm"></span>
-        </a>
-      </span>
-    </nav>
-    <div class="mt-auto px-gutter pt-lg border-t border-white/5">
-      <button rv-on-click="closeDrawer" class="w-full flex items-center justify-center gap-xs py-3 text-on-surface-variant hover:text-white transition-colors">
-        <span class="material-symbols-outlined">close</span>
-        Close Menu
-      </button>
-    </div>
-  </aside>
+  ${mobileDrawerTpl}
 
 </div>
 `;
@@ -254,11 +191,13 @@ const template = `
 export function createController({ api, router }) {
   const self = {
     // Layout
+    mobileDrawer: createMobileDrawerController(),
+    activeTenant: createActiveTenantController(),
     topBar: createTopBarController({
       title: 'Platform Admin',
       breadcrumb: 'Platform > Tenants',
       onBack: () => window.history.back(),
-      onMenuOpen: () => { self.drawerOpen = true; self._syncDrawer(); },
+      onMenuOpen: () => self.mobileDrawer.open(),
     }),
     sidebar: createSidebarController({
       activeRoute: ROUTE,
@@ -282,25 +221,10 @@ export function createController({ api, router }) {
     // Pagination state
     pagination: createPaginationController({ page: 1, total: 0, onPageChange: () => {} }),
 
-    // Drawer state
-    drawerOpen: false,
-    drawerClass: 'fixed inset-y-0 left-0 w-[280px] z-[60] bg-surface-container-low border-r border-white/5 shadow-xl flex flex-col py-lg transition-transform duration-300 lg:hidden -translate-x-full',
-
     _cursor: undefined,
     _prevCursors: [],
     _nextCursor: undefined,
     _total: 0,
-
-    _syncDrawer() {
-      self.drawerClass = self.drawerOpen
-        ? 'fixed inset-y-0 left-0 w-[280px] z-[60] bg-surface-container-low border-r border-white/5 shadow-xl flex flex-col py-lg transition-transform duration-300 lg:hidden translate-x-0'
-        : 'fixed inset-y-0 left-0 w-[280px] z-[60] bg-surface-container-low border-r border-white/5 shadow-xl flex flex-col py-lg transition-transform duration-300 lg:hidden -translate-x-full';
-    },
-
-    closeDrawer() {
-      self.drawerOpen = false;
-      self._syncDrawer();
-    },
 
     createTenant() {
       router.navigate('#/tenants/new');
@@ -315,7 +239,16 @@ export function createController({ api, router }) {
         const items = data.data || [];
         self._nextCursor = data.pagination?.nextCursor || undefined;
         self._total = items.length;
-        self.tenants = items.map(t => createTenantViewModel(t, { router, api }));
+        self.tenants = items.map(t => createTenantViewModel(t, {
+          router,
+          api,
+          onTenantSelected: (id, name) => {
+            self.activeTenant.isSet = true;
+            self.activeTenant.isEmpty = false;
+            self.activeTenant.name = name;
+            self.activeTenant.id = id;
+          },
+        }));
         self.isEmpty = self.tenants.length === 0;
         const currentPage = self._prevCursors.length + 1;
         self.pagination = createPaginationController({

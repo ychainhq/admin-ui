@@ -142,7 +142,7 @@ describe('TenantConfigView — createController', () => {
   test('sidebar is initialised with /tenants as active route', () => {
     const { ctrl } = makeCtrl();
     expect(Array.isArray(ctrl.sidebar.navItems)).toBe(true);
-    const active = ctrl.sidebar.navItems.find(i => i.itemClass.includes('border-l-secondary'));
+    const active = ctrl.sidebar.navItems.find(i => i.showActive === true);
     expect(active?.label).toBe('Tenant List');
   });
 

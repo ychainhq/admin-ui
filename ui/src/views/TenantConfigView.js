@@ -121,18 +121,6 @@ const template = `
 </div>
 `;
 
-// snake_case → camelCase mapping for PATCH request (engine Zod schema expects camelCase)
-const SNAKE_TO_CAMEL = {
-  btc_confirmations_required:  'btcConfirmationsRequired',
-  btc_finality_confirmations:  'btcFinalityConfirmations',
-  custody_mode:                'custodyMode',
-  withdrawal_mode:             'withdrawalMode',
-  daily_withdrawal_limit_sats: 'dailyWithdrawalLimitSats',
-  per_tx_limit_sats:           'perTxLimitSats',
-  btc_xpub:                    'btcXpub',
-  btc_sweep_threshold_sats:    'btcSweepThresholdSats',
-  customer_session_ttl_seconds: 'customerSessionTtlSeconds',
-};
 
 export function createController({ tenantId, api, router }) {
   const self = {
@@ -184,13 +172,7 @@ export function createController({ tenantId, api, router }) {
       self.error = null;
       self.saveSuccess = false;
       try {
-        const snakePayload = collectConfigValues(self.config.fields);
-        // Convert to camelCase — engine PATCH endpoint uses Zod camelCase schema
-        const payload = {};
-        Object.keys(snakePayload).forEach(k => {
-          const camel = SNAKE_TO_CAMEL[k] || k;
-          payload[camel] = snakePayload[k];
-        });
+        const payload = collectConfigValues(self.config.fields);
         await api.saveTenantConfig(tenantId, payload);
         self.saveSuccess = true;
         setTimeout(() => { self.saveSuccess = false; }, 4000);

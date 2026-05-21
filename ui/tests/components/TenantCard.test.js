@@ -1,5 +1,5 @@
 import { createTenantViewModel } from '../../src/components/TenantCard.js';
-import { makeRouter } from '../mocks/api.js';
+import { makeMockApi, makeRouter } from '../mocks/api.js';
 
 const activeTenant = {
   id: 'tenant_default',
@@ -78,10 +78,36 @@ describe('createTenantViewModel', () => {
     expect(router.navigate).toHaveBeenCalledWith('#/tenants/tenant_default/config');
   });
 
-  test('workWith navigates to config route', () => {
-    const vm = createTenantViewModel(activeTenant, { router });
-    vm.workWith();
-    expect(router.navigate).toHaveBeenCalledWith('#/tenants/tenant_default/config');
+  test('workWith switches tenant and does not navigate', async () => {
+    const api = makeMockApi();
+    const vm = createTenantViewModel(activeTenant, { router, api });
+    await vm.workWith();
+    expect(api.switchTenant).toHaveBeenCalledWith('tenant_default');
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  test('workWith stores active tenant in sessionStorage', async () => {
+    sessionStorage.clear();
+    const api = makeMockApi();
+    const vm = createTenantViewModel(activeTenant, { router, api });
+    await vm.workWith();
+    const stored = JSON.parse(sessionStorage.getItem('chain_api_active_tenant'));
+    expect(stored.id).toBe('tenant_default');
+    expect(stored.name).toBe('Dev Tenant');
+  });
+
+  test('workWith calls onTenantSelected with id and name', async () => {
+    const api = makeMockApi();
+    const onTenantSelected = jest.fn();
+    const vm = createTenantViewModel(activeTenant, { router, api, onTenantSelected });
+    await vm.workWith();
+    expect(onTenantSelected).toHaveBeenCalledWith('tenant_default', 'Dev Tenant');
+  });
+
+  test('workWith works without onTenantSelected (optional)', async () => {
+    const api = makeMockApi();
+    const vm = createTenantViewModel(activeTenant, { router, api });
+    await expect(vm.workWith()).resolves.toBeUndefined();
   });
 
   test('falls back when created_at is missing', () => {

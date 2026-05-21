@@ -274,4 +274,29 @@ describe('NodeDetailView — createController', () => {
     ctrl.sidebar.createTenant();
     expect(router.navigate).toHaveBeenCalledWith('#/tenants/new');
   });
+
+  test('mobileDrawer starts closed', () => {
+    const { ctrl } = makeCtrl();
+    expect(ctrl.mobileDrawer.isOpen).toBe(false);
+  });
+
+  test('topBar.onMenuOpen opens mobileDrawer', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.topBar.onMenuOpen();
+    expect(ctrl.mobileDrawer.isOpen).toBe(true);
+  });
+
+  test('activeTenant.isEmpty when no tenant stored', () => {
+    sessionStorage.clear();
+    const { ctrl } = makeCtrl();
+    expect(ctrl.activeTenant.isEmpty).toBe(true);
+  });
+
+  test('activeTenant.isSet when tenant stored in sessionStorage', () => {
+    sessionStorage.setItem('chain_api_active_tenant', JSON.stringify({ id: 'ten_01', name: 'Acme Corp' }));
+    const { ctrl } = makeCtrl();
+    expect(ctrl.activeTenant.isSet).toBe(true);
+    expect(ctrl.activeTenant.name).toBe('Acme Corp');
+    sessionStorage.clear();
+  });
 });

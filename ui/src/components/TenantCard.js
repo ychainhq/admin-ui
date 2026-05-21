@@ -1,3 +1,5 @@
+import { setActiveTenant } from '../activeTenant.js';
+
 // Template for a single tenant card — used inside rv-each-tenant="tenants" (mobile only)
 const CARD_INNER = `
   <div class="flex justify-between items-start">
@@ -65,7 +67,7 @@ const TABLE_BADGE_SUSPENDED = 'inline-flex items-center px-2.5 py-0.5 rounded-fu
 const TABLE_WORK_BTN_ACTIVE = 'px-4 py-2 rounded bg-secondary text-on-secondary-fixed text-label-md font-bold hover:brightness-110 active:scale-95 transition-all';
 const TABLE_WORK_BTN_GHOST = 'px-4 py-2 rounded text-on-surface-variant text-label-md font-bold hover:bg-white/5 transition-all border border-white/10';
 
-export function createTenantViewModel(raw, { router, api }) {
+export function createTenantViewModel(raw, { router, api, onTenantSelected }) {
   const isActive = raw.status === 'active';
   const custodyMode = raw.config?.custody_mode || raw.custody_mode || raw.custodyMode || '—';
   return {
@@ -86,6 +88,10 @@ export function createTenantViewModel(raw, { router, api }) {
     tableWorkBtnClass: isActive ? TABLE_WORK_BTN_ACTIVE : TABLE_WORK_BTN_GHOST,
     // actions
     viewConfig: () => router.navigate(`#/tenants/${encodeURIComponent(raw.id)}/config`),
-    workWith:   async () => { await api.switchTenant(raw.id); },
+    workWith:   async () => {
+      await api.switchTenant(raw.id);
+      setActiveTenant(raw.id, raw.name);
+      onTenantSelected?.(raw.id, raw.name);
+    },
   };
 }
