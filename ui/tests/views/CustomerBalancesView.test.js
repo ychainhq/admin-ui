@@ -105,4 +105,31 @@ describe('CustomerBalancesView — createController', () => {
     expect(ctrl.balances[0].asset).toBe('—');
     expect(ctrl.balances[0].chain).toBe('—');
   });
+
+  test('load() accepts current backend data array shape', async () => {
+    const { ctrl } = setup({
+      getCustomerBalances: jest.fn().mockResolvedValue([
+        {
+          asset_id: 'bitcoin:BTC',
+          pending: '0',
+          settled: '50000000000',
+          total: '50000000000',
+        },
+      ]),
+    });
+
+    await ctrl.load();
+
+    expect(ctrl.balancesEmpty).toBe(false);
+    expect(ctrl.balances).toEqual([
+      {
+        asset: 'BTC',
+        chain: 'bitcoin',
+        available: '500.00000000',
+        pending: '0.00000000',
+        hold: '0.00000000',
+        total: '500.00000000',
+      },
+    ]);
+  });
 });

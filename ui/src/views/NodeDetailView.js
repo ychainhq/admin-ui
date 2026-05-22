@@ -35,6 +35,45 @@ const generateAddrBodyHtml = `
 </button>
 `;
 
+const sendTxBodyHtml = `
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+  <div>
+    <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Source Wallet</label>
+    <select rv-html="sendTx.walletOptionsHtml" rv-on-change="sendTx.onWalletChange"
+      class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary transition-all outline-none">
+      <option>Loading wallets…</option>
+    </select>
+  </div>
+  <div>
+    <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Amount (BTC)</label>
+    <input rv-on-input="sendTx.onAmountInput"
+      class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
+      type="number" placeholder="0.001" step="0.00000001" min="0.00000001" autocomplete="off" />
+  </div>
+</div>
+<div>
+  <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Destination Address</label>
+  <input rv-on-input="sendTx.onAddressInput"
+    class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
+    type="text" placeholder="bcrt1q…" autocomplete="off" />
+</div>
+<div class="grid grid-cols-3 gap-sm items-end">
+  <div>
+    <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Confirm blocks</label>
+    <input rv-on-input="sendTx.onBlocksInput"
+      class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-body-sm focus:ring-1 focus:ring-secondary transition-all outline-none"
+      type="number" value="1" min="0" max="100" />
+  </div>
+  <div class="col-span-2">
+    <button rv-on-click="sendTx.run" rv-attr-disabled="sendTx.loading"
+      class="w-full flex items-center justify-center gap-xs bg-secondary text-on-secondary-fixed px-md py-2 rounded-lg font-label-md font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
+      <span class="material-symbols-outlined text-[18px]">send</span>
+      Send & Confirm
+    </button>
+  </div>
+</div>
+`;
+
 const mineBlocksBodyHtml = `
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm">
   <div class="sm:col-span-2">
@@ -122,13 +161,20 @@ const template = `
               <span class="material-symbols-outlined text-[16px]">account_balance_wallet</span>
               Wallet Operations
             </h3>
-            <div class="max-w-2xl">
+            <div class="max-w-2xl space-y-sm">
               ${opCardHtml({
                 icon: 'add_circle',
                 title: 'Generate New Address',
                 description: 'Create or load a named wallet and generate a receive address',
                 scopePrefix: 'generateAddr',
                 bodyHtml: generateAddrBodyHtml,
+              })}
+              ${opCardHtml({
+                icon: 'send',
+                title: 'Send Transaction',
+                description: 'Send BTC from a node wallet to any address, then mine N blocks to confirm',
+                scopePrefix: 'sendTx',
+                bodyHtml: sendTxBodyHtml,
               })}
             </div>
           </div>
@@ -227,6 +273,68 @@ export function createController({ nodeId, api, router }) {
       },
     },
 
+    // ─── Send Transaction ─────────────────────────────────────────────────────────
+    sendTx: {
+      walletOptionsHtml: '<option value="" disabled selected>Loading wallets…</option>',
+      fromWallet: '',
+      toAddress: '',
+      amount: '',
+      blocks: '1',
+      loading: false,
+      error: null,
+      result: null,
+      _txid: null,
+      onWalletChange(e) { self.sendTx.fromWallet = e.target.value; },
+      onAddressInput(e) { self.sendTx.toAddress = e.target.value; },
+      onAmountInput(e) { self.sendTx.amount = e.target.value; },
+      onBlocksInput(e) { self.sendTx.blocks = e.target.value; },
+      copy() {
+        const txt = self.sendTx._txid || self.sendTx.result;
+        if (txt) navigator.clipboard.writeText(txt).catch(() => {});
+      },
+      async run() {
+        const wallet = self.sendTx.fromWallet;
+        const address = self.sendTx.toAddress.trim();
+        const amount = parseFloat(self.sendTx.amount);
+        const blocks = parseInt(self.sendTx.blocks, 10);
+
+        if (!wallet)          { self.sendTx.error = 'Select a source wallet'; return; }
+        if (!address)         { self.sendTx.error = 'Destination address is required'; return; }
+        if (!amount || amount <= 0) { self.sendTx.error = 'Amount must be greater than 0'; return; }
+        if (isNaN(blocks) || blocks < 0) { self.sendTx.error = 'Confirmation blocks must be 0 or more'; return; }
+
+        self.sendTx.loading = true;
+        self.sendTx.error = null;
+        self.sendTx.result = null;
+        self.sendTx._txid = null;
+        try {
+          const sendRes = await api.rpc('sendtoaddress', [address, amount], { wallet });
+          if (sendRes?.error) throw new Error(sendRes.error.message || 'sendtoaddress failed');
+          const txid = sendRes?.result;
+          if (!txid) throw new Error('No txid returned by node');
+          self.sendTx._txid = txid;
+
+          let minedCount = 0;
+          if (blocks > 0) {
+            const addrRes = await api.rpc('getnewaddress', [''], { wallet: 'btcminer' });
+            const minerAddr = addrRes?.result;
+            if (!minerAddr) throw new Error('Could not get miner address for confirmation blocks');
+            const mineRes = await api.rpc('generatetoaddress', [blocks, minerAddr]);
+            minedCount = mineRes?.result?.length ?? 0;
+          }
+
+          const confirmLabel = minedCount > 0
+            ? ` · ${minedCount} block${minedCount !== 1 ? 's' : ''} confirmed`
+            : ' · unconfirmed (0 blocks mined)';
+          self.sendTx.result = txid + confirmLabel;
+        } catch (e) {
+          self.sendTx.error = e.message;
+        } finally {
+          self.sendTx.loading = false;
+        }
+      },
+    },
+
     // ─── Mine & Fund ─────────────────────────────────────────────────────────────
     mineBlocks: {
       address: '',
@@ -270,6 +378,8 @@ export function createController({ nodeId, api, router }) {
 
     async init() {
       if (!nodeConfig) return;
+
+      // Node status
       try {
         const res = await api.rpc('getblockchaininfo', []);
         const info = res?.result;
@@ -281,6 +391,34 @@ export function createController({ nodeId, api, router }) {
         };
       } catch {
         self.nodeStatus = { checking: false, showOnline: false, showOffline: true, blocksText: '' };
+      }
+
+      // Populate wallet selector with balances
+      try {
+        const walletsRes = await api.rpc('listwallets', []);
+        const names = walletsRes?.result || [];
+        const items = await Promise.all(names.map(async (name) => {
+          try {
+            const r = await api.rpc('getbalances', [], { wallet: name });
+            const mine = r?.result?.mine || {};
+            const spendable = mine.trusted || 0;
+            const immature = mine.immature || 0;
+            const balLabel = immature > 0
+              ? `${spendable.toFixed(4)} BTC  (+${immature.toFixed(0)} immature)`
+              : `${spendable.toFixed(4)} BTC`;
+            return { name, label: `${name}  —  ${balLabel}`, spendable };
+          } catch {
+            return { name, label: `${name}  —  (unavailable)`, spendable: 0 };
+          }
+        }));
+
+        const defaultWallet = items.find(w => w.spendable > 0) || items[0];
+        self.sendTx.walletOptionsHtml = items
+          .map(w => `<option value="${w.name}"${defaultWallet && w.name === defaultWallet.name ? ' selected' : ''}>${w.label}</option>`)
+          .join('');
+        if (defaultWallet) self.sendTx.fromWallet = defaultWallet.name;
+      } catch {
+        self.sendTx.walletOptionsHtml = '<option value="">Could not load wallets</option>';
       }
     },
   };

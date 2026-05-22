@@ -61,6 +61,41 @@ describe('CustomerDepositsView — createController', () => {
     expect(d.detectedAt).toContain('2026-02-01');
   });
 
+  test('deposit objects map current backend snake_case shape', async () => {
+    const getCustomerDeposits = jest.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'dep_670342ff21712f34',
+          chain_id: 'bitcoin',
+          asset_id: 'bitcoin:BTC',
+          amount_raw: '5000000000',
+          amount_display: '50.00000000',
+          tx_hash: '958a5035cafd9973e46ebf1f313df1166cdb99446f9bd544e22fa03671d0b65a',
+          vout: 0,
+          confirmations: 110,
+          status: 'finalized',
+          address: 'bcrt1qrqrwvxs9e9ru40u9nadvgg3uj7ujs5lyk38wuf',
+          created_at: '2026-05-22T13:49:24.985Z',
+        },
+      ],
+      pagination: { nextCursor: null },
+    });
+    const { ctrl } = setup({ getCustomerDeposits });
+
+    await ctrl.load();
+
+    expect(ctrl.depositsEmpty).toBe(false);
+    expect(ctrl.deposits[0]).toMatchObject({
+      depositId: 'dep_670342ff21712f34',
+      amount: '50.00000000',
+      asset: 'BTC',
+      statusLabel: 'FINALIZED',
+      address: 'bcrt1qrqrwvxs9e9ru40u9nadvgg3uj7ujs5lyk38wuf',
+      addressShort: 'bcrt1qrq…k38wuf',
+      detectedAt: '2026-05-22 13:49',
+    });
+  });
+
   test('pending deposit has secondary badge', async () => {
     const { ctrl } = setup({ getCustomerDeposits: jest.fn().mockResolvedValue(DEPOSITS_PAGE) });
     await ctrl.load();

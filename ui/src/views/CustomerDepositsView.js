@@ -26,14 +26,48 @@ function fmtDate(v) {
   try { return new Date(v).toISOString().slice(0, 16).replace('T', ' '); } catch { return '—'; }
 }
 
+function formatRawAmount(raw, assetId) {
+  if (raw === null || raw === undefined || raw === '') return '0';
+  const value = String(raw);
+  if (assetId === 'bitcoin:BTC') {
+    const sats = BigInt(value);
+    const sign = sats < 0n ? '-' : '';
+    const abs = sats < 0n ? -sats : sats;
+    const whole = abs / 100000000n;
+    const fraction = String(abs % 100000000n).padStart(8, '0');
+    return `${sign}${whole}.${fraction}`;
+  }
+  return value;
+}
+
 const DEPOSIT_STATUS_BADGE = {
-  pending:   'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
-  confirmed: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20',
-  finalized: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/20 text-tertiary border border-tertiary/30',
+  detected:             'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
+  pending:              'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
+  pending_confirmation: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
+  confirmed:            'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20',
+  finalized:            'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/20 text-tertiary border border-tertiary/30',
 };
 
 function depositStatusBadge(status) {
   return DEPOSIT_STATUS_BADGE[status] || DEPOSIT_STATUS_BADGE.pending;
+}
+
+function normalizeDeposit(d) {
+  const assetId = d.asset_id || d.assetId || '';
+  const [, assetFromAssetId] = assetId.includes(':') ? assetId.split(':') : ['', ''];
+  const addr = d.address || '';
+  const status = d.status || '';
+
+  return {
+    depositId:       d.depositId || d.deposit_id || d.id || '—',
+    amount:          d.amount || d.amount_display || d.amountDisplay || formatRawAmount(d.amount_raw || d.amountRaw, assetId),
+    asset:           d.asset || assetFromAssetId || assetId || '—',
+    statusLabel:     status.toUpperCase(),
+    statusBadgeClass: depositStatusBadge(status),
+    address:         addr,
+    addressShort:    addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr,
+    detectedAt:      fmtDate(d.detectedAt || d.detected_at || d.created_at || d.createdAt),
+  };
 }
 
 const desktopTopBarTpl = desktopTopBarHtml({
@@ -221,19 +255,7 @@ export function createController({ api, router, id }) {
       const data = await api.getCustomerDeposits(id, { limit: PER_PAGE, cursor: self._cursor });
       const items = data.data || [];
       self._nextCursor = data.pagination?.nextCursor || undefined;
-      self.deposits = items.map(d => {
-        const addr = d.address || '';
-        return {
-          depositId:       d.depositId || d.deposit_id || '—',
-          amount:          d.amount || '0',
-          asset:           d.asset || '—',
-          statusLabel:     (d.status || '').toUpperCase(),
-          statusBadgeClass: depositStatusBadge(d.status),
-          address:         addr,
-          addressShort:    addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr,
-          detectedAt:      fmtDate(d.detectedAt || d.detected_at),
-        };
-      });
+      self.deposits = items.map(normalizeDeposit);
       self.depositsEmpty = self.deposits.length === 0;
       const currentPage = self._prevCursors.length + 1;
       self.pagination = createPaginationController({
