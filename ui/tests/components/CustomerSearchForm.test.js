@@ -162,4 +162,129 @@ describe('createCustomerSearchFormController', () => {
     expect(() => ctrl.onClear()).not.toThrow();
     expect(onClear).toHaveBeenCalledTimes(1);
   });
+
+  // --- sections: initial state ---
+
+  test('sections object has all 5 keys', () => {
+    const { ctrl } = setup();
+    expect(Object.keys(ctrl.sections)).toEqual(['core', 'profile', 'contact', 'identifier', 'relationship']);
+  });
+
+  test('sections.core is expanded by default', () => {
+    const { ctrl } = setup();
+    expect(ctrl.sections.core.expanded).toBe(true);
+  });
+
+  test('non-core sections are collapsed by default', () => {
+    const { ctrl } = setup();
+    expect(ctrl.sections.profile.expanded).toBe(false);
+    expect(ctrl.sections.contact.expanded).toBe(false);
+    expect(ctrl.sections.identifier.expanded).toBe(false);
+    expect(ctrl.sections.relationship.expanded).toBe(false);
+  });
+
+  test('all sections start with activeCount 0', () => {
+    const { ctrl } = setup();
+    const counts = Object.values(ctrl.sections).map(s => s.activeCount);
+    expect(counts.every(c => c === 0)).toBe(true);
+  });
+
+  // --- sections: toggle ---
+
+  test('toggle() on core section collapses it', () => {
+    const { ctrl } = setup();
+    ctrl.sections.core.toggle();
+    expect(ctrl.sections.core.expanded).toBe(false);
+  });
+
+  test('toggle() on collapsed section expands it', () => {
+    const { ctrl } = setup();
+    ctrl.sections.profile.toggle();
+    expect(ctrl.sections.profile.expanded).toBe(true);
+  });
+
+  test('toggle() twice returns section to original state', () => {
+    const { ctrl } = setup();
+    ctrl.sections.profile.toggle();
+    ctrl.sections.profile.toggle();
+    expect(ctrl.sections.profile.expanded).toBe(false);
+  });
+
+  test('toggling one section does not affect others', () => {
+    const { ctrl } = setup();
+    ctrl.sections.profile.toggle();
+    expect(ctrl.sections.contact.expanded).toBe(false);
+    expect(ctrl.sections.core.expanded).toBe(true);
+  });
+
+  test('toggle() works without event argument', () => {
+    const { ctrl } = setup();
+    expect(() => ctrl.sections.core.toggle()).not.toThrow();
+  });
+
+  // --- sections: activeCount ---
+
+  test('filling a core field increments sections.core.activeCount', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'reference', value: 'REF-001' } });
+    expect(ctrl.sections.core.activeCount).toBe(1);
+  });
+
+  test('filling two core fields gives sections.core.activeCount of 2', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'reference', value: 'REF-001' } });
+    ctrl.onFormInput({ target: { name: 'status', value: 'active' } });
+    expect(ctrl.sections.core.activeCount).toBe(2);
+  });
+
+  test('filling a profile field increments sections.profile.activeCount, not core', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'profile_given_name', value: 'Jan' } });
+    expect(ctrl.sections.profile.activeCount).toBe(1);
+    expect(ctrl.sections.core.activeCount).toBe(0);
+  });
+
+  test('filling contact field increments sections.contact.activeCount', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'contact_email', value: 'jan@x.com' } });
+    expect(ctrl.sections.contact.activeCount).toBe(1);
+  });
+
+  test('filling identifier fields increments sections.identifier.activeCount', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'identifier_type', value: 'passport' } });
+    ctrl.onFormInput({ target: { name: 'identifier_value', value: 'AB1' } });
+    expect(ctrl.sections.identifier.activeCount).toBe(2);
+  });
+
+  test('filling relationship field increments sections.relationship.activeCount', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'rel_display_name', value: 'Hans' } });
+    expect(ctrl.sections.relationship.activeCount).toBe(1);
+  });
+
+  test('clearing a field decrements activeCount', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'reference', value: 'REF-001' } });
+    ctrl.onFormInput({ target: { name: 'reference', value: '' } });
+    expect(ctrl.sections.core.activeCount).toBe(0);
+  });
+
+  test('onClear resets all section activeCount to 0', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'reference', value: 'REF-001' } });
+    ctrl.onFormInput({ target: { name: 'profile_given_name', value: 'Jan' } });
+    ctrl.onFormInput({ target: { name: 'contact_email', value: 'jan@x.com' } });
+    ctrl.onClear({ preventDefault: jest.fn() });
+    const counts = Object.values(ctrl.sections).map(s => s.activeCount);
+    expect(counts.every(c => c === 0)).toBe(true);
+  });
+
+  test('activeCount visible on collapsed section (toggle does not reset count)', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { name: 'profile_given_name', value: 'Jan' } });
+    ctrl.sections.profile.toggle(); // expand
+    ctrl.sections.profile.toggle(); // collapse again
+    expect(ctrl.sections.profile.activeCount).toBe(1);
+  });
 });
