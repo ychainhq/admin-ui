@@ -323,19 +323,19 @@ describe('CustomerCreateView — submit identifier', () => {
 // ── Submit — document ──────────────────────────────────────────────────────────
 
 describe('CustomerCreateView — submit document', () => {
-  test('calls addCustomerDocument with storage_system manual', async () => {
+  test('calls addCustomerDocument with document_number and default storage fields', async () => {
     const createCustomer = jest.fn().mockResolvedValue({ id: 'cust_1' });
     const addCustomerDocument = jest.fn().mockResolvedValue({});
     const { ctrl } = setup({ createCustomer, addCustomerDocument });
     ctrl.onDocumentTypeChange({ target: { value: 'passport' } });
-    ctrl.onDocumentRefInput({ target: { value: 's3://bucket/doc.pdf' } });
+    ctrl.onDocumentNumberInput({ target: { value: 'AB 123456' } });
     await ctrl.submit();
     expect(addCustomerDocument).toHaveBeenCalledWith('cust_1', {
-      document_type: 'passport', storage_ref: 's3://bucket/doc.pdf', storage_system: 'manual',
+      document_type: 'passport', document_number: 'AB 123456', storage_ref: 'n/a', storage_system: 'manual',
     });
   });
 
-  test('does NOT call addCustomerDocument when storage_ref missing', async () => {
+  test('does NOT call addCustomerDocument when document_number missing', async () => {
     const addCustomerDocument = jest.fn();
     const { ctrl } = setup({ addCustomerDocument });
     ctrl.onDocumentTypeChange({ target: { value: 'passport' } });
@@ -426,7 +426,7 @@ describe('CustomerCreateView — success state', () => {
     ctrl.onIdentifierTypeChange({ target: { value: 'passport' } });
     ctrl.onIdentifierValueInput({ target: { value: 'X1' } });
     ctrl.onDocumentTypeChange({ target: { value: 'passport' } });
-    ctrl.onDocumentRefInput({ target: { value: 'ref' } });
+    ctrl.onDocumentNumberInput({ target: { value: 'AB1' } });
     await ctrl.submit();
     expect(ctrl.success).not.toBeNull();
     expect(ctrl.subErrors).toHaveLength(2);

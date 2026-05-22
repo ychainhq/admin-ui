@@ -309,10 +309,10 @@ const template = `
                   </select>
                 </div>
                 <div>
-                  <label class="block font-label-md text-[10px] uppercase text-on-surface-variant mb-xs">Storage ref</label>
-                  <input rv-on-input="onDocumentRefInput"
+                  <label class="block font-label-md text-[10px] uppercase text-on-surface-variant mb-xs">Document number</label>
+                  <input rv-on-input="onDocumentNumberInput"
                     class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none text-sm"
-                    type="text" placeholder="s3://bucket/doc.pdf" />
+                    type="text" placeholder="AB 123456" />
                 </div>
               </div>
             </div>
@@ -434,7 +434,7 @@ export function createController({ api, router }) {
       identifier_value: '',
       // document
       document_type: '',
-      document_storage_ref: '',
+      document_number: '',
       // address
       address_type: 'registered',
       address_line1: '',
@@ -479,8 +479,8 @@ export function createController({ api, router }) {
     onEntitySubtypeChange(e){ self._form.entity_subtype = e.target.value; },
     onIdentifierTypeChange(e){ self._form.identifier_type  = e.target.value; },
     onIdentifierValueInput(e){ self._form.identifier_value = e.target.value.trim(); },
-    onDocumentTypeChange(e) { self._form.document_type        = e.target.value; },
-    onDocumentRefInput(e)   { self._form.document_storage_ref = e.target.value.trim(); },
+    onDocumentTypeChange(e)   { self._form.document_type   = e.target.value; },
+    onDocumentNumberInput(e)  { self._form.document_number = e.target.value.trim(); },
     onAddressTypeChange(e)  { self._form.address_type = e.target.value; },
     onAddressInput(e)       { self._form['address_' + e.target.dataset.field] = e.target.value.trim(); },
 
@@ -548,8 +548,8 @@ export function createController({ api, router }) {
         }
 
         // 4. Document
-        if (f.document_type && f.document_storage_ref) {
-          try { await api.addCustomerDocument(id, { document_type: f.document_type, storage_ref: f.document_storage_ref, storage_system: 'manual' }); }
+        if (f.document_type && f.document_number) {
+          try { await api.addCustomerDocument(id, { document_type: f.document_type, document_number: f.document_number, storage_ref: 'n/a', storage_system: 'manual' }); }
           catch (e) { errors.push(`document: ${e.message}`); }
         }
 
@@ -584,7 +584,7 @@ export function createController({ api, router }) {
         given_name: '', middle_name: '', family_name: '', date_of_birth: '', nationality: '',
         entity_subtype: '', legal_name: '', country_of_incorporation: '',
         identifier_type: '', identifier_value: '',
-        document_type: '', document_storage_ref: '',
+        document_type: '', document_number: '',
         address_type: 'registered', address_line1: '', address_city: '', address_country: '',
       };
       self.isNaturalPerson = true;
