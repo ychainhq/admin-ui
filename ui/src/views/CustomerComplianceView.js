@@ -169,6 +169,7 @@ const documentsSectionTpl = `
           <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">EXPIRY</th>
           <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">UPLOADED BY</th>
           <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">HASH</th>
+          <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">FILE</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-white/5">
@@ -182,6 +183,13 @@ const documentsSectionTpl = `
           <td rv-text="doc.uploadedBy" class="px-md py-3 font-body-sm text-on-surface-variant"></td>
           <td class="px-md py-3">
             <span rv-text="doc.hashShort" rv-attr-title="doc.hashFull" class="font-mono-data text-on-surface-variant text-[11px] cursor-help"></span>
+          </td>
+          <td class="px-md py-3">
+            <a rv-show="doc.hasStorageRef" rv-attr-href="doc.storageRef" rv-attr-title="doc.storageRef" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-xs font-mono-data text-secondary text-[11px] hover:underline">
+              <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+              <span rv-text="doc.storageRefShort"></span>
+            </a>
+            <span rv-hide="doc.hasStorageRef" class="font-mono-data text-on-surface-variant text-[11px]">—</span>
           </td>
         </tr>
       </tbody>
@@ -357,15 +365,21 @@ export function createController({ api, router, id }) {
 
         // Documents
         const docsList = docsData?.data || [];
-        self.documents = docsList.map(d => ({
-          type:       d.document_type || '—',
-          number:     d.document_number || '—',
-          country:    d.issuing_country || '—',
-          expiry:     fmtDate(d.expiry_date),
-          uploadedBy: d.uploaded_by || '—',
-          hashShort:  d.file_hash ? d.file_hash.slice(0, 16) + '…' : '—',
-          hashFull:   d.file_hash || '',
-        }));
+        self.documents = docsList.map(d => {
+          const ref = d.storage_ref || '';
+          return {
+            type:           d.document_type || '—',
+            number:         d.document_number || '—',
+            country:        d.issuing_country || '—',
+            expiry:         fmtDate(d.expiry_date),
+            uploadedBy:     d.uploaded_by || '—',
+            hashShort:      d.file_hash ? d.file_hash.slice(0, 16) + '…' : '—',
+            hashFull:       d.file_hash || '',
+            storageRef:     ref,
+            storageRefShort: ref.length > 24 ? '…' + ref.slice(-20) : ref,
+            hasStorageRef:  Boolean(ref),
+          };
+        });
         self.documentsEmpty = self.documents.length === 0;
 
       } catch (e) {
