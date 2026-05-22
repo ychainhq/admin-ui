@@ -202,7 +202,17 @@ describe('CustomerProfileView — createController', () => {
 
   test('goToCustomers() navigates to /customers', () => {
     const { ctrl, router } = setup();
-    ctrl.goToCustomers();
+    const e = { preventDefault: jest.fn() };
+    ctrl.goToCustomers(e);
+    expect(e.preventDefault).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith('#/customers');
+  });
+
+  test('goToCustomer() navigates to customer profile', () => {
+    const { ctrl, router } = setup();
+    const e = { preventDefault: jest.fn() };
+    ctrl.goToCustomer(e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith('#/customers/cust_x/profile');
   });
 });

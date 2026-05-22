@@ -39,10 +39,13 @@ export const template = `
           <span rv-text="header.customerId" class="font-mono-data text-on-surface text-[14px]"></span>
           <span rv-text="header.statusLabel" rv-attr-class="header.statusBadgeClass"></span>
         </div>
+        <p rv-show="header.hasFullName" rv-text="header.fullName" class="font-body-md text-on-surface font-semibold"></p>
         <p rv-show="header.hasReference" rv-text="header.reference" class="font-body-sm text-on-surface-variant"></p>
         <p class="font-body-sm text-on-surface-variant mt-xs flex items-center gap-xs">
           <span class="material-symbols-outlined text-[14px]">calendar_today</span>
           <span rv-text="header.createdAtLabel"></span>
+          <span rv-show="header.hasCity" class="material-symbols-outlined text-[14px] ml-xs">location_on</span>
+          <span rv-show="header.hasCity" rv-text="header.city"></span>
         </p>
       </div>
     </div>
@@ -78,6 +81,10 @@ export function createCustomerDetailHeaderController({ customerId, activeTab, ro
     createdAtLabel: '',
     canDisable: false,
     disableLoading: false,
+    fullName: '',
+    hasFullName: false,
+    city: '',
+    hasCity: false,
     onDisable() { onDisable?.(); },
     tabs: TABS.map(tab => {
       const route = `/customers/${encodeURIComponent(customerId)}/${tab.key}`;
@@ -95,6 +102,19 @@ export function createCustomerDetailHeaderController({ customerId, activeTab, ro
       ctrl.statusBadgeClass = customerStatusBadgeClass(customer.status);
       ctrl.createdAtLabel = fmtDate(customer.createdAt || customer.created_at);
       ctrl.canDisable = customer.status === 'active';
+    },
+    setProfile(profileData) {
+      if (!profileData) return;
+      const parts = [profileData.given_name, profileData.middle_name, profileData.family_name].filter(Boolean);
+      ctrl.fullName = parts.join(' ');
+      ctrl.hasFullName = ctrl.fullName.length > 0;
+    },
+    setContact(contactData) {
+      if (!contactData) return;
+      const addrs = contactData.addresses || [];
+      const primary = addrs.find(a => a.is_primary) || addrs[0];
+      ctrl.city = primary?.city || '';
+      ctrl.hasCity = !!ctrl.city;
     },
   };
   return ctrl;

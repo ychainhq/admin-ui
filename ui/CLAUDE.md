@@ -28,6 +28,13 @@
 - Każdy ekran dostępny **bezpośrednio z URL** — zero modali/popupów jako głównego flow.
 - Router czyści poprzedni binding (`unbind()`) przed zamontowaniem nowego widoku.
 
+### Nawigacja breadcrumb (okruszki)
+- Każdy podekran (detail view, sub-tab) musi mieć w desktop top barze klikalne okruszki do wszystkich poziomów nadrzędnych.
+- Okruszek do listy: `<a rv-on-click="goToList" href="#">Lista</a>` + metoda `goToList(e) { e?.preventDefault(); router.navigate(...); }`.
+- Okruszek do encji nadrzędnej (np. customer ID): `<a rv-on-click="goToParent" href="#">` — nawiguje do widoku domyślnego tej encji (np. `/profile`).
+- Bieżący poziom (ostatni okruszek) — zwykły `<span>`, bez linku.
+- **Wszystkie** handlery klikalne w `rv-on-click` muszą przyjmować `(e)` i wołać `e?.preventDefault()` — inaczej `href="#"` nadpisuje hash na root aplikacji.
+
 ### API (`src/api.js`)
 - Proxy endpointy: `/admin-api/*` → `/admin/v1/*` (admin key), `/api/*` → `/v1/*` (tenant key)
 - Szczegóły endpointów: patrz `../docs/chain_api_mcp_mini_hld_and_agent_prompt.md` rozdział 7 (API Reference)

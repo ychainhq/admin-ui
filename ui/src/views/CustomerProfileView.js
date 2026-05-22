@@ -30,7 +30,7 @@ const desktopTopBarTpl = desktopTopBarHtml({
     <span class="material-symbols-outlined text-[14px] text-outline">chevron_right</span>
     <a rv-on-click="goToCustomers" href="#" class="text-on-surface-variant hover:text-on-surface transition-colors">Customers</a>
     <span class="material-symbols-outlined text-[14px] text-outline">chevron_right</span>
-    <span rv-text="header.customerId" class="text-on-surface font-semibold"></span>
+    <a rv-on-click="goToCustomer" href="#" rv-text="header.customerId" class="text-on-surface font-semibold hover:text-secondary transition-colors"></a>
     <span class="material-symbols-outlined text-[14px] text-outline">chevron_right</span>
     <span class="text-on-surface font-semibold">Profile</span>
   `,
@@ -277,8 +277,9 @@ export function createController({ api, router, id }) {
     identifiersEmpty: true,
     contact: { notSet: true, addresses: [], hasAddresses: false },
 
-    goToTenants() { router.navigate('#/tenants'); },
-    goToCustomers() { router.navigate('#/customers'); },
+    goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
+    goToCustomers(e) { e?.preventDefault(); router.navigate('#/customers'); },
+    goToCustomer(e) { e?.preventDefault(); router.navigate(`#/customers/${encodeURIComponent(id)}/profile`); },
 
     async disableCustomer() {
       self.header.disableLoading = true;
@@ -306,6 +307,8 @@ export function createController({ api, router, id }) {
         ]);
 
         self.header.setCustomer(customer);
+        self.header.setProfile(profileData);
+        self.header.setContact(contactData);
 
         // Profile
         if (!profileData) {

@@ -13,6 +13,14 @@ const ROUTE = '/customers';
 const ACTIVE_TAB = 'deposits';
 const PER_PAGE = 20;
 
+async function safeLoad(fn) {
+  try { return await fn(); }
+  catch (e) {
+    if (e.message?.startsWith('HTTP 404') || e.message?.toLowerCase().includes('not found')) return null;
+    throw e;
+  }
+}
+
 function fmtDate(v) {
   if (!v) return '—';
   try { return new Date(v).toISOString().slice(0, 16).replace('T', ' '); } catch { return '—'; }
@@ -34,7 +42,7 @@ const desktopTopBarTpl = desktopTopBarHtml({
     <span class="material-symbols-outlined text-[14px] text-outline">chevron_right</span>
     <a rv-on-click="goToCustomers" href="#" class="text-on-surface-variant hover:text-on-surface transition-colors">Customers</a>
     <span class="material-symbols-outlined text-[14px] text-outline">chevron_right</span>
-    <span rv-text="header.customerId" class="text-on-surface font-semibold"></span>
+    <a rv-on-click="goToCustomer" href="#" rv-text="header.customerId" class="text-on-surface font-semibold hover:text-secondary transition-colors"></a>
     <span class="material-symbols-outlined text-[14px] text-outline">chevron_right</span>
     <span class="text-on-surface font-semibold">Deposits</span>
   `,
@@ -191,8 +199,9 @@ export function createController({ api, router, id }) {
     _prevCursors: [],
     _nextCursor: undefined,
 
-    goToTenants() { router.navigate('#/tenants'); },
-    goToCustomers() { router.navigate('#/customers'); },
+    goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
+    goToCustomers(e) { e?.preventDefault(); router.navigate('#/customers'); },
+    goToCustomer(e) { e?.preventDefault(); router.navigate(`#/customers/${encodeURIComponent(id)}/profile`); },
 
     async disableCustomer() {
       self.header.disableLoading = true;
@@ -249,11 +258,15 @@ export function createController({ api, router, id }) {
       self.loading = true;
       self.error = null;
       try {
-        const [customer] = await Promise.all([
+        const [customer, , profileData, contactData] = await Promise.all([
           api.getCustomer(id),
           self.loadDeposits(),
+          safeLoad(() => api.getCustomerProfile(id)),
+          safeLoad(() => api.getCustomerContact(id)),
         ]);
         self.header.setCustomer(customer);
+        self.header.setProfile(profileData);
+        self.header.setContact(contactData);
       } catch (e) {
         self.error = e.message;
       } finally {

@@ -134,6 +134,72 @@ describe('createCustomerDetailHeaderController — setCustomer()', () => {
   });
 });
 
+describe('createCustomerDetailHeaderController — setProfile()', () => {
+  test('sets fullName from given + family name', () => {
+    const ctrl = makeCtrl();
+    ctrl.setProfile({ given_name: 'Jan', family_name: 'Kowalski' });
+    expect(ctrl.fullName).toBe('Jan Kowalski');
+    expect(ctrl.hasFullName).toBe(true);
+  });
+
+  test('includes middle name when present', () => {
+    const ctrl = makeCtrl();
+    ctrl.setProfile({ given_name: 'Jan', middle_name: 'Adam', family_name: 'Kowalski' });
+    expect(ctrl.fullName).toBe('Jan Adam Kowalski');
+  });
+
+  test('skips null middle name', () => {
+    const ctrl = makeCtrl();
+    ctrl.setProfile({ given_name: 'Jan', middle_name: null, family_name: 'Kowalski' });
+    expect(ctrl.fullName).toBe('Jan Kowalski');
+  });
+
+  test('hasFullName=false when profileData is null', () => {
+    const ctrl = makeCtrl();
+    ctrl.setProfile(null);
+    expect(ctrl.hasFullName).toBe(false);
+  });
+
+  test('hasFullName=false when no name fields', () => {
+    const ctrl = makeCtrl();
+    ctrl.setProfile({});
+    expect(ctrl.hasFullName).toBe(false);
+  });
+});
+
+describe('createCustomerDetailHeaderController — setContact()', () => {
+  test('sets city from primary address', () => {
+    const ctrl = makeCtrl();
+    ctrl.setContact({ addresses: [{ city: 'Warszawa', is_primary: true }] });
+    expect(ctrl.city).toBe('Warszawa');
+    expect(ctrl.hasCity).toBe(true);
+  });
+
+  test('falls back to first address when none is primary', () => {
+    const ctrl = makeCtrl();
+    ctrl.setContact({ addresses: [{ city: 'Kraków', is_primary: false }] });
+    expect(ctrl.city).toBe('Kraków');
+  });
+
+  test('hasCity=false when contactData is null', () => {
+    const ctrl = makeCtrl();
+    ctrl.setContact(null);
+    expect(ctrl.hasCity).toBe(false);
+  });
+
+  test('hasCity=false when addresses empty', () => {
+    const ctrl = makeCtrl();
+    ctrl.setContact({ addresses: [] });
+    expect(ctrl.hasCity).toBe(false);
+  });
+
+  test('hasCity=false when address has no city', () => {
+    const ctrl = makeCtrl();
+    ctrl.setContact({ addresses: [{ city: '', is_primary: true }] });
+    expect(ctrl.hasCity).toBe(false);
+  });
+});
+
 describe('createCustomerDetailHeaderController — onDisable callback', () => {
   test('onDisable calls the provided callback', () => {
     const cb = jest.fn();

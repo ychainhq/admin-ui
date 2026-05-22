@@ -214,7 +214,7 @@ export function createController({ api, router }) {
     _nextCursor: undefined,
     _statusFilter: '',
 
-    goToTenants() { router.navigate('#/tenants'); },
+    goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
     createCustomer() { router.navigate('#/customers/new'); },
 
     onStatusFilter(e) {
