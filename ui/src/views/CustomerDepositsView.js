@@ -7,6 +7,7 @@ import { template as paginationTpl, createPaginationController } from '../compon
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { template as headerTpl, createCustomerDetailHeaderController } from '../components/CustomerDetailHeader.js';
+import { template as depositSearchTpl, createDepositSearchFormController } from '../components/DepositSearchForm.js';
 import { getActiveTenantKey } from '../api.js';
 
 const ROUTE = '/customers';
@@ -109,6 +110,8 @@ const template = `
         <div rv-hide="noActiveTenant" class="pt-gutter">
 
           ${headerTpl}
+
+          ${depositSearchTpl}
 
           <div rv-show="error" class="glass-card rounded-xl p-md bg-error/10 border border-error/30 mb-md">
             <div class="flex items-center gap-sm">
@@ -232,6 +235,7 @@ export function createController({ api, router, id }) {
     _cursor: undefined,
     _prevCursors: [],
     _nextCursor: undefined,
+    _activeFilters: {},
 
     goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
     goToCustomers(e) { e?.preventDefault(); router.navigate('#/customers'); },
@@ -252,7 +256,11 @@ export function createController({ api, router, id }) {
     },
 
     async loadDeposits() {
-      const data = await api.getCustomerDeposits(id, { limit: PER_PAGE, cursor: self._cursor });
+      const data = await api.getCustomerDeposits(id, {
+        limit: PER_PAGE,
+        cursor: self._cursor,
+        ...self._activeFilters,
+      });
       const items = data.data || [];
       self._nextCursor = data.pagination?.nextCursor || undefined;
       self.deposits = items.map(normalizeDeposit);
@@ -300,6 +308,23 @@ export function createController({ api, router, id }) {
       if (!self.noActiveTenant) self.load();
     },
   };
+
+  self.depositSearchForm = createDepositSearchFormController({
+    onSearch(filters) {
+      self._activeFilters = filters;
+      self._cursor = undefined;
+      self._prevCursors = [];
+      self.load();
+    },
+    onClear() {
+      self._activeFilters = {};
+      self._cursor = undefined;
+      self._prevCursors = [];
+      self.error = null;
+      self.load();
+    },
+  });
+
   return self;
 }
 

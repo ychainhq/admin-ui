@@ -138,6 +138,49 @@ describe('CustomerDepositsView — createController', () => {
     expect(getCustomerDeposits).toHaveBeenLastCalledWith('cust_x', expect.objectContaining({ cursor: 'cur_abc' }));
   });
 
+  test('deposit search passes filters to API and resets pagination', async () => {
+    const getCustomerDeposits = jest.fn()
+      .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: 'cur_abc' } })
+      .mockResolvedValueOnce({ data: [], pagination: { nextCursor: null } })
+      .mockResolvedValueOnce({ data: [DEPOSITS_PAGE.data[0]], pagination: { nextCursor: null } });
+    const { ctrl } = setup({ getCustomerDeposits });
+    await ctrl.load();
+    ctrl.pagination.pages.find(p => p.label === '2')?.go();
+    await Promise.resolve();
+
+    ctrl.depositSearchForm.onFormInput({ target: { name: 'txHash', value: '958a*' } });
+    ctrl.depositSearchForm.onFormInput({ target: { tagName: 'SELECT', name: 'status', value: 'Finalized', selectedIndex: 4 } });
+    ctrl.depositSearchForm.onFormInput({ target: { name: 'minConfirmations', value: '100' } });
+    ctrl.depositSearchForm.onSearch({ preventDefault: jest.fn() });
+    await Promise.resolve();
+
+    expect(getCustomerDeposits).toHaveBeenLastCalledWith('cust_x', expect.objectContaining({
+      cursor: undefined,
+      txHash: '958a*',
+      status: 'finalized',
+      minConfirmations: 100,
+    }));
+  });
+
+  test('deposit search clear removes filters and reloads first page', async () => {
+    const getCustomerDeposits = jest.fn()
+      .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: null } })
+      .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: null } })
+      .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: null } });
+    const { ctrl } = setup({ getCustomerDeposits });
+    await ctrl.load();
+
+    ctrl.depositSearchForm.onFormInput({ target: { name: 'address', value: 'bcrt1*' } });
+    ctrl.depositSearchForm.onSearch({ preventDefault: jest.fn() });
+    await Promise.resolve();
+    ctrl.depositSearchForm.onClear({ preventDefault: jest.fn() });
+    await Promise.resolve();
+
+    expect(ctrl._activeFilters).toEqual({});
+    expect(ctrl.depositSearchForm._form.address).toBe('');
+    expect(getCustomerDeposits).toHaveBeenLastCalledWith('cust_x', expect.not.objectContaining({ address: 'bcrt1*' }));
+  });
+
   test('noActiveTenant=true when no key', () => {
     sessionStorage.clear();
     const ctrl = createController({ api: makeMockApi(), router: makeRouter(), id: 'cust_x' });

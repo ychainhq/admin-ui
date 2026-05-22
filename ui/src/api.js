@@ -168,9 +168,26 @@ export const api = {
     return res.data ?? res;
   },
 
-  getCustomerDeposits: (id, { limit = 20, cursor } = {}) => {
+  getCustomerDeposits: (id, {
+    limit = 20,
+    cursor,
+    depositId,
+    txHash,
+    address,
+    assetId,
+    status,
+    minConfirmations,
+    maxConfirmations,
+  } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
+    if (depositId) params.set('depositId', depositId);
+    if (txHash) params.set('txHash', txHash);
+    if (address) params.set('address', address);
+    if (assetId) params.set('assetId', assetId);
+    if (status) params.set('status', status);
+    if (minConfirmations !== undefined) params.set('minConfirmations', String(minConfirmations));
+    if (maxConfirmations !== undefined) params.set('maxConfirmations', String(maxConfirmations));
     return tenantRequest(`/api/customers/${encodeURIComponent(id)}/deposits?${params}`);
   },
 

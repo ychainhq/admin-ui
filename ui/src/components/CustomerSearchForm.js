@@ -1,3 +1,5 @@
+import { createFilterPanelController, createFilterPanelTemplate } from './FilterPanel.js';
+
 const STATUS_FILTERS = [
   { value: '',            label: 'All statuses' },
   { value: 'active',      label: 'Active' },
@@ -34,263 +36,76 @@ const IDENTIFIER_TYPES = [
   { value: 'other',                label: 'Other' },
 ];
 
-// Maps section keys → form field names (used for activeCount computation)
-const SECTION_FIELDS = {
-  core:         ['id', 'reference', 'display_name', 'status', 'party_type', 'country_of_origin'],
-  profile:      ['profile_given_name', 'profile_family_name', 'profile_middle_name', 'profile_business_name'],
-  contact:      ['contact_email', 'contact_phone'],
-  identifier:   ['identifier_type', 'identifier_value'],
-  relationship: ['rel_display_name', 'rel_identifier_type', 'rel_identifier_value'],
+const trim = (v) => (v && String(v).trim()) || undefined;
+
+const customerSearchConfig = {
+  bindName: 'searchForm',
+  title: 'Search Customers',
+  helpHtml: 'Use <code class="text-secondary font-mono">*</code> as wildcard — <code class="text-on-surface-variant font-mono">jan*</code> starts with &nbsp;·&nbsp; <code class="text-on-surface-variant font-mono">*ski</code> ends with',
+  sections: [
+    {
+      key: 'core',
+      label: 'Core',
+      expanded: true,
+      fields: [
+        { name: 'id', label: 'Customer ID', placeholder: 'cust_...' },
+        { name: 'reference', label: 'Reference', placeholder: 'e.g. REF-001 or REF-*' },
+        { name: 'display_name', label: 'Display Name', placeholder: 'Kowalski or Kow*' },
+        { name: 'status', label: 'Status', type: 'select', options: STATUS_FILTERS },
+        { name: 'party_type', label: 'Party Type', type: 'select', options: PARTY_TYPE_FILTERS },
+        { name: 'country_of_origin', label: 'Country (ISO-2)', placeholder: 'e.g. PL', maxLength: 2, normalize: (v) => trim(v)?.toUpperCase() },
+      ],
+    },
+    {
+      key: 'profile',
+      label: 'Profile',
+      gridClass: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-sm mb-md',
+      fields: [
+        { name: 'profile_given_name', label: 'Given Name', placeholder: 'Jan or Jan*' },
+        { name: 'profile_family_name', label: 'Family Name', placeholder: 'Kowalski or *ski' },
+        { name: 'profile_middle_name', label: 'Middle Name', placeholder: 'Adam' },
+        { name: 'profile_business_name', label: 'Business / Legal Name', placeholder: 'Acme or Acme*' },
+      ],
+    },
+    {
+      key: 'contact',
+      label: 'Contact',
+      gridClass: 'grid grid-cols-1 sm:grid-cols-2 gap-sm mb-md',
+      fields: [
+        { name: 'contact_email', label: 'Email', placeholder: 'jan@* or *@example.com' },
+        { name: 'contact_phone', label: 'Phone', placeholder: '+48* or *789' },
+      ],
+    },
+    {
+      key: 'identifier',
+      label: 'Identifier',
+      gridClass: 'grid grid-cols-1 sm:grid-cols-2 gap-sm mb-md',
+      fields: [
+        { name: 'identifier_type', label: 'Type', type: 'select', options: IDENTIFIER_TYPES },
+        { name: 'identifier_value', label: 'Value', placeholder: 'AB123456 or AB1*' },
+      ],
+    },
+    {
+      key: 'relationship',
+      label: 'Relationship (External Party)',
+      gridClass: 'grid grid-cols-1 sm:grid-cols-3 gap-sm mb-md',
+      fields: [
+        { name: 'rel_display_name', label: 'Party Name', placeholder: 'Hans Mueller or Hans*' },
+        { name: 'rel_identifier_type', label: 'ID Type', type: 'select', options: IDENTIFIER_TYPES },
+        { name: 'rel_identifier_value', label: 'ID Value', placeholder: 'DE987654 or DE9*' },
+      ],
+    },
+  ],
 };
 
-const inputClass  = 'w-full glass-card border border-white/10 rounded-lg px-3 py-2 text-body-sm text-on-surface bg-transparent focus:ring-1 focus:ring-secondary outline-none placeholder:text-on-surface-variant/40';
-const labelClass  = 'block text-label-sm text-on-surface-variant mb-1';
-const selectClass = `${inputClass} cursor-pointer appearance-none`;
+export const template = createFilterPanelTemplate(customerSearchConfig);
 
-const toggleRowClass = 'flex items-center justify-between text-label-sm font-semibold uppercase tracking-wider text-on-surface-variant/60 mb-sm cursor-pointer select-none hover:text-on-surface-variant/80 transition-colors -mx-1 px-1 rounded';
-const badgeClass     = 'normal-case tracking-normal text-[11px] font-semibold text-secondary bg-secondary/10 border border-secondary/20 px-2 py-0.5 rounded-full';
-
-// Builds the collapsible section header row (shared across all 5 sections)
-const mkHead = (key, label) => `
-<div rv-on-click="searchForm.sections.${key}.toggle" class="${toggleRowClass}">
-  <span>${label}</span>
-  <span class="flex items-center gap-xs">
-    <span rv-show="searchForm.sections.${key}.activeCount" class="${badgeClass}">
-      <span rv-text="searchForm.sections.${key}.activeCount"></span> active
-    </span>
-    <span rv-show="searchForm.sections.${key}.expanded"  class="material-symbols-outlined text-[16px]">expand_less</span>
-    <span rv-hide="searchForm.sections.${key}.expanded"  class="material-symbols-outlined text-[16px]">expand_more</span>
-  </span>
-</div>`;
-
-export const template = `
-<div class="glass-card rounded-xl p-md mb-gutter">
-
-  <h3 class="text-title-md font-semibold text-on-surface mb-md">Search Customers</h3>
-
-  <!-- CORE (expanded by default) -->
-  ${mkHead('core', 'Core')}
-  <div rv-show="searchForm.sections.core.expanded">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-sm mb-md">
-      <div>
-        <label class="${labelClass}">Customer ID</label>
-        <input rv-on-input="searchForm.onFormInput" name="id" type="text" placeholder="cust_..." class="${inputClass}">
-      </div>
-      <div>
-        <label class="${labelClass}">Reference</label>
-        <input rv-on-input="searchForm.onFormInput" name="reference" type="text" placeholder="e.g. REF-001 or REF-*" class="${inputClass}">
-      </div>
-      <div>
-        <label class="${labelClass}">Display Name</label>
-        <input rv-on-input="searchForm.onFormInput" name="display_name" type="text" placeholder="Kowalski or Kow*" class="${inputClass}">
-      </div>
-      <div>
-        <label class="${labelClass}">Status</label>
-        <select rv-on-change="searchForm.onFormInput" name="status" class="${selectClass}">
-          <option rv-each-f="searchForm.statusFilters" rv-attr-value="f.value" rv-text="f.label"></option>
-        </select>
-      </div>
-      <div>
-        <label class="${labelClass}">Party Type</label>
-        <select rv-on-change="searchForm.onFormInput" name="party_type" class="${selectClass}">
-          <option rv-each-f="searchForm.partyTypeFilters" rv-attr-value="f.value" rv-text="f.label"></option>
-        </select>
-      </div>
-      <div>
-        <label class="${labelClass}">Country (ISO-2)</label>
-        <input rv-on-input="searchForm.onFormInput" name="country_of_origin" type="text" placeholder="e.g. PL" maxlength="2" class="${inputClass}">
-      </div>
-    </div>
-  </div>
-
-  <!-- PROFILE (collapsed by default) -->
-  ${mkHead('profile', 'Profile')}
-  <div rv-show="searchForm.sections.profile.expanded">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-sm mb-md">
-      <div>
-        <label class="${labelClass}">Given Name</label>
-        <input rv-on-input="searchForm.onFormInput" name="profile_given_name" type="text" placeholder="Jan or Jan*" class="${inputClass}">
-      </div>
-      <div>
-        <label class="${labelClass}">Family Name</label>
-        <input rv-on-input="searchForm.onFormInput" name="profile_family_name" type="text" placeholder="Kowalski or *ski" class="${inputClass}">
-      </div>
-      <div>
-        <label class="${labelClass}">Middle Name</label>
-        <input rv-on-input="searchForm.onFormInput" name="profile_middle_name" type="text" placeholder="Adam" class="${inputClass}">
-      </div>
-      <div>
-        <label class="${labelClass}">Business / Legal Name</label>
-        <input rv-on-input="searchForm.onFormInput" name="profile_business_name" type="text" placeholder="Acme or Acme*" class="${inputClass}">
-      </div>
-    </div>
-  </div>
-
-  <!-- CONTACT (collapsed by default) -->
-  ${mkHead('contact', 'Contact')}
-  <div rv-show="searchForm.sections.contact.expanded">
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm mb-md">
-      <div>
-        <label class="${labelClass}">Email</label>
-        <input rv-on-input="searchForm.onFormInput" name="contact_email" type="text" placeholder="jan@* or *@example.com" class="${inputClass}">
-      </div>
-      <div>
-        <label class="${labelClass}">Phone</label>
-        <input rv-on-input="searchForm.onFormInput" name="contact_phone" type="text" placeholder="+48* or *789" class="${inputClass}">
-      </div>
-    </div>
-  </div>
-
-  <!-- IDENTIFIER (collapsed by default) -->
-  ${mkHead('identifier', 'Identifier')}
-  <div rv-show="searchForm.sections.identifier.expanded">
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm mb-md">
-      <div>
-        <label class="${labelClass}">Type</label>
-        <select rv-on-change="searchForm.onFormInput" name="identifier_type" class="${selectClass}">
-          <option rv-each-f="searchForm.identifierTypes" rv-attr-value="f.value" rv-text="f.label"></option>
-        </select>
-      </div>
-      <div>
-        <label class="${labelClass}">Value</label>
-        <input rv-on-input="searchForm.onFormInput" name="identifier_value" type="text" placeholder="AB123456 or AB1*" class="${inputClass}">
-      </div>
-    </div>
-  </div>
-
-  <!-- RELATIONSHIP (collapsed by default) -->
-  ${mkHead('relationship', 'Relationship (External Party)')}
-  <div rv-show="searchForm.sections.relationship.expanded">
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm mb-md">
-      <div>
-        <label class="${labelClass}">Party Name</label>
-        <input rv-on-input="searchForm.onFormInput" name="rel_display_name" type="text" placeholder="Hans Mueller or Hans*" class="${inputClass}">
-      </div>
-      <div>
-        <label class="${labelClass}">ID Type</label>
-        <select rv-on-change="searchForm.onFormInput" name="rel_identifier_type" class="${selectClass}">
-          <option rv-each-f="searchForm.identifierTypes" rv-attr-value="f.value" rv-text="f.label"></option>
-        </select>
-      </div>
-      <div>
-        <label class="${labelClass}">ID Value</label>
-        <input rv-on-input="searchForm.onFormInput" name="rel_identifier_value" type="text" placeholder="DE987654 or DE9*" class="${inputClass}">
-      </div>
-    </div>
-  </div>
-
-  <!-- FOOTER -->
-  <div class="flex items-center justify-between pt-md border-t border-white/10">
-    <p class="text-body-sm text-on-surface-variant/60 hidden sm:block">
-      Use <code class="text-secondary font-mono">*</code> as wildcard — <code class="text-on-surface-variant font-mono">jan*</code> starts with &nbsp;·&nbsp; <code class="text-on-surface-variant font-mono">*ski</code> ends with
-    </p>
-    <div class="flex gap-sm ml-auto">
-      <button rv-on-click="searchForm.onClear"
-        class="px-md py-2 rounded-lg border border-white/10 text-label-md text-on-surface-variant hover:bg-white/5 transition-colors">
-        Clear
-      </button>
-      <button rv-on-click="searchForm.onSearch"
-        class="flex items-center gap-xs px-md py-2 rounded-lg bg-secondary text-on-secondary-fixed text-label-md font-semibold hover:brightness-110 transition-all">
-        <span class="material-symbols-outlined text-[18px]">search</span>
-        Search
-      </button>
-    </div>
-  </div>
-
-</div>
-`;
-
-/**
- * @param {{ onSearch: (filters: object) => void, onClear: () => void }} props
- */
 export function createCustomerSearchFormController({ onSearch, onClear }) {
-  const makeSection = (expanded) => {
-    const section = {
-      expanded,
-      activeCount: 0,
-      toggle(e) { e?.preventDefault(); section.expanded = !section.expanded; },
-    };
-    return section;
-  };
+  const ctrl = createFilterPanelController(customerSearchConfig, { onSearch, onClear });
 
-  const self = {
-    statusFilters:    STATUS_FILTERS,
-    partyTypeFilters: PARTY_TYPE_FILTERS,
-    identifierTypes:  IDENTIFIER_TYPES,
+  ctrl.statusFilters = STATUS_FILTERS;
+  ctrl.partyTypeFilters = PARTY_TYPE_FILTERS;
+  ctrl.identifierTypes = IDENTIFIER_TYPES;
 
-    sections: {
-      core:         makeSection(true),
-      profile:      makeSection(false),
-      contact:      makeSection(false),
-      identifier:   makeSection(false),
-      relationship: makeSection(false),
-    },
-
-    _form: {
-      id: '', reference: '', display_name: '', status: '', party_type: '', country_of_origin: '',
-      profile_given_name: '', profile_family_name: '', profile_middle_name: '', profile_business_name: '',
-      contact_email: '', contact_phone: '',
-      identifier_type: '', identifier_value: '',
-      rel_display_name: '', rel_identifier_type: '', rel_identifier_value: '',
-    },
-
-    onFormInput(e) {
-      const field = e.target.name;
-      if (!field) return;
-      // rv-attr-value doesn't reliably set the HTML value attribute on <option> elements,
-      // so e.target.value may return the label text instead of the data value.
-      // For select fields, resolve the correct value by selectedIndex from the source array.
-      const SELECT_SOURCES = {
-        status:              STATUS_FILTERS,
-        party_type:          PARTY_TYPE_FILTERS,
-        identifier_type:     IDENTIFIER_TYPES,
-        rel_identifier_type: IDENTIFIER_TYPES,
-      };
-      const src = e.target.tagName === 'SELECT' ? SELECT_SOURCES[field] : null;
-      self._form[field] = src ? (src[e.target.selectedIndex]?.value ?? e.target.value) : e.target.value;
-      syncCounts();
-    },
-
-    onSearch(e) {
-      e?.preventDefault();
-      const f = self._form;
-      const trim = (v) => (v && v.trim()) || undefined;
-      onSearch({
-        id:                    trim(f.id),
-        reference:             trim(f.reference),
-        display_name:          trim(f.display_name),
-        status:                trim(f.status),
-        party_type:            trim(f.party_type),
-        country_of_origin:     trim(f.country_of_origin)?.toUpperCase(),
-        profile_given_name:    trim(f.profile_given_name),
-        profile_family_name:   trim(f.profile_family_name),
-        profile_middle_name:   trim(f.profile_middle_name),
-        profile_business_name: trim(f.profile_business_name),
-        contact_email:         trim(f.contact_email),
-        contact_phone:         trim(f.contact_phone),
-        identifier_type:       trim(f.identifier_type),
-        identifier_value:      trim(f.identifier_value),
-        rel_display_name:      trim(f.rel_display_name),
-        rel_identifier_type:   trim(f.rel_identifier_type),
-        rel_identifier_value:  trim(f.rel_identifier_value),
-      });
-    },
-
-    onClear(e) {
-      e?.preventDefault();
-      Object.keys(self._form).forEach(k => { self._form[k] = ''; });
-      syncCounts();
-      onClear();
-    },
-  };
-
-  // Recomputes activeCount for every section from current _form state.
-  // Function declaration so it is hoisted and available inside onFormInput/onClear above.
-  function syncCounts() {
-    for (const [key, fields] of Object.entries(SECTION_FIELDS)) {
-      self.sections[key].activeCount = fields.filter(n => self._form[n]).length;
-    }
-  }
-
-  return self;
+  return ctrl;
 }
