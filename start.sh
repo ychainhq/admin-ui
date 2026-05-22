@@ -99,9 +99,16 @@ step_btc() {
   header "Step 1 — Bitcoin Core"
   cd "$SCRIPT_DIR"
 
+  # Always rebuild the UI proxy image so proxy/server.js changes are never stale
+  info "Rebuilding UI proxy Docker image..."
+  docker compose build ui
+  ok "UI proxy image rebuilt"
+
   # Start containers if not running
   if docker compose ps 2>/dev/null | grep -qE "bitcoin-core.*(Up|running)" ; then
-    ok "Containers already running"
+    info "Applying rebuilt UI image (docker compose up -d ui)..."
+    docker compose up -d ui > /dev/null 2>&1
+    ok "UI proxy container updated"
   else
     info "Starting containers (docker compose up -d)..."
     docker compose up -d
@@ -287,9 +294,18 @@ ENVEOF
   fi
 }
 
-# ─── step 3: start engine (foreground) ───────────────────────────────────────
+# ─── step 3: build engine (TypeScript → dist/) ────────────────────────────────
+step_build_engine() {
+  header "Step 3 — Building engine"
+  cd "$ENGINE_DIR"
+  info "Compiling TypeScript (npm run build)..."
+  npm run build || die "Engine build failed — fix TypeScript errors above"
+  ok "Engine built → dist/"
+}
+
+# ─── step 4: start engine (foreground) ───────────────────────────────────────
 step_engine_start() {
-  header "Step 3 — Starting engine"
+  header "Step 4 — Starting engine"
 
   echo -e "  ${C_CYAN}Bitcoin Core${C_RESET}  →  http://localhost:18443"
   echo -e "  ${C_CYAN}UI proxy${C_RESET}      →  http://localhost:3001"
@@ -299,7 +315,7 @@ step_engine_start() {
   echo ""
 
   cd "$ENGINE_DIR"
-  exec npm run dev
+  exec npm start
 }
 
 # ─── main ─────────────────────────────────────────────────────────────────────
@@ -313,11 +329,13 @@ case "$MODE" in
     cmd_reset
     step_btc
     step_engine_setup
+    step_build_engine
     step_engine_start
     ;;
   start|"")
     step_btc
     step_engine_setup
+    step_build_engine
     step_engine_start
     ;;
   -h|--help|help)

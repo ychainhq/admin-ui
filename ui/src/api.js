@@ -84,10 +84,38 @@ export const api = {
 
   // --- Customer API (tenant-scoped, /api/* → /v1/*) ---
 
-  getCustomers: ({ limit = 20, cursor, status } = {}) => {
+  getCustomers: ({
+    limit = 20, cursor,
+    // customers table
+    status, party_type, id, reference, display_name, country_of_origin,
+    // customer_profiles
+    profile_given_name, profile_family_name, profile_middle_name, profile_business_name,
+    // customer_contact
+    contact_email, contact_phone,
+    // customer_identifiers
+    identifier_type, identifier_value,
+    // customer_relationships external_party
+    rel_display_name, rel_identifier_type, rel_identifier_value,
+  } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
-    if (cursor) params.set('cursor', cursor);
-    if (status) params.set('status', status);
+    if (cursor)               params.set('cursor', cursor);
+    if (status)               params.set('status', status);
+    if (party_type)           params.set('party_type', party_type);
+    if (id)                   params.set('id', id);
+    if (reference)            params.set('reference', reference);
+    if (display_name)         params.set('display_name', display_name);
+    if (country_of_origin)    params.set('country_of_origin', country_of_origin);
+    if (profile_given_name)   params.set('profile_given_name', profile_given_name);
+    if (profile_family_name)  params.set('profile_family_name', profile_family_name);
+    if (profile_middle_name)  params.set('profile_middle_name', profile_middle_name);
+    if (profile_business_name)params.set('profile_business_name', profile_business_name);
+    if (contact_email)        params.set('contact_email', contact_email);
+    if (contact_phone)        params.set('contact_phone', contact_phone);
+    if (identifier_type)      params.set('identifier_type', identifier_type);
+    if (identifier_value)     params.set('identifier_value', identifier_value);
+    if (rel_display_name)     params.set('rel_display_name', rel_display_name);
+    if (rel_identifier_type)  params.set('rel_identifier_type', rel_identifier_type);
+    if (rel_identifier_value) params.set('rel_identifier_value', rel_identifier_value);
     return tenantRequest(`/api/customers?${params}`);
   },
 

@@ -20,11 +20,19 @@ function setup(apiOverrides = {}, sessionKey = 'test-key') {
 afterEach(() => sessionStorage.clear());
 
 describe('CustomerListView — createController', () => {
+
+  // --- initial state ---
+
   test('initial state: loading false, customers empty, no error', () => {
     const { ctrl } = setup();
     expect(ctrl.loading).toBe(false);
     expect(ctrl.customers).toHaveLength(0);
     expect(ctrl.error).toBeNull();
+  });
+
+  test('initial state: hasSearched is false', () => {
+    const { ctrl } = setup();
+    expect(ctrl.hasSearched).toBe(false);
   });
 
   test('noActiveTenant is false when tenant key is set', () => {
@@ -37,32 +45,114 @@ describe('CustomerListView — createController', () => {
     expect(ctrl.noActiveTenant).toBe(true);
   });
 
+  // --- searchForm component is wired ---
+
+  test('searchForm is attached to scope', () => {
+    const { ctrl } = setup();
+    expect(ctrl.searchForm).toBeDefined();
+    expect(typeof ctrl.searchForm.onSearch).toBe('function');
+    expect(typeof ctrl.searchForm.onClear).toBe('function');
+  });
+
+  // --- init: NO auto-load ---
+
+  test('init() does NOT call load regardless of tenant state', async () => {
+    const { ctrl, api } = setup();
+    await ctrl.init();
+    expect(api.getCustomers).not.toHaveBeenCalled();
+  });
+
   test('init() does not call load when noActiveTenant', async () => {
     const { ctrl, api } = setup({}, null);
     await ctrl.init();
     expect(api.getCustomers).not.toHaveBeenCalled();
   });
 
-  test('init() calls load() when tenant is active', async () => {
-    const { ctrl, api } = setup();
-    await ctrl.init();
-    expect(api.getCustomers).toHaveBeenCalledTimes(1);
+  // --- searchForm.onSearch triggers view load ---
+
+  test('searchForm.onSearch sets hasSearched to true', () => {
+    const { ctrl } = setup();
+    ctrl.searchForm.onSearch({ preventDefault: jest.fn() });
+    expect(ctrl.hasSearched).toBe(true);
   });
+
+  test('searchForm.onSearch calls getCustomers', async () => {
+    const getCustomers = jest.fn().mockResolvedValue(PAGE);
+    const { ctrl } = setup({ getCustomers });
+    ctrl.searchForm.onSearch({ preventDefault: jest.fn() });
+    await Promise.resolve();
+    expect(getCustomers).toHaveBeenCalledTimes(1);
+  });
+
+  test('searchForm.onSearch passes filters to getCustomers', async () => {
+    const getCustomers = jest.fn().mockResolvedValue(PAGE);
+    const { ctrl } = setup({ getCustomers });
+    ctrl.searchForm.onFormInput({ target: { name: 'reference', value: 'REF-001' } });
+    ctrl.searchForm.onFormInput({ target: { name: 'status', value: 'active' } });
+    ctrl.searchForm.onSearch({ preventDefault: jest.fn() });
+    await Promise.resolve();
+    expect(getCustomers).toHaveBeenCalledWith(expect.objectContaining({
+      reference: 'REF-001',
+      status: 'active',
+    }));
+  });
+
+  test('second searchForm.onSearch resets cursor and prevCursors', async () => {
+    const getCustomers = jest.fn().mockResolvedValue({ data: CUSTOMERS, pagination: { nextCursor: 'next_abc' } });
+    const { ctrl } = setup({ getCustomers });
+    ctrl.searchForm.onSearch({ preventDefault: jest.fn() });
+    await Promise.resolve();
+    ctrl._cursor = 'next_abc';
+    ctrl._prevCursors = ['prev_1'];
+    ctrl.searchForm.onSearch({ preventDefault: jest.fn() });
+    expect(ctrl._cursor).toBeUndefined();
+    expect(ctrl._prevCursors).toHaveLength(0);
+  });
+
+  // --- searchForm.onClear ---
+
+  test('searchForm.onClear resets hasSearched to false', async () => {
+    const { ctrl } = setup();
+    ctrl.searchForm.onSearch({ preventDefault: jest.fn() });
+    await Promise.resolve();
+    ctrl.searchForm.onClear({ preventDefault: jest.fn() });
+    expect(ctrl.hasSearched).toBe(false);
+  });
+
+  test('searchForm.onClear empties customers', async () => {
+    const { ctrl } = setup();
+    ctrl.searchForm.onSearch({ preventDefault: jest.fn() });
+    await Promise.resolve();
+    ctrl.searchForm.onClear({ preventDefault: jest.fn() });
+    expect(ctrl.customers).toHaveLength(0);
+  });
+
+  test('searchForm.onClear does NOT call getCustomers', () => {
+    const getCustomers = jest.fn().mockResolvedValue(PAGE);
+    const { ctrl } = setup({ getCustomers });
+    ctrl.searchForm.onClear({ preventDefault: jest.fn() });
+    expect(getCustomers).not.toHaveBeenCalled();
+  });
+
+  // --- load ---
 
   test('load() populates customers', async () => {
     const { ctrl } = setup();
+    ctrl.hasSearched = true;
     await ctrl.load();
     expect(ctrl.customers).toHaveLength(3);
   });
 
   test('load() sets isEmpty when no results', async () => {
     const { ctrl } = setup({ getCustomers: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }) });
+    ctrl.hasSearched = true;
     await ctrl.load();
     expect(ctrl.isEmpty).toBe(true);
   });
 
   test('load() clears isEmpty on successful load with data', async () => {
     const { ctrl } = setup();
+    ctrl.hasSearched = true;
     await ctrl.load();
     expect(ctrl.isEmpty).toBe(false);
   });
@@ -97,6 +187,8 @@ describe('CustomerListView — createController', () => {
     expect(ctrl.loading).toBe(false);
   });
 
+  // --- customer view models ---
+
   test('customers are mapped to view models with statusLabel', async () => {
     const { ctrl } = setup();
     await ctrl.load();
@@ -117,6 +209,8 @@ describe('CustomerListView — createController', () => {
     expect(router.navigate).toHaveBeenCalledWith('#/customers/cust_1/profile');
   });
 
+  // --- navigation ---
+
   test('createCustomer() navigates to /customers/new', () => {
     const { ctrl, router } = setup();
     ctrl.createCustomer();
@@ -129,25 +223,7 @@ describe('CustomerListView — createController', () => {
     expect(router.navigate).toHaveBeenCalledWith('#/tenants');
   });
 
-  test('onStatusFilter triggers reload with status param', async () => {
-    const getCustomers = jest.fn().mockResolvedValue(PAGE);
-    const { ctrl } = setup({ getCustomers });
-    await ctrl.load();
-    getCustomers.mockClear();
-    ctrl.onStatusFilter({ target: { value: 'active' } });
-    await Promise.resolve();
-    expect(getCustomers).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }));
-  });
-
-  test('onStatusFilter with empty value sends status=undefined', async () => {
-    const getCustomers = jest.fn().mockResolvedValue(PAGE);
-    const { ctrl } = setup({ getCustomers });
-    await ctrl.load();
-    getCustomers.mockClear();
-    ctrl.onStatusFilter({ target: { value: '' } });
-    await Promise.resolve();
-    expect(getCustomers).toHaveBeenCalledWith(expect.objectContaining({ status: undefined }));
-  });
+  // --- pagination ---
 
   test('pagination is updated after load', async () => {
     const { ctrl } = setup();
@@ -156,16 +232,23 @@ describe('CustomerListView — createController', () => {
     expect(ctrl.pagination.showingText).toContain('3');
   });
 
-  test('next page uses nextCursor', async () => {
+  test('next page uses nextCursor and keeps active filters', async () => {
     const getCustomers = jest.fn()
       .mockResolvedValueOnce({ data: CUSTOMERS, pagination: { nextCursor: 'next_abc' } })
       .mockResolvedValueOnce({ data: [], pagination: { nextCursor: null } });
     const { ctrl } = setup({ getCustomers });
-    await ctrl.load();
+    ctrl.searchForm.onFormInput({ target: { name: 'status', value: 'active' } });
+    ctrl.searchForm.onSearch({ preventDefault: jest.fn() });
+    await Promise.resolve();
     ctrl.pagination.pages.find(p => p.label === '2')?.go();
     await Promise.resolve();
-    expect(getCustomers).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'next_abc' }));
+    expect(getCustomers).toHaveBeenLastCalledWith(expect.objectContaining({
+      cursor: 'next_abc',
+      status: 'active',
+    }));
   });
+
+  // --- layout helpers ---
 
   test('sidebar has Customers nav item active', () => {
     const { ctrl } = setup();
@@ -179,11 +262,5 @@ describe('CustomerListView — createController', () => {
     const item = ctrl.bottomNav.items.find(i => i.label === 'Customers');
     expect(item).toBeDefined();
     expect(item.itemClass).toContain('secondary');
-  });
-
-  test('statusFilters array has 4 options', () => {
-    const { ctrl } = setup();
-    expect(ctrl.statusFilters).toHaveLength(4);
-    expect(ctrl.statusFilters[0].value).toBe('');
   });
 });

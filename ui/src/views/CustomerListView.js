@@ -7,17 +7,11 @@ import { template as mobileDrawerTpl, createMobileDrawerController } from '../co
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { template as customerCardTpl, createCustomerViewModel } from '../components/CustomerCard.js';
+import { template as searchFormTpl, createCustomerSearchFormController } from '../components/CustomerSearchForm.js';
 import { getActiveTenantKey } from '../api.js';
 
 const ROUTE = '/customers';
 const PER_PAGE = 20;
-
-const STATUS_FILTERS = [
-  { value: '',         label: 'All statuses' },
-  { value: 'active',   label: 'Active' },
-  { value: 'disabled', label: 'Disabled' },
-  { value: 'frozen',   label: 'Frozen' },
-];
 
 const desktopTopBarTpl = desktopTopBarHtml({
   breadcrumbHtml: `
@@ -29,10 +23,10 @@ const desktopTopBarTpl = desktopTopBarHtml({
 });
 
 const desktopTableTpl = `
-<div rv-hide="loading" class="hidden lg:block">
+<div rv-show="hasSearched" rv-hide="loading" class="hidden lg:block">
   <div rv-show="isEmpty" class="glass-card rounded-xl p-lg text-center">
-    <span class="material-symbols-outlined text-[48px] text-on-surface-variant">group</span>
-    <p class="font-body-md text-on-surface-variant mt-sm">No customers found</p>
+    <span class="material-symbols-outlined text-[48px] text-on-surface-variant">manage_search</span>
+    <p class="font-body-md text-on-surface-variant mt-sm">No customers found matching your criteria</p>
   </div>
   <div rv-hide="isEmpty" class="glass-card rounded-xl overflow-hidden">
     <div class="overflow-x-auto">
@@ -130,15 +124,17 @@ const template = `
           <div class="hidden lg:flex flex-col lg:flex-row lg:items-end justify-between gap-md pt-gutter mb-gutter">
             <div>
               <h2 class="text-display-lg font-display-lg text-on-surface mb-xs">Customers</h2>
-              <p class="text-body-md font-body-md text-on-surface-variant">All customers registered for the active tenant.</p>
+              <p class="text-body-md font-body-md text-on-surface-variant">Search customers for the active tenant.</p>
             </div>
-            <div class="flex items-center gap-sm shrink-0">
-              <select rv-on-change="onStatusFilter"
-                class="glass-card border border-white/10 rounded-lg px-md py-2 text-label-md text-on-surface bg-transparent focus:ring-1 focus:ring-secondary outline-none appearance-none cursor-pointer">
-                <option rv-each-f="statusFilters" rv-attr-value="f.value" rv-text="f.label"></option>
-              </select>
-            </div>
+            <button rv-hide="noActiveTenant" rv-on-click="createCustomer"
+              class="hidden lg:flex items-center gap-xs px-md py-2 rounded-lg bg-secondary text-on-secondary-fixed text-label-md font-semibold hover:brightness-110 transition-all shrink-0">
+              <span class="material-symbols-outlined text-[18px]">person_add</span>
+              New Customer
+            </button>
           </div>
+
+          <!-- Search form (always visible) -->
+          ${searchFormTpl}
 
           <!-- Error state -->
           <div rv-show="error" class="glass-card rounded-xl p-md bg-error/10 border border-error/30 mb-gutter">
@@ -153,11 +149,17 @@ const template = `
             <div class="w-8 h-8 rounded-full border-2 border-secondary border-t-transparent animate-spin"></div>
           </div>
 
-          <!-- Mobile: cards + pagination -->
-          <div rv-hide="loading" class="lg:hidden">
+          <!-- Pre-search prompt -->
+          <div rv-hide="hasSearched" rv-hide="loading" class="glass-card rounded-xl p-lg text-center">
+            <span class="material-symbols-outlined text-[48px] text-on-surface-variant">manage_search</span>
+            <p class="font-body-md text-on-surface-variant mt-sm">Enter search criteria above and click Search</p>
+          </div>
+
+          <!-- Mobile: cards + pagination (after search) -->
+          <div rv-show="hasSearched" rv-hide="loading" class="lg:hidden">
             <div rv-show="isEmpty" class="glass-card rounded-xl p-lg text-center">
-              <span class="material-symbols-outlined text-[48px] text-on-surface-variant">group</span>
-              <p class="font-body-md text-on-surface-variant mt-sm">No customers found</p>
+              <span class="material-symbols-outlined text-[48px] text-on-surface-variant">manage_search</span>
+              <p class="font-body-md text-on-surface-variant mt-sm">No customers found matching your criteria</p>
             </div>
             <div rv-hide="isEmpty">
               ${customerCardTpl}
@@ -165,7 +167,7 @@ const template = `
             </div>
           </div>
 
-          <!-- Desktop: table -->
+          <!-- Desktop: table (after search) -->
           ${desktopTableTpl}
 
         </div>
@@ -206,23 +208,16 @@ export function createController({ api, router }) {
     loading: false,
     error: null,
     isEmpty: false,
-    statusFilters: STATUS_FILTERS,
+    hasSearched: false,
 
     pagination: createPaginationController({ page: 1, total: 0, onPageChange: () => {} }),
     _cursor: undefined,
     _prevCursors: [],
     _nextCursor: undefined,
-    _statusFilter: '',
+    _activeFilters: {},
 
     goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
     createCustomer() { router.navigate('#/customers/new'); },
-
-    onStatusFilter(e) {
-      self._statusFilter = e.target.value;
-      self._cursor = undefined;
-      self._prevCursors = [];
-      self.load();
-    },
 
     async load() {
       self.loading = true;
@@ -232,7 +227,7 @@ export function createController({ api, router }) {
         const data = await api.getCustomers({
           limit: PER_PAGE,
           cursor: self._cursor,
-          status: self._statusFilter || undefined,
+          ...self._activeFilters,
         });
         const items = data.data || [];
         self._nextCursor = data.pagination?.nextCursor || undefined;
@@ -263,9 +258,29 @@ export function createController({ api, router }) {
     },
 
     init() {
-      if (!self.noActiveTenant) self.load();
+      // No auto-load — user must submit the search form first.
     },
   };
+
+  self.searchForm = createCustomerSearchFormController({
+    onSearch(filters) {
+      self._activeFilters = filters;
+      self._cursor = undefined;
+      self._prevCursors = [];
+      self.hasSearched = true;
+      self.load();
+    },
+    onClear() {
+      self._activeFilters = {};
+      self._cursor = undefined;
+      self._prevCursors = [];
+      self.hasSearched = false;
+      self.customers = [];
+      self.isEmpty = false;
+      self.error = null;
+    },
+  });
+
   return self;
 }
 
