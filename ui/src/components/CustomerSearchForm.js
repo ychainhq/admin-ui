@@ -236,10 +236,19 @@ export function createCustomerSearchFormController({ onSearch, onClear }) {
 
     onFormInput(e) {
       const field = e.target.name;
-      if (field) {
-        self._form[field] = e.target.value;
-        syncCounts();
-      }
+      if (!field) return;
+      // rv-attr-value doesn't reliably set the HTML value attribute on <option> elements,
+      // so e.target.value may return the label text instead of the data value.
+      // For select fields, resolve the correct value by selectedIndex from the source array.
+      const SELECT_SOURCES = {
+        status:              STATUS_FILTERS,
+        party_type:          PARTY_TYPE_FILTERS,
+        identifier_type:     IDENTIFIER_TYPES,
+        rel_identifier_type: IDENTIFIER_TYPES,
+      };
+      const src = e.target.tagName === 'SELECT' ? SELECT_SOURCES[field] : null;
+      self._form[field] = src ? (src[e.target.selectedIndex]?.value ?? e.target.value) : e.target.value;
+      syncCounts();
     },
 
     onSearch(e) {

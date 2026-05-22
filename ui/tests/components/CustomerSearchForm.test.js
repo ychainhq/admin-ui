@@ -61,6 +61,37 @@ describe('createCustomerSearchFormController', () => {
     expect(Object.values(ctrl._form).every(v => v === '')).toBe(true);
   });
 
+  test('onFormInput resolves party_type select by selectedIndex, not label text', () => {
+    const { ctrl } = setup();
+    // Simulates Rivets returning label text instead of value attribute
+    ctrl.onFormInput({ target: { tagName: 'SELECT', name: 'party_type', value: 'Natural Person', selectedIndex: 1 } });
+    expect(ctrl._form.party_type).toBe('natural_person');
+  });
+
+  test('onFormInput resolves status select by selectedIndex', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { tagName: 'SELECT', name: 'status', value: 'Active', selectedIndex: 1 } });
+    expect(ctrl._form.status).toBe('active');
+  });
+
+  test('onFormInput resolves identifier_type select by selectedIndex', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { tagName: 'SELECT', name: 'identifier_type', value: 'Passport', selectedIndex: 1 } });
+    expect(ctrl._form.identifier_type).toBe('passport');
+  });
+
+  test('onFormInput resolves rel_identifier_type select by selectedIndex', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { tagName: 'SELECT', name: 'rel_identifier_type', value: 'Tax ID', selectedIndex: 5 } });
+    expect(ctrl._form.rel_identifier_type).toBe('tax_id');
+  });
+
+  test('onFormInput selecting "All types" (index 0) stores empty string', () => {
+    const { ctrl } = setup();
+    ctrl.onFormInput({ target: { tagName: 'SELECT', name: 'party_type', value: 'All types', selectedIndex: 0 } });
+    expect(ctrl._form.party_type).toBe('');
+  });
+
   // --- onSearch: filter derivation ---
 
   test('onSearch calls onSearch callback', () => {
