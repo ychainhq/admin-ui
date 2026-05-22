@@ -13,7 +13,8 @@ async function request(path, options = {}) {
     let message = `HTTP ${res.status}`;
     try {
       const body = await res.clone().json();
-      message = body?.error?.message || body?.message || message;
+      const detail = body?.error?.message || body?.message;
+      if (detail) message = `${message}: ${detail}`;
     } catch { /* ignore parse errors */ }
     throw new Error(message);
   }
@@ -81,26 +82,38 @@ export const api = {
     return tenantRequest(`/api/customers?${params}`);
   },
 
-  getCustomer: (id) =>
-    tenantRequest(`/api/customers/${encodeURIComponent(id)}`),
+  getCustomer: async (id) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}`);
+    return res.data ?? res;
+  },
 
-  createCustomer: (data) =>
-    tenantRequest('/api/customers', { method: 'POST', body: JSON.stringify(data) }),
+  createCustomer: async (data) => {
+    const res = await tenantRequest('/api/customers', { method: 'POST', body: JSON.stringify(data) });
+    return res.data ?? res;
+  },
 
-  disableCustomer: (id) =>
-    tenantRequest(`/api/customers/${encodeURIComponent(id)}/disable`, { method: 'POST' }),
+  disableCustomer: async (id) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/disable`, { method: 'POST' });
+    return res.data ?? res;
+  },
 
-  getCustomerProfile: (id) =>
-    tenantRequest(`/api/customers/${encodeURIComponent(id)}/profile`),
+  getCustomerProfile: async (id) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/profile`);
+    return res.data ?? res;
+  },
 
   getCustomerIdentifiers: (id) =>
     tenantRequest(`/api/customers/${encodeURIComponent(id)}/identifiers`),
 
-  getCustomerContact: (id) =>
-    tenantRequest(`/api/customers/${encodeURIComponent(id)}/contact`),
+  getCustomerContact: async (id) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/contact`);
+    return res.data ?? res;
+  },
 
-  getCustomerAmlKyc: (id) =>
-    tenantRequest(`/api/customers/${encodeURIComponent(id)}/aml-kyc`),
+  getCustomerAmlKyc: async (id) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/aml-kyc`);
+    return res.data ?? res;
+  },
 
   getCustomerRelationships: (id) =>
     tenantRequest(`/api/customers/${encodeURIComponent(id)}/relationships`),
@@ -108,11 +121,15 @@ export const api = {
   getCustomerDocuments: (id) =>
     tenantRequest(`/api/customers/${encodeURIComponent(id)}/documents`),
 
-  getCustomerDataGovernance: (id) =>
-    tenantRequest(`/api/customers/${encodeURIComponent(id)}/data-governance`),
+  getCustomerDataGovernance: async (id) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/data-governance`);
+    return res.data ?? res;
+  },
 
-  getCustomerBalances: (id) =>
-    tenantRequest(`/api/customers/${encodeURIComponent(id)}/balances`),
+  getCustomerBalances: async (id) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/balances`);
+    return res.data ?? res;
+  },
 
   getCustomerDeposits: (id, { limit = 20, cursor } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });

@@ -4,7 +4,7 @@ import { makeMockApi, makeRouter } from '../mocks/api.js';
 const CUSTOMER = { customerId: 'cust_x', reference: 'ref-x', status: 'active', createdAt: '2026-01-01T00:00:00Z' };
 
 const NATURAL_PROFILE = {
-  partyType: 'natural_person',
+  person_type: 'individual',
   given_name: 'Jan', family_name: 'Kowalski',
   date_of_birth: '1985-03-15',
   nationalities: ['PL', 'DE'],
@@ -13,7 +13,6 @@ const NATURAL_PROFILE = {
 };
 
 const LEGAL_PROFILE = {
-  partyType: 'legal_entity',
   entity_subtype: 'company',
   legal_name: 'Acme Sp. z o.o.',
   country_of_incorporation: 'PL',
@@ -22,13 +21,13 @@ const LEGAL_PROFILE = {
 };
 
 const IDENTIFIERS = { data: [
-  { identifier_type: 'passport', value: 'AB1234567', issuing_country: 'PL', expiry_date: '2030-12-31' },
+  { type: 'passport', value: 'AB1234567', issuing_country: 'PL', valid_until: '2030-12-31' },
 ] };
 
 const CONTACT = {
   email: 'jan@example.com', phone: '+48600100200',
   email_verified: true, phone_verified: false,
-  addresses: [{ address_type: 'residential', line1: 'ul. Marszałkowska 1', city: 'Warszawa', postal_code: '00-001', country: 'PL', is_primary: true }],
+  addresses: [{ type: 'residential', line1: 'ul. Marszałkowska 1', city: 'Warszawa', postal_code: '00-001', country: 'PL', is_primary: true }],
 };
 
 function setup({ profileData = null, idsData = { data: [] }, contactData = null, ...apiOverrides } = {}) {

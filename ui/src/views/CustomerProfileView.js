@@ -51,7 +51,7 @@ const profileSectionTpl = `
   </div>
 
   <!-- Natural person -->
-  <div rv-hide="profile.notSet" rv-show="profile.isNaturalPerson" class="divide-y divide-white/5">
+  <div rv-show="profile.isNaturalPerson" class="divide-y divide-white/5">
     <div class="flex flex-col lg:flex-row lg:items-center gap-xs px-md py-3">
       <span class="font-body-sm text-on-surface-variant lg:w-1/3">Given name</span>
       <span rv-text="profile.givenName" class="font-body-md text-on-surface font-semibold"></span>
@@ -79,7 +79,7 @@ const profileSectionTpl = `
   </div>
 
   <!-- Legal entity -->
-  <div rv-hide="profile.notSet" rv-hide="profile.isNaturalPerson" class="divide-y divide-white/5">
+  <div rv-show="profile.isLegalEntity" class="divide-y divide-white/5">
     <div class="flex flex-col lg:flex-row lg:items-center gap-xs px-md py-3">
       <span class="font-body-sm text-on-surface-variant lg:w-1/3">Legal name</span>
       <span rv-text="profile.legalName" class="font-body-md text-on-surface font-semibold"></span>
@@ -309,12 +309,13 @@ export function createController({ api, router, id }) {
 
         // Profile
         if (!profileData) {
-          self.profile = { notSet: true, isNaturalPerson: false };
+          self.profile = { notSet: true, isNaturalPerson: false, isLegalEntity: false };
         } else {
-          const isNatural = profileData.partyType === 'natural_person';
+          const isNatural = !!profileData.person_type;
           self.profile = {
             notSet: false,
             isNaturalPerson: isNatural,
+            isLegalEntity: !isNatural,
             // Natural person
             givenName:           profileData.given_name || '—',
             familyName:          profileData.family_name || '—',
@@ -337,10 +338,10 @@ export function createController({ api, router, id }) {
         // Identifiers
         const idsList = idsData?.data || [];
         self.identifiers = idsList.map(d => ({
-          type:    d.identifier_type || '—',
+          type:    d.type || '—',
           value:   d.value || '—',
           country: d.issuing_country || '—',
-          expiry:  fmtDate(d.expiry_date),
+          expiry:  fmtDate(d.valid_until),
         }));
         self.identifiersEmpty = self.identifiers.length === 0;
 
@@ -349,7 +350,7 @@ export function createController({ api, router, id }) {
           self.contact = { notSet: true, addresses: [], hasAddresses: false };
         } else {
           const addrs = (contactData.addresses || []).map(a => ({
-            type:       a.address_type || '—',
+            type:       a.type || '—',
             line1:      a.line1 || '—',
             city:       a.city || '',
             postalCode: a.postal_code || '',

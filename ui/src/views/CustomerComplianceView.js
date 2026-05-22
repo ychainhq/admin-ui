@@ -139,7 +139,7 @@ const relationshipsSectionTpl = `
         </span>
         <span rv-show="rel.country">Country: <span rv-text="rel.country"></span></span>
         <span rv-show="rel.ownershipPercent">Ownership: <span rv-text="rel.ownershipPercent" class="font-semibold text-on-surface"></span>%</span>
-        <span rv-show="rel.isControlling" class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20">CONTROLLING</span>
+        <span rv-show="rel.isDirect" class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20">DIRECT</span>
       </div>
       <p rv-show="rel.notes" class="ml-8 mt-xs font-body-sm text-on-surface-variant italic">
         "<span rv-text="rel.notes"></span>"
@@ -338,14 +338,14 @@ export function createController({ api, router, id }) {
         // Relationships
         const relsList = relsData?.data || [];
         self.relationships = relsList.map(r => ({
-          legalName:       r.external_party?.legal_name || '—',
+          legalName:       r.external_party?.display_name || '—',
           typeLabel:       (r.relationship_type || '—').toUpperCase(),
           typeBadgeClass:  statusBadge(r.relationship_type, REL_TYPE_BADGE),
           identifierType:  r.external_party?.identifier_type || '',
           identifierValue: r.external_party?.identifier_value || '',
-          country:         r.external_party?.country || '',
-          ownershipPercent: r.ownership_percent != null ? String(r.ownership_percent) : '',
-          isControlling:   Boolean(r.is_controlling),
+          country:         r.external_party?.country_of_origin || '',
+          ownershipPercent: r.ownership_percentage != null ? String(r.ownership_percentage) : '',
+          isDirect:        Boolean(r.is_direct_ownership),
           notes:           r.notes || '',
         }));
         self.relationshipsEmpty = self.relationships.length === 0;

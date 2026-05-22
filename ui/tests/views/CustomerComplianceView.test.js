@@ -12,7 +12,7 @@ const AML = {
 };
 
 const RELATIONSHIPS = { data: [
-  { relationship_type: 'ubo', external_party: { legal_name: 'Big Boss', identifier_type: 'passport', identifier_value: 'XX999', country: 'PL' }, ownership_percent: 51, is_controlling: true, notes: 'verified' },
+  { relationship_type: 'ubo', external_party: { display_name: 'Big Boss', identifier_type: 'passport', identifier_value: 'XX999', country_of_origin: 'PL' }, ownership_percentage: 51, is_direct_ownership: true, notes: 'verified' },
 ] };
 
 const DOCUMENTS = { data: [
@@ -97,7 +97,7 @@ describe('CustomerComplianceView — createController', () => {
     expect(ctrl.relationships[0].legalName).toBe('Big Boss');
     expect(ctrl.relationships[0].typeLabel).toBe('UBO');
     expect(ctrl.relationships[0].ownershipPercent).toBe('51');
-    expect(ctrl.relationships[0].isControlling).toBe(true);
+    expect(ctrl.relationships[0].isDirect).toBe(true);
     expect(ctrl.relationshipsEmpty).toBe(false);
   });
 
