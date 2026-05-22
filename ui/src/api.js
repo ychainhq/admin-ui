@@ -1,5 +1,14 @@
 const TENANT_KEY_SESSION = 'chain_api_tenant_key';
 
+function snakeToCamel(str) {
+  return str.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+function keysToCamel(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [snakeToCamel(k), v]));
+}
+
 export function getActiveTenantKey() {
   return sessionStorage.getItem(TENANT_KEY_SESSION) || null;
 }
@@ -51,7 +60,7 @@ export const api = {
 
   getTenantConfig: async (id) => {
     const res = await request(`/admin-api/tenants/${encodeURIComponent(id)}/config`);
-    return res.data ?? res;
+    return keysToCamel(res.data ?? res);
   },
 
   saveTenantConfig: (id, config) =>

@@ -10,6 +10,7 @@ const rawConfig = {
   btcXpub: 'xpub6CUGRUo...',
   btcSweepThresholdSats: 100000,
   customerSessionTtlSeconds: 3600,
+  actorTokenSecret: null,
 };
 
 describe('createConfigFieldsController', () => {
@@ -22,7 +23,7 @@ describe('createConfigFieldsController', () => {
   });
 
   test('returns one field object per defined config key', () => {
-    expect(fields.length).toBe(9);
+    expect(fields.length).toBe(10);
   });
 
   test('each field has required properties', () => {
@@ -116,6 +117,6 @@ describe('collectConfigValues', () => {
     const onFieldChange = jest.fn();
     const fields = createConfigFieldsController(rawConfig, onFieldChange);
     const result = collectConfigValues(fields);
-    expect(Object.keys(result).length).toBe(9);
+    expect(Object.keys(result).length).toBe(10);
   });
 });

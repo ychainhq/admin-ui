@@ -47,7 +47,7 @@ describe('TenantConfigView — createController', () => {
   test('load() populates config.fields from API response', async () => {
     const { ctrl } = makeCtrl();
     await ctrl.load();
-    expect(ctrl.config.fields).toHaveLength(9);
+    expect(ctrl.config.fields).toHaveLength(10);
   });
 
   test('load() sets error on API failure', async () => {

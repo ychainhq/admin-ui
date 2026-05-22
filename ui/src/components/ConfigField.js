@@ -105,6 +105,14 @@ const FIELD_DEFINITIONS = [
     inputType: 'number',
     placeholder: 'e.g. 3600',
   },
+  {
+    key: 'actorTokenSecret',
+    label: 'actorTokenSecret',
+    description: 'HMAC-SHA256 secret for X-Actor-Token JWT signing. Min 32 chars. Leave empty to disable actor-level RBAC.',
+    inputType: 'text',
+    placeholder: 'min. 32 characters — leave empty to disable',
+    nullable: true,
+  },
 ];
 
 export function createConfigFieldsController(rawConfig, onFieldChange) {
