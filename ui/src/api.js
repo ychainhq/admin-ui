@@ -15,8 +15,8 @@ export function getActiveTenantKey() {
 
 async function request(path, options = {}) {
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
