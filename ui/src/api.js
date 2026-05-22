@@ -139,11 +139,26 @@ export const api = {
     return res.data ?? res;
   },
 
+  upsertCustomerProfile: async (id, data) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/profile`, { method: 'PUT', body: JSON.stringify(data) });
+    return res.data ?? res;
+  },
+
   getCustomerIdentifiers: (id) =>
     tenantRequest(`/api/customers/${encodeURIComponent(id)}/identifiers`),
 
+  addCustomerIdentifier: async (id, data) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/identifiers`, { method: 'POST', body: JSON.stringify(data) });
+    return res.data ?? res;
+  },
+
   getCustomerContact: async (id) => {
     const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/contact`);
+    return res.data ?? res;
+  },
+
+  upsertCustomerContact: async (id, data) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/contact`, { method: 'PUT', body: JSON.stringify(data) });
     return res.data ?? res;
   },
 
@@ -157,6 +172,11 @@ export const api = {
 
   getCustomerDocuments: (id) =>
     tenantRequest(`/api/customers/${encodeURIComponent(id)}/documents`),
+
+  addCustomerDocument: async (id, data) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/documents`, { method: 'POST', body: JSON.stringify(data) });
+    return res.data ?? res;
+  },
 
   getCustomerDataGovernance: async (id) => {
     const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/data-governance`);

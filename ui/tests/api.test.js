@@ -74,3 +74,55 @@ describe('api — request header integrity', () => {
     expect(opts.headers['Content-Type']).toBe('application/json');
   });
 });
+
+describe('api — customer write wrappers', () => {
+  beforeEach(() => {
+    sessionStorage.setItem('chain_api_tenant_key', 'tk');
+  });
+
+  test('upsertCustomerProfile sends PUT to /api/customers/:id/profile', async () => {
+    const fetch = mockFetch(200, { data: { id: 'cust_1' } });
+    const payload = { partyType: 'natural_person', person_type: 'individual', given_name: 'Jan', family_name: 'Kowalski' };
+    await api.upsertCustomerProfile('cust_1', payload);
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toContain('/api/customers/cust_1/profile');
+    expect(opts.method).toBe('PUT');
+    expect(JSON.parse(opts.body)).toEqual(payload);
+  });
+
+  test('addCustomerIdentifier sends POST to /api/customers/:id/identifiers', async () => {
+    const fetch = mockFetch(201, { data: { id: 'ident_1' } });
+    const payload = { type: 'passport', value: 'AB123456' };
+    await api.addCustomerIdentifier('cust_1', payload);
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toContain('/api/customers/cust_1/identifiers');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual(payload);
+  });
+
+  test('addCustomerDocument sends POST to /api/customers/:id/documents', async () => {
+    const fetch = mockFetch(201, { data: { id: 'doc_1' } });
+    const payload = { document_type: 'passport', storage_ref: 'ref', storage_system: 'manual' };
+    await api.addCustomerDocument('cust_1', payload);
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toContain('/api/customers/cust_1/documents');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual(payload);
+  });
+
+  test('upsertCustomerContact sends PUT to /api/customers/:id/contact', async () => {
+    const fetch = mockFetch(200, { data: {} });
+    const payload = { addresses: [{ type: 'registered', line1: 'ul. Testowa 1', city: 'Warszawa', country: 'PL', is_primary: true }] };
+    await api.upsertCustomerContact('cust_1', payload);
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toContain('/api/customers/cust_1/contact');
+    expect(opts.method).toBe('PUT');
+    expect(JSON.parse(opts.body)).toEqual(payload);
+  });
+
+  test('upsertCustomerProfile returns res.data', async () => {
+    mockFetch(200, { data: { partyType: 'natural_person' } });
+    const result = await api.upsertCustomerProfile('cust_1', {});
+    expect(result).toEqual({ partyType: 'natural_person' });
+  });
+});
