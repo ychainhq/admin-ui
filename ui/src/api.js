@@ -211,6 +211,64 @@ export const api = {
     return tenantRequest(`/api/customers/${encodeURIComponent(id)}/deposits?${params}`);
   },
 
+  createDepositAddress: async (customerId, { chain }) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(customerId)}/deposit-address`, {
+      method: 'POST',
+      body: JSON.stringify({ chain }),
+    });
+    return res.data ?? res;
+  },
+
+  getDeposits: ({ limit = 20, cursor, status } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    if (status) params.set('status', status);
+    return tenantRequest(`/api/deposits?${params}`);
+  },
+
+  createCustomerSession: async (customerId) => {
+    const res = await tenantRequest(`/api/customers/${encodeURIComponent(customerId)}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    return res.data ?? res;
+  },
+
+  createWithdrawalAsCustomer: async (sessionToken, data) => {
+    const res = await request('/customer/me/withdrawals', {
+      method: 'POST',
+      headers: { 'X-Session-Token': sessionToken },
+      body: JSON.stringify(data),
+    });
+    return res.data ?? res;
+  },
+
+  getWithdrawalBatches: ({ limit = 20, cursor } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return tenantRequest(`/api/withdrawal-batches?${params}`);
+  },
+
+  getWallets: () =>
+    tenantRequest('/api/wallets'),
+
+  createSweep: async (data) => {
+    const res = await tenantRequest('/api/sweeps', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res.data ?? res;
+  },
+
+  getSigningTasks: ({ limit = 20, cursor } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return tenantRequest(`/api/signing-tasks?${params}`);
+  },
+
+  getExternalSigners: () =>
+    tenantRequest('/api/external-signers'),
+
   // tenantRequest is exposed so future views can call /api/* with the active tenant key.
   tenantRequest,
 };

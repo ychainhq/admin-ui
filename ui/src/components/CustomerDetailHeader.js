@@ -6,11 +6,12 @@ function fmtDate(v) {
 }
 
 const TABS = [
-  { key: 'profile',    label: 'Profile',    icon: 'person' },
-  { key: 'compliance', label: 'Compliance', icon: 'shield' },
-  { key: 'governance', label: 'Governance', icon: 'policy' },
-  { key: 'balances',   label: 'Balances',   icon: 'account_balance_wallet' },
-  { key: 'deposits',   label: 'Deposits',   icon: 'inbox' },
+  { key: 'profile',     label: 'Profile',     icon: 'person' },
+  { key: 'compliance',  label: 'Compliance',  icon: 'shield' },
+  { key: 'governance',  label: 'Governance',  icon: 'policy' },
+  { key: 'balances',    label: 'Balances',    icon: 'account_balance_wallet' },
+  { key: 'deposits',    label: 'Deposits',    icon: 'inbox' },
+  { key: 'withdrawals', label: 'Withdrawals', icon: 'arrow_upward' },
 ];
 
 const TAB_ACTIVE   = 'flex items-center gap-xs px-md pb-3 pt-sm text-secondary border-b-2 border-secondary cursor-pointer whitespace-nowrap font-label-md';

@@ -12,6 +12,11 @@ import { CustomerComplianceView } from './views/CustomerComplianceView.js';
 import { CustomerGovernanceView } from './views/CustomerGovernanceView.js';
 import { CustomerBalancesView } from './views/CustomerBalancesView.js';
 import { CustomerDepositsView } from './views/CustomerDepositsView.js';
+import { CustomerWithdrawalsView } from './views/CustomerWithdrawalsView.js';
+import { WithdrawalBatchesView } from './views/WithdrawalBatchesView.js';
+import { WalletsView } from './views/WalletsView.js';
+import { SigningTasksView } from './views/SigningTasksView.js';
+import { ExternalSignersView } from './views/ExternalSignersView.js';
 
 const router = createRouter();
 const deps = { api, router };
@@ -31,8 +36,14 @@ router
   .on('/customers/:id/compliance', (params) => CustomerComplianceView.mount(appEl(), params, deps))
   .on('/customers/:id/governance', (params) => CustomerGovernanceView.mount(appEl(), params, deps))
   .on('/customers/:id/balances',   (params) => CustomerBalancesView.mount(appEl(), params, deps))
-  .on('/customers/:id/deposits',   (params) => CustomerDepositsView.mount(appEl(), params, deps))
+  .on('/customers/:id/deposits',    (params) => CustomerDepositsView.mount(appEl(), params, deps))
+  .on('/customers/:id/withdrawals', (params) => CustomerWithdrawalsView.mount(appEl(), params, deps))
   .on('/customers/:id', (params) => { router.navigate(`#/customers/${params.id}/profile`); return null; })
+  // Operations
+  .on('/withdrawal-batches', (params) => WithdrawalBatchesView.mount(appEl(), params, deps))
+  .on('/wallets',            (params) => WalletsView.mount(appEl(), params, deps))
+  .on('/signing-tasks',      (params) => SigningTasksView.mount(appEl(), params, deps))
+  .on('/external-signers',   (params) => ExternalSignersView.mount(appEl(), params, deps))
   .on('/nodes', (params) => NodeListView.mount(appEl(), params, deps))
   .on('/nodes/:nodeId', (params) => NodeDetailView.mount(appEl(), params, deps));
 

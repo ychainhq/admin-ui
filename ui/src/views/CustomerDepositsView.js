@@ -111,6 +111,42 @@ const template = `
 
           ${headerTpl}
 
+          <!-- Deposit Address card -->
+          <div class="glass-card rounded-xl overflow-hidden mb-md">
+            <div class="px-md py-sm bg-white/[0.03] border-b border-white/5 flex items-center gap-sm">
+              <span class="material-symbols-outlined text-on-surface-variant text-[18px]">qr_code_2</span>
+              <span class="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Deposit Address</span>
+            </div>
+            <div class="p-md">
+              <div rv-show="depositAddr.error" class="flex items-center gap-sm mb-sm text-error">
+                <span class="material-symbols-outlined text-[16px]">error</span>
+                <span rv-text="depositAddr.error" class="font-body-sm"></span>
+              </div>
+              <div rv-show="depositAddr.address" class="mb-sm">
+                <div class="flex items-center gap-sm flex-wrap">
+                  <span rv-text="depositAddr.address" class="font-mono-data text-on-surface text-[13px] break-all"></span>
+                  <button rv-on-click="depositAddr.copy"
+                    class="flex items-center gap-xs px-sm py-1 rounded-lg border border-white/10 text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all text-[12px]">
+                    <span class="material-symbols-outlined text-[14px]">content_copy</span>
+                    Copy
+                  </button>
+                </div>
+                <p class="font-body-sm text-on-surface-variant mt-sm flex items-center gap-xs">
+                  <span class="material-symbols-outlined text-[14px]">info</span>
+                  To fund this address go to
+                  <a rv-on-click="depositAddr.goToDevNodes" href="#"
+                    class="text-secondary underline hover:brightness-110">Dev Nodes → Send Transaction</a>
+                </p>
+              </div>
+              <button rv-show="depositAddr.showCreate" rv-on-click="depositAddr.create" rv-attr-disabled="depositAddr.loading"
+                class="flex items-center gap-xs bg-secondary text-on-secondary-fixed px-md py-2 rounded-lg font-label-md font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
+                <span class="material-symbols-outlined text-[18px]">add_circle</span>
+                <span rv-hide="depositAddr.loading">Create Deposit Address</span>
+                <span rv-show="depositAddr.loading">Creating…</span>
+              </button>
+            </div>
+          </div>
+
           ${depositSearchTpl}
 
           <div rv-show="error" class="glass-card rounded-xl p-md bg-error/10 border border-error/30 mb-md">
@@ -240,6 +276,30 @@ export function createController({ api, router, id }) {
     goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
     goToCustomers(e) { e?.preventDefault(); router.navigate('#/customers'); },
     goToCustomer(e) { e?.preventDefault(); router.navigate(`#/customers/${encodeURIComponent(id)}/profile`); },
+
+    depositAddr: {
+      address: '',
+      showCreate: true,
+      loading: false,
+      error: null,
+      async create() {
+        self.depositAddr.loading = true;
+        self.depositAddr.error = null;
+        try {
+          const result = await api.createDepositAddress(id, { chain: 'bitcoin' });
+          self.depositAddr.address = result.address || result.depositAddress || '';
+          self.depositAddr.showCreate = false;
+        } catch (e) {
+          self.depositAddr.error = e.message;
+        } finally {
+          self.depositAddr.loading = false;
+        }
+      },
+      copy() {
+        if (self.depositAddr.address) navigator.clipboard.writeText(self.depositAddr.address).catch(() => {});
+      },
+      goToDevNodes(e) { e?.preventDefault(); router.navigate('#/nodes/btc-regtest'); },
+    },
 
     async disableCustomer() {
       self.header.disableLoading = true;

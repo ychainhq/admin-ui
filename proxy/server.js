@@ -112,6 +112,42 @@ app.post('/rpc', async (req, res) => {
   }
 });
 
+// ─── chain-api customer-session proxy  (/customer/* → engine /v1/*) ─────────
+// Uses X-Session-Token header (customer session Bearer) instead of tenant key.
+
+app.all('/customer/*', async (req, res) => {
+  const subPath = req.path.slice('/customer'.length);
+  let url = `${CHAIN_API_URL}/v1${subPath}`;
+  const qs = new URLSearchParams(req.query).toString();
+  if (qs) url += '?' + qs;
+
+  const sessionToken = req.headers['x-session-token'];
+  if (!sessionToken) return res.status(401).json({ error: { message: 'x-session-token header required' } });
+
+  try {
+    const opts = {
+      method:  req.method,
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionToken}`,
+      },
+    };
+    if (['POST', 'PATCH', 'PUT'].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
+      opts.body = JSON.stringify(req.body);
+    }
+    const response = await fetch(url, opts);
+    const ct = response.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      res.status(response.status).json(await response.json());
+    } else {
+      const text = await response.text();
+      res.status(response.status).json({ error: { message: text || `HTTP ${response.status}` } });
+    }
+  } catch (err) {
+    res.status(502).json({ error: { message: `Engine unreachable: ${err.message}` } });
+  }
+});
+
 // ─── chain-api tenant proxy  (/api/* → engine /v1/*) ─────────────────────────
 
 app.all('/api/*', async (req, res) => {

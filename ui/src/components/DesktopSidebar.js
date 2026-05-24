@@ -65,6 +65,11 @@ const NAV_ITEMS = [
   { label: 'Customer Assets',    icon: 'account_balance_wallet', route: '/customer-assets' },
   { label: 'Transactions',       icon: 'swap_horiz',             route: '/transactions' },
   { label: 'Support',            icon: 'contact_support',        route: '/support' },
+  { separator: true,             label: 'Operations' },
+  { label: 'Wallets',            icon: 'account_balance',        route: '/wallets' },
+  { label: 'Withdrawal Batches', icon: 'pending_actions',        route: '/withdrawal-batches' },
+  { label: 'Signing Tasks',      icon: 'task_alt',               route: '/signing-tasks' },
+  { label: 'External Signers',   icon: 'verified_user',          route: '/external-signers' },
   { separator: true,             label: 'Dev Tools' },
   { label: 'Dev Nodes',          icon: 'hub',                    route: '/nodes' },
 ];
