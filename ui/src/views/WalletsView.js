@@ -23,14 +23,47 @@ function formatSats(raw) {
   }
 }
 
+function formatDisplayBalance(value) {
+  if (value === null || value === undefined || value === '') return '0.00000000 BTC';
+  const text = String(value);
+  return text.includes(' ') ? text : `${text} BTC`;
+}
+
+function walletBalanceDisplay(balanceRes) {
+  const balances = balanceRes?.balances || {};
+  const bitcoin = balances.bitcoin;
+  const firstBalance = bitcoin || Object.values(balances)[0];
+  if (!firstBalance) return '0.00000000 BTC';
+  if (firstBalance.total_display || firstBalance.totalDisplay) {
+    return formatDisplayBalance(firstBalance.total_display || firstBalance.totalDisplay);
+  }
+  return formatSats(firstBalance.total || firstBalance.confirmed || '0');
+}
+
 const TYPE_BADGE = {
-  hot:     'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
-  deposit: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-on-surface-variant border border-white/20',
-  cold:    'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20',
+  hot:             'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
+  external_signer: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
+  deposit:         'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-on-surface-variant border border-white/20',
+  watch_only:      'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-on-surface-variant border border-white/20',
+  cold:            'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20',
 };
 
 function typeBadge(type) {
   return TYPE_BADGE[type] || TYPE_BADGE.deposit;
+}
+
+const STATUS_BADGE = {
+  active:   'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20',
+  inactive: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
+  disabled: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-error/10 text-error border border-error/20',
+};
+
+function statusBadge(status) {
+  return STATUS_BADGE[status] || STATUS_BADGE.inactive;
+}
+
+function labelize(value) {
+  return String(value || '—').replace(/_/g, ' ').toUpperCase();
 }
 
 const desktopTopBarTpl = desktopTopBarHtml({
@@ -115,8 +148,10 @@ const template = `
                 <thead>
                   <tr class="border-b border-white/5 bg-white/[0.02]">
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ID</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">NAME</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TYPE</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CHAIN</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ROLE</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">BALANCE</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ACTIONS</th>
                   </tr>
@@ -124,10 +159,14 @@ const template = `
                 <tbody class="divide-y divide-white/5">
                   <tr rv-each-wallet="wallets" class="hover:bg-white/[0.02]">
                     <td rv-text="wallet.id"    class="px-md py-3 font-mono-data text-on-surface text-[12px]"></td>
+                    <td rv-text="wallet.name"  class="px-md py-3 font-body-sm text-on-surface"></td>
                     <td class="px-md py-3">
                       <span rv-text="wallet.typeLabel" rv-attr-class="wallet.typeBadgeClass"></span>
                     </td>
-                    <td rv-text="wallet.chain" class="px-md py-3 font-body-sm text-on-surface-variant"></td>
+                    <td rv-text="wallet.roleLabel" class="px-md py-3 font-body-sm text-on-surface-variant"></td>
+                    <td class="px-md py-3">
+                      <span rv-text="wallet.statusLabel" rv-attr-class="wallet.statusBadgeClass"></span>
+                    </td>
                     <td rv-text="wallet.balance" class="px-md py-3 font-mono-data text-on-surface text-right"></td>
                     <td class="px-md py-3">
                       <button rv-on-click="wallet.sweep" rv-attr-disabled="wallet.sweeping"
@@ -147,11 +186,13 @@ const template = `
               <div rv-each-wallet="wallets" class="px-md py-3">
                 <div class="flex items-start justify-between mb-xs">
                   <div>
-                    <p rv-text="wallet.id" class="font-mono-data text-on-surface text-[12px]"></p>
+                    <p rv-text="wallet.name" class="font-body-sm text-on-surface font-semibold"></p>
+                    <p rv-text="wallet.id" class="font-mono-data text-on-surface-variant text-[12px] mt-0.5"></p>
                     <div class="flex items-center gap-sm mt-xs">
                       <span rv-text="wallet.typeLabel" rv-attr-class="wallet.typeBadgeClass"></span>
-                      <span rv-text="wallet.chain" class="font-body-sm text-on-surface-variant"></span>
+                      <span rv-text="wallet.statusLabel" rv-attr-class="wallet.statusBadgeClass"></span>
                     </div>
+                    <p rv-text="wallet.roleLabel" class="font-body-sm text-on-surface-variant mt-xs"></p>
                   </div>
                   <span rv-text="wallet.balance" class="font-mono-data text-on-surface text-[13px]"></span>
                 </div>
@@ -209,15 +250,26 @@ export function createController({ api, router }) {
       try {
         const res = await api.getWallets();
         const items = res.data || res || [];
-        self.wallets = (Array.isArray(items) ? items : []).map(w => {
+        const rows = Array.isArray(items) ? items : [];
+        self.wallets = await Promise.all(rows.map(async w => {
           const type = w.wallet_type || w.walletType || w.type || 'deposit';
-          const balRaw = w.balance_sats || w.balanceSats || w.balance || '0';
+          const status = w.status || '';
+          const role = w.wallet_role || w.walletRole || '—';
+          let balance = '—';
+          try {
+            balance = walletBalanceDisplay(await api.getWalletBalances(w.id));
+          } catch {
+            balance = '—';
+          }
           return {
             id:            w.id || '—',
+            name:          w.name || '—',
             typeLabel:     type.toUpperCase(),
             typeBadgeClass: typeBadge(type),
-            chain:         w.chain || '—',
-            balance:       formatSats(balRaw),
+            roleLabel:     labelize(role),
+            statusLabel:   labelize(status),
+            statusBadgeClass: statusBadge(status),
+            balance,
             sweeping:      false,
             sweep() {
               const wallet = this;
@@ -233,7 +285,7 @@ export function createController({ api, router }) {
                 .finally(() => { wallet.sweeping = false; });
             },
           };
-        });
+        }));
         self.walletsEmpty = self.wallets.length === 0;
       } catch (e) {
         self.error = e.message;

@@ -26,13 +26,13 @@ describe('createCustomerDetailHeaderController — initial state', () => {
     expect(makeCtrl().customerId).toBe('cust_abc');
   });
 
-  test('produces 5 tabs', () => {
-    expect(makeCtrl().tabs).toHaveLength(5);
+  test('produces 6 tabs', () => {
+    expect(makeCtrl().tabs).toHaveLength(6);
   });
 
   test('tabs have correct keys', () => {
     const keys = makeCtrl().tabs.map(t => t.key);
-    expect(keys).toEqual(['profile', 'compliance', 'governance', 'balances', 'deposits']);
+    expect(keys).toEqual(['profile', 'compliance', 'governance', 'balances', 'deposits', 'withdrawals']);
   });
 
   test('active tab receives active CSS class', () => {

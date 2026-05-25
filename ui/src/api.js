@@ -252,6 +252,11 @@ export const api = {
   getWallets: () =>
     tenantRequest('/api/wallets'),
 
+  getWalletBalances: async (walletId) => {
+    const res = await tenantRequest(`/api/wallets/${encodeURIComponent(walletId)}/balances`);
+    return res.data ?? res;
+  },
+
   createSweep: async (data) => {
     const res = await tenantRequest('/api/sweeps', {
       method: 'POST',
