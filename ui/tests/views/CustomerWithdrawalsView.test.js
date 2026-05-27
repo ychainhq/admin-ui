@@ -76,7 +76,7 @@ describe('CustomerWithdrawalsView — load', () => {
     const { ctrl } = makeCtrl({ createCustomerSession: createSession, getCustomerWithdrawals: getWithdrawals });
     await ctrl.loadWithdrawals();
     expect(createSession).toHaveBeenCalledWith(CUSTOMER_ID);
-    expect(getWithdrawals).toHaveBeenCalledWith('tok_session');
+    expect(getWithdrawals).toHaveBeenCalledWith('tok_session', expect.objectContaining({ limit: 20 }));
   });
 
   test('loadWithdrawals() uses customer session token, not customerId', async () => {

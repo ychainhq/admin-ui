@@ -3,6 +3,8 @@ import { template as topBarTpl, createTopBarController } from '../components/Top
 import { template as bottomNavTpl, createBottomNavController } from '../components/BottomNav.js';
 import { template as sidebarTpl, createSidebarController } from '../components/DesktopSidebar.js';
 import { template as mobileDrawerTpl, createMobileDrawerController } from '../components/MobileDrawer.js';
+import { template as paginationTpl, createPaginationController } from '../components/Pagination.js';
+import { template as withdrawalBatchSearchTpl, createWithdrawalBatchSearchFormController } from '../components/WithdrawalBatchSearchForm.js';
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { getActiveTenantKey } from '../api.js';
@@ -111,6 +113,8 @@ const template = `
             <div class="w-8 h-8 rounded-full border-2 border-secondary border-t-transparent animate-spin"></div>
           </div>
 
+          ${withdrawalBatchSearchTpl}
+
           <div rv-hide="loading" class="glass-card rounded-xl overflow-hidden">
             <div class="px-md py-sm bg-white/[0.03] border-b border-white/5 flex items-center justify-between">
               <div class="flex items-center gap-sm">
@@ -199,6 +203,11 @@ const template = `
               </div>
             </div>
 
+            <!-- Pagination -->
+            <div rv-show="pagination.visible" class="px-md py-sm border-t border-white/5">
+              ${paginationTpl}
+            </div>
+
           </div>
         </div>
       </div>
@@ -231,6 +240,11 @@ export function createController({ api, router }) {
     error: null,
     batches: [],
     batchesEmpty: true,
+    _activeFilters: {},
+    _cursor: undefined,
+    _prevCursors: [],
+    _nextCursor: undefined,
+    pagination: { visible: false },
 
     goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
 
@@ -238,10 +252,32 @@ export function createController({ api, router }) {
       self.loading = true;
       self.error = null;
       try {
-        const res = await api.getWithdrawalBatches();
+        const res = await api.getWithdrawalBatches({
+          limit: 20,
+          cursor: self._cursor,
+          ...self._activeFilters,
+        });
         const items = res.data || res || [];
+        self._nextCursor = res.pagination?.nextCursor || undefined;
         self.batches = (Array.isArray(items) ? items : []).map(normalizeBatch);
         self.batchesEmpty = self.batches.length === 0;
+        const currentPage = self._prevCursors.length + 1;
+        self.pagination = createPaginationController({
+          page: currentPage,
+          total: self._nextCursor
+            ? currentPage * 20 + 1
+            : (currentPage - 1) * 20 + self.batches.length,
+          onPageChange(p) {
+            if (p > currentPage && self._nextCursor) {
+              self._prevCursors.push(self._cursor);
+              self._cursor = self._nextCursor;
+              self.load();
+            } else if (p < currentPage && self._prevCursors.length > 0) {
+              self._cursor = self._prevCursors.pop();
+              self.load();
+            }
+          },
+        });
       } catch (e) {
         self.error = e.message;
       } finally {
@@ -253,6 +289,23 @@ export function createController({ api, router }) {
       if (!self.noActiveTenant) self.load();
     },
   };
+
+  self.withdrawalBatchSearchForm = createWithdrawalBatchSearchFormController({
+    onSearch(filters) {
+      self._activeFilters = filters;
+      self._cursor = undefined;
+      self._prevCursors = [];
+      self.load();
+    },
+    onClear() {
+      self._activeFilters = {};
+      self._cursor = undefined;
+      self._prevCursors = [];
+      self.error = null;
+      self.load();
+    },
+  });
+
   return self;
 }
 

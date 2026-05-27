@@ -169,6 +169,22 @@ const template = `
               <span class="material-symbols-outlined text-error text-[16px]">error</span>
               <span rv-text="depositGenError" class="font-body-sm text-error"></span>
             </div>
+            <!-- Address filter bar -->
+            <div rv-show="addressesLoaded" class="px-md py-sm border-b border-white/5 flex flex-wrap gap-sm items-center">
+              <span class="text-[11px] text-on-surface-variant uppercase tracking-wider font-semibold">Filter:</span>
+              <select rv-on-change="onAddrFilterChange" name="status"
+                class="bg-[#151b2d] border border-white/10 rounded-lg px-sm py-1 text-on-surface text-[12px] font-mono-data focus:ring-1 focus:ring-secondary outline-none appearance-none">
+                <option value="">All statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="disabled">Disabled</option>
+              </select>
+              <select rv-on-change="onAddrFilterChange" name="chain"
+                class="bg-[#151b2d] border border-white/10 rounded-lg px-sm py-1 text-on-surface text-[12px] font-mono-data focus:ring-1 focus:ring-secondary outline-none appearance-none">
+                <option value="">All chains</option>
+                <option value="bitcoin">Bitcoin</option>
+              </select>
+            </div>
             <div rv-show="depositAddressesEmpty" class="p-lg text-center">
               <span class="material-symbols-outlined text-[40px] text-on-surface-variant">account_balance_wallet</span>
               <p class="font-body-sm text-on-surface-variant mt-sm">No deposit addresses yet — click Generate to create one</p>
@@ -343,6 +359,12 @@ export function createController({ api, router, id }) {
     depositsEmpty: true,
     depositAddresses: [],
     depositAddressesEmpty: true,
+    _allDepositAddresses: [],
+    addrFilter: {
+      status: '',
+      chain: '',
+    },
+    addressesLoaded: false,
     depositGenerating: false,
     depositGenError: null,
     depositGenResult: null,
@@ -371,7 +393,7 @@ export function createController({ api, router, id }) {
           self.depositAddr.showCreate = false;
           if (addr) {
             const isActive = !result.status || result.status === 'active';
-            self.depositAddresses = [{
+            self._allDepositAddresses = [{
               addressShort: addr,
               chain:        result.chain_id || result.chain || 'bitcoin',
               statusLabel:  result.status || 'active',
@@ -379,8 +401,8 @@ export function createController({ api, router, id }) {
                 ? 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20'
                 : 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
               copy() { navigator.clipboard?.writeText(addr)?.catch(() => {}); },
-            }, ...self.depositAddresses];
-            self.depositAddressesEmpty = false;
+            }, ...self._allDepositAddresses];
+            self._applyAddrFilter();
           }
         } catch (e) {
           self.depositAddr.error = e.message;
@@ -394,6 +416,23 @@ export function createController({ api, router, id }) {
       goToDevNodes(e) { e?.preventDefault(); router.navigate('#/nodes/btc-regtest'); },
     },
 
+    _applyAddrFilter() {
+      const { status, chain } = self.addrFilter;
+      const filtered = self._allDepositAddresses.filter(a => {
+        if (status && a.statusLabel.toLowerCase() !== status) return false;
+        if (chain && a.chain.toLowerCase() !== chain.toLowerCase()) return false;
+        return true;
+      });
+      self.depositAddresses = filtered;
+      self.depositAddressesEmpty = filtered.length === 0;
+    },
+
+    onAddrFilterChange(e) {
+      const { name, value } = e.target;
+      self.addrFilter[name] = value;
+      self._applyAddrFilter();
+    },
+
     async generateDepositAddress() {
       self.depositGenerating = true;
       self.depositGenError = null;
@@ -402,7 +441,7 @@ export function createController({ api, router, id }) {
         const result = await api.createDepositAddress(id, { chain: 'bitcoin' });
         const addr = result.address || '';
         const isActive = !result.status || result.status === 'active';
-        self.depositAddresses = [{
+        self._allDepositAddresses = [{
           addressShort: addr,
           chain:        result.chain || 'bitcoin',
           statusLabel:  result.status || 'active',
@@ -410,8 +449,8 @@ export function createController({ api, router, id }) {
             ? 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20'
             : 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
           copy() { navigator.clipboard?.writeText(addr)?.catch(() => {}); },
-        }, ...self.depositAddresses];
-        self.depositAddressesEmpty = false;
+        }, ...self._allDepositAddresses];
+        self._applyAddrFilter();
         self.depositGenResult = addr;
       } catch (e) {
         self.depositGenError = e.message;
@@ -491,7 +530,9 @@ export function createController({ api, router, id }) {
             copy() { navigator.clipboard?.writeText(a.address)?.catch(() => {}); },
           };
         });
-        self.depositAddressesEmpty = self.depositAddresses.length === 0;
+        self._allDepositAddresses = self.depositAddresses.slice();
+        self._applyAddrFilter();
+        self.addressesLoaded = true;
       } catch (e) {
         self.error = e.message;
       } finally {

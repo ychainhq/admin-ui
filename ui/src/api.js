@@ -249,9 +249,11 @@ export const api = {
     return res.data ?? res;
   },
 
-  getWithdrawalBatches: ({ limit = 20, cursor } = {}) => {
+  getWithdrawalBatches: ({ limit = 20, cursor, status, chainId } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
+    if (status) params.set('status', status);
+    if (chainId) params.set('chainId', chainId);
     return tenantRequest(`/api/withdrawal-batches?${params}`);
   },
 
@@ -282,19 +284,23 @@ export const api = {
     return res.data ?? res;
   },
 
-  getSigningTasks: ({ limit = 20, cursor } = {}) => {
+  getSigningTasks: ({ limit = 20, cursor, status, chainId, requestType } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
+    if (status) params.set('status', status);
+    if (chainId) params.set('chainId', chainId);
+    if (requestType) params.set('requestType', requestType);
     return tenantRequest(`/api/signing-tasks?${params}`);
   },
 
   getExternalSigners: () =>
     tenantRequest('/api/external-signers'),
 
-  getCustomerWithdrawals: (sessionToken, { limit = 20, cursor, status } = {}) => {
+  getCustomerWithdrawals: (sessionToken, { limit = 20, cursor, status, toAddress } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
     if (status) params.set('status', status);
+    if (toAddress) params.set('toAddress', toAddress);
     return request(`/customer/me/withdrawals?${params}`, {
       headers: { 'X-Session-Token': sessionToken },
     });

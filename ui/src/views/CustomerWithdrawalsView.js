@@ -3,6 +3,8 @@ import { template as topBarTpl, createTopBarController } from '../components/Top
 import { template as bottomNavTpl, createBottomNavController } from '../components/BottomNav.js';
 import { template as sidebarTpl, createSidebarController } from '../components/DesktopSidebar.js';
 import { template as mobileDrawerTpl, createMobileDrawerController } from '../components/MobileDrawer.js';
+import { template as paginationTpl, createPaginationController } from '../components/Pagination.js';
+import { template as withdrawalHistorySearchTpl, createWithdrawalHistorySearchFormController } from '../components/WithdrawalHistorySearchForm.js';
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { template as headerTpl, createCustomerDetailHeaderController } from '../components/CustomerDetailHeader.js';
@@ -189,6 +191,8 @@ const template = `
             <div class="w-8 h-8 rounded-full border-2 border-secondary border-t-transparent animate-spin"></div>
           </div>
 
+          ${withdrawalHistorySearchTpl}
+
           <!-- Withdrawals list -->
           <div rv-hide="loading" class="glass-card rounded-xl overflow-hidden mb-md">
             <div class="px-md py-sm bg-white/[0.03] border-b border-white/5 flex items-center justify-between">
@@ -254,6 +258,11 @@ const template = `
                 <p rv-text="wd.createdAt" class="font-mono-data text-on-surface-variant text-[11px] mt-xs"></p>
               </div>
             </div>
+
+            <!-- Pagination -->
+            <div rv-hide="withdrawalsEmpty" class="border-t border-white/5">
+              ${paginationTpl}
+            </div>
           </div>
 
           <!-- Info: see batches -->
@@ -318,6 +327,11 @@ export function createController({ api, router, id }) {
     // Withdrawals list
     withdrawals:     [],
     withdrawalsEmpty: true,
+    pagination: createPaginationController({ page: 1, total: 0, perPage: 20, onPageChange: () => {} }),
+    _activeFilters: {},
+    _withdrawalCursor: undefined,
+    _withdrawalPrevCursors: [],
+    _withdrawalNextCursor: undefined,
 
     header: createCustomerDetailHeaderController({
       customerId: id,
@@ -438,10 +452,33 @@ export function createController({ api, router, id }) {
         const session = await api.createCustomerSession(id);
         const token = session.accessToken || session.token || session.sessionToken;
         if (!token) throw new Error('No customer session token');
-        const res = await api.getCustomerWithdrawals(token);
+        const res = await api.getCustomerWithdrawals(token, {
+          limit: 20,
+          cursor: self._withdrawalCursor,
+          ...self._activeFilters,
+        });
         const items = res.data || [];
+        self._withdrawalNextCursor = res.pagination?.nextCursor || undefined;
         self.withdrawals = (Array.isArray(items) ? items : []).map(normalizeWithdrawal);
         self.withdrawalsEmpty = self.withdrawals.length === 0;
+        const currentPage = self._withdrawalPrevCursors.length + 1;
+        self.pagination = createPaginationController({
+          page: currentPage,
+          perPage: 20,
+          total: self._withdrawalNextCursor
+            ? currentPage * 20 + 1
+            : (currentPage - 1) * 20 + self.withdrawals.length,
+          onPageChange(p) {
+            if (p > currentPage && self._withdrawalNextCursor) {
+              self._withdrawalPrevCursors.push(self._withdrawalCursor);
+              self._withdrawalCursor = self._withdrawalNextCursor;
+              self.loadWithdrawals();
+            } else if (p < currentPage && self._withdrawalPrevCursors.length > 0) {
+              self._withdrawalCursor = self._withdrawalPrevCursors.pop();
+              self.loadWithdrawals();
+            }
+          },
+        });
       } catch (e) {
         // non-fatal — list stays empty
       }
@@ -489,6 +526,22 @@ export function createController({ api, router, id }) {
       if (!self.noActiveTenant) self.load();
     },
   };
+
+  self.withdrawalHistorySearchForm = createWithdrawalHistorySearchFormController({
+    onSearch(filters) {
+      self._activeFilters = filters;
+      self._withdrawalCursor = undefined;
+      self._withdrawalPrevCursors = [];
+      self.loadWithdrawals();
+    },
+    onClear() {
+      self._activeFilters = {};
+      self._withdrawalCursor = undefined;
+      self._withdrawalPrevCursors = [];
+      self.loadWithdrawals();
+    },
+  });
+
   return self;
 }
 

@@ -6,6 +6,8 @@ import { template as mobileDrawerTpl, createMobileDrawerController } from '../co
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { getActiveTenantKey } from '../api.js';
+import { template as paginationTpl, createPaginationController } from '../components/Pagination.js';
+import { template as signingTaskSearchTpl, createSigningTaskSearchFormController } from '../components/SigningTaskSearchForm.js';
 
 const ROUTE = '/signing-tasks';
 
@@ -72,6 +74,8 @@ const template = `
         </div>
 
         <div rv-hide="noActiveTenant">
+
+          ${signingTaskSearchTpl}
 
           <div rv-show="error" class="glass-card rounded-xl p-md bg-error/10 border border-error/30 mb-md">
             <div class="flex items-center gap-sm">
@@ -147,6 +151,11 @@ const template = `
               </div>
             </div>
 
+            <!-- Pagination -->
+            <div rv-show="pagination.visible" class="px-md py-sm border-t border-white/5">
+              ${paginationTpl}
+            </div>
+
           </div>
         </div>
       </div>
@@ -179,6 +188,11 @@ export function createController({ api, router }) {
     error: null,
     tasks: [],
     tasksEmpty: true,
+    _activeFilters: {},
+    _cursor: undefined,
+    _prevCursors: [],
+    _nextCursor: undefined,
+    pagination: { visible: false },
 
     goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
 
@@ -186,10 +200,32 @@ export function createController({ api, router }) {
       self.loading = true;
       self.error = null;
       try {
-        const res = await api.getSigningTasks();
+        const res = await api.getSigningTasks({
+          limit: 20,
+          cursor: self._cursor,
+          ...self._activeFilters,
+        });
         const items = res.data || res || [];
+        self._nextCursor = res.pagination?.nextCursor || undefined;
         self.tasks = (Array.isArray(items) ? items : []).map(normalizeTask);
         self.tasksEmpty = self.tasks.length === 0;
+        const currentPage = self._prevCursors.length + 1;
+        self.pagination = createPaginationController({
+          page: currentPage,
+          total: self._nextCursor
+            ? currentPage * 20 + 1
+            : (currentPage - 1) * 20 + self.tasks.length,
+          onPageChange(p) {
+            if (p > currentPage && self._nextCursor) {
+              self._prevCursors.push(self._cursor);
+              self._cursor = self._nextCursor;
+              self.load();
+            } else if (p < currentPage && self._prevCursors.length > 0) {
+              self._cursor = self._prevCursors.pop();
+              self.load();
+            }
+          },
+        });
       } catch (e) {
         self.error = e.message;
       } finally {
@@ -201,6 +237,23 @@ export function createController({ api, router }) {
       if (!self.noActiveTenant) self.load();
     },
   };
+
+  self.signingTaskSearchForm = createSigningTaskSearchFormController({
+    onSearch(filters) {
+      self._activeFilters = filters;
+      self._cursor = undefined;
+      self._prevCursors = [];
+      self.load();
+    },
+    onClear() {
+      self._activeFilters = {};
+      self._cursor = undefined;
+      self._prevCursors = [];
+      self.error = null;
+      self.load();
+    },
+  });
+
   return self;
 }
 
