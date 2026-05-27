@@ -204,7 +204,7 @@ const template = `
             </div>
 
             <!-- Pagination -->
-            <div rv-show="pagination.visible" class="px-md py-sm border-t border-white/5">
+            <div rv-show="pagination.hasPages" class="px-md py-sm border-t border-white/5">
               ${paginationTpl}
             </div>
 

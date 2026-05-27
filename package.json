@@ -1,0 +1,11 @@
+{
+  "name": "ychain-mng-ui",
+  "version": "1.0.0",
+  "description": "Local test environment for [chain-api v2](../engine/) (multi-tenant Bitcoin custody API).",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}

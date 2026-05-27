@@ -58,6 +58,77 @@ Dlaczego: Tenant API nie wymusza RBAC na poziomie klienta — aktor z X-Actor-To
 - Bieżący poziom (ostatni okruszek) — zwykły `<span>`, bez linku.
 - **Wszystkie** handlery klikalne w `rv-on-click` muszą przyjmować `(e)` i wołać `e?.preventDefault()` — inaczej `href="#"` nadpisuje hash na root aplikacji.
 
+### Tabele — reguła obowiązkowa: filtrowania + stronicowanie
+
+**Każdy widok prezentujący dane jako tabelę MUSI mieć panel filtrowania i stronicowanie.**
+
+Nie ma wyjątków — nawet jeśli danych jest mało teraz, konwencja obowiązuje od razu.
+
+#### Panel filtrowania
+
+Używaj zawsze `FilterPanel.js` (`createFilterPanelTemplate` + `createFilterPanelController`).
+Utwórz dedykowany komponent w `src/components/XxxSearchForm.js` (tak jak `CustomerSearchForm.js`, `DepositSearchForm.js` itp.).
+
+Pola w filtrowni odpowiadają **dokładnie kolumnom wyświetlanym w tabeli**. Reguły dla typów pól:
+
+| Typ wartości w kolumnie | Pole filtrowni | Implementacja |
+|---|---|---|
+| Tekst / ID / hash | Input text z wildcard | `type: 'text'`, `placeholder: 'abc* lub *xyz'`; backend obsługuje `LIKE` |
+| Słownik / enum (status, typ, rola) | Select z opcją "All" | `type: 'select'`, `options: [{ value: '', label: 'All ...' }, ...]` |
+| Liczba | Trzy pola: równe / mniejsze / większe | `name: 'amountEq'` / `'amountLt'` / `'amountGt'`, `inputType: 'number'`, normalize: `positiveInt` |
+| Data | Dwa pola: data od / data do | `name: 'createdFrom'` / `'createdTo'`, `inputType: 'date'`; jedno dla każdej kolumny z datą |
+
+**Przykład — tabela ma kolumny: ID, Status, Amount, Created At:**
+```
+fields: [
+  { name: 'id',          label: 'ID',         placeholder: 'abc*' },
+  { name: 'status',      label: 'Status',     type: 'select', options: STATUS_OPTIONS },
+  { name: 'amountEq',    label: 'Amount =',   inputType: 'number', normalize: positiveInt },
+  { name: 'amountLt',    label: 'Amount <',   inputType: 'number', normalize: positiveInt },
+  { name: 'amountGt',    label: 'Amount >',   inputType: 'number', normalize: positiveInt },
+  { name: 'createdFrom', label: 'Created from', inputType: 'date' },
+  { name: 'createdTo',   label: 'Created to',   inputType: 'date' },
+]
+```
+
+Pola numeryczne i daty grupuj w osobnej sekcji (`key: 'advanced'`, `expanded: false`) żeby panel był czytelny.
+
+#### Stronicowanie
+
+Używaj zawsze `Pagination.js` (`createPaginationController`). Wzorzec cursor-based:
+
+```javascript
+// Stan w kontrolerze widoku:
+_cursor: undefined,
+_prevCursors: [],
+_nextCursor: undefined,
+pagination: createPaginationController({ page: 1, total: 0, onPageChange: () => {} }),
+
+// W load():
+self._nextCursor = res.pagination?.nextCursor || undefined;
+const currentPage = self._prevCursors.length + 1;
+self.pagination = createPaginationController({
+  page: currentPage,
+  total: self._nextCursor
+    ? currentPage * LIMIT + 1
+    : (currentPage - 1) * LIMIT + items.length,
+  onPageChange(p) {
+    if (p > currentPage && self._nextCursor) {
+      self._prevCursors.push(self._cursor);
+      self._cursor = self._nextCursor;
+      self.load();
+    } else if (p < currentPage && self._prevCursors.length > 0) {
+      self._cursor = self._prevCursors.pop();
+      self.load();
+    }
+  },
+});
+```
+
+Przy search/clear zawsze resetuj kursor: `self._cursor = undefined; self._prevCursors = [];`.
+
+W template: `<div rv-show="pagination.hasPages" ...>${paginationTpl}</div>` (nie `pagination.visible`).
+
 ### API (`src/api.js`)
 - Proxy endpointy: `/admin-api/*` → `/admin/v1/*` (admin key), `/api/*` → `/v1/*` (tenant key)
 - Szczegóły endpointów: patrz `../docs/chain_api_mcp_mini_hld_and_agent_prompt.md` rozdział 7 (API Reference)
