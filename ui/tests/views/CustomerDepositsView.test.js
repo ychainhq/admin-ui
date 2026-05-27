@@ -193,4 +193,70 @@ describe('CustomerDepositsView — createController', () => {
     await ctrl.disableCustomer();
     expect(ctrl.header.canDisable).toBe(false);
   });
+
+  test('depositAddr.create() adds address to depositAddresses list immediately', async () => {
+    const createDepositAddress = jest.fn().mockResolvedValue({ address: 'bc1qimmediate', chain: 'bitcoin' });
+    const { ctrl } = setup({ createDepositAddress });
+    await ctrl.load();
+    await ctrl.depositAddr.create();
+    expect(ctrl.depositAddresses[0].addressShort).toBe('bc1qimmediate');
+    expect(ctrl.depositAddressesEmpty).toBe(false);
+    expect(ctrl.depositAddr.address).toBe('bc1qimmediate');
+    expect(ctrl.depositAddr.showCreate).toBe(false);
+  });
+
+  test('depositAddressesEmpty=true initially', () => {
+    const { ctrl } = setup();
+    expect(ctrl.depositAddressesEmpty).toBe(true);
+    expect(ctrl.depositAddresses).toHaveLength(0);
+  });
+
+  test('deposit addresses loaded and mapped on load()', async () => {
+    const addrsData = { data: [
+      { address: 'bc1qabcd', chain_id: 'bitcoin', status: 'active' },
+      { address: 'bc1qefgh', chain_id: 'bitcoin', status: 'archived' },
+    ] };
+    const { ctrl } = setup({ getCustomerAddresses: jest.fn().mockResolvedValue(addrsData) });
+    await ctrl.load();
+    expect(ctrl.depositAddresses).toHaveLength(2);
+    expect(ctrl.depositAddresses[0].addressShort).toBe('bc1qabcd');
+    expect(ctrl.depositAddresses[0].chain).toBe('bitcoin');
+    expect(ctrl.depositAddresses[0].statusLabel).toBe('active');
+    expect(ctrl.depositAddressesEmpty).toBe(false);
+  });
+
+  test('depositAddressesEmpty=true when API returns empty list', async () => {
+    const { ctrl } = setup();
+    await ctrl.load();
+    expect(ctrl.depositAddressesEmpty).toBe(true);
+  });
+
+  test('generateDepositAddress() calls createDepositAddress and prepends result', async () => {
+    const createDepositAddress = jest.fn().mockResolvedValue({ address: 'bc1qnew', chain: 'bitcoin' });
+    const { ctrl } = setup({ createDepositAddress });
+    await ctrl.load();
+    await ctrl.generateDepositAddress();
+    expect(createDepositAddress).toHaveBeenCalledWith('cust_x', { chain: 'bitcoin' });
+    expect(ctrl.depositAddresses[0].addressShort).toBe('bc1qnew');
+    expect(ctrl.depositAddressesEmpty).toBe(false);
+    expect(ctrl.depositGenResult).toBe('bc1qnew');
+  });
+
+  test('generateDepositAddress() sets depositGenError on failure', async () => {
+    const createDepositAddress = jest.fn().mockRejectedValue(new Error('address gen failed'));
+    const { ctrl } = setup({ createDepositAddress });
+    await ctrl.generateDepositAddress();
+    expect(ctrl.depositGenError).toBe('address gen failed');
+    expect(ctrl.depositGenerating).toBe(false);
+  });
+
+  test('generateDepositAddress() clears previous error/result before attempting', async () => {
+    const createDepositAddress = jest.fn().mockResolvedValue({ address: 'bc1qnew2', chain: 'bitcoin' });
+    const { ctrl } = setup({ createDepositAddress });
+    ctrl.depositGenError = 'old error';
+    ctrl.depositGenResult = 'old result';
+    await ctrl.generateDepositAddress();
+    expect(ctrl.depositGenError).toBeNull();
+    expect(ctrl.depositGenResult).toBe('bc1qnew2');
+  });
 });

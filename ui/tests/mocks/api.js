@@ -26,6 +26,8 @@ export function makeMockApi(overrides = {}) {
     getCustomerDataGovernance: jest.fn().mockResolvedValue(null),
     getCustomerBalances: jest.fn().mockResolvedValue({ customerId: 'cust_test', balances: [] }),
     getCustomerDeposits: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
+    getCustomerAddresses: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
+    createDepositAddress: jest.fn().mockResolvedValue({ address: 'bc1qtest123', chain: 'bitcoin' }),
     getWallets: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
     getWallet: jest.fn().mockResolvedValue({ id: 'wal_test', name: 'Test Hot', wallet_role: 'tenant_hot', type: 'watch_only', status: 'active' }),
     getWalletAddresses: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),

@@ -183,6 +183,12 @@ export const api = {
     return res.data ?? res;
   },
 
+  getCustomerAddresses: (id, { limit = 50, cursor } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return tenantRequest(`/api/customers/${encodeURIComponent(id)}/addresses?${params}`);
+  },
+
   getCustomerBalances: async (id) => {
     const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/balances`);
     return res.data ?? res;

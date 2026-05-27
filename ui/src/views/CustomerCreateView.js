@@ -22,6 +22,38 @@ const ADDRESS_TYPES = ['registered','correspondence','residential','operational'
 
 const ENTITY_SUBTYPES = ['company','foundation','association','ngo','public_body','trust','other'];
 
+const COUNTRY_OPTIONS = [
+  ['AD','Andorra'],['AE','UAE'],['AF','Afghanistan'],['AL','Albania'],['AM','Armenia'],
+  ['AO','Angola'],['AR','Argentina'],['AT','Austria'],['AU','Australia'],['AZ','Azerbaijan'],
+  ['BA','Bosnia and Herzegovina'],['BD','Bangladesh'],['BE','Belgium'],['BG','Bulgaria'],['BH','Bahrain'],
+  ['BR','Brazil'],['BY','Belarus'],
+  ['CA','Canada'],['CH','Switzerland'],['CI',"Côte d'Ivoire"],['CL','Chile'],['CM','Cameroon'],
+  ['CN','China'],['CO','Colombia'],['CY','Cyprus'],['CZ','Czech Republic'],
+  ['DE','Germany'],['DK','Denmark'],['DZ','Algeria'],
+  ['EE','Estonia'],['EG','Egypt'],['ES','Spain'],['ET','Ethiopia'],
+  ['FI','Finland'],['FR','France'],
+  ['GB','United Kingdom'],['GE','Georgia'],['GH','Ghana'],['GR','Greece'],
+  ['HK','Hong Kong'],['HR','Croatia'],['HU','Hungary'],
+  ['ID','Indonesia'],['IE','Ireland'],['IL','Israel'],['IN','India'],['IQ','Iraq'],['IS','Iceland'],['IT','Italy'],
+  ['JO','Jordan'],['JP','Japan'],
+  ['KE','Kenya'],['KG','Kyrgyzstan'],['KR','South Korea'],['KW','Kuwait'],['KZ','Kazakhstan'],
+  ['LB','Lebanon'],['LI','Liechtenstein'],['LK','Sri Lanka'],['LT','Lithuania'],['LU','Luxembourg'],['LV','Latvia'],
+  ['MA','Morocco'],['MC','Monaco'],['MD','Moldova'],['ME','Montenegro'],['MK','North Macedonia'],
+  ['MT','Malta'],['MX','Mexico'],['MY','Malaysia'],
+  ['NG','Nigeria'],['NL','Netherlands'],['NO','Norway'],['NZ','New Zealand'],
+  ['OM','Oman'],
+  ['PH','Philippines'],['PK','Pakistan'],['PL','Poland'],['PT','Portugal'],
+  ['QA','Qatar'],
+  ['RO','Romania'],['RS','Serbia'],['RU','Russia'],
+  ['SA','Saudi Arabia'],['SE','Sweden'],['SG','Singapore'],['SI','Slovenia'],['SK','Slovakia'],
+  ['TH','Thailand'],['TN','Tunisia'],['TR','Turkey'],['TZ','Tanzania'],
+  ['UA','Ukraine'],['UG','Uganda'],['US','United States'],['UZ','Uzbekistan'],
+  ['VN','Vietnam'],
+  ['XK','Kosovo'],
+  ['ZA','South Africa'],['ZM','Zambia'],['ZW','Zimbabwe'],
+];
+const countryOptionTags = COUNTRY_OPTIONS.map(([c, n]) => `<option value="${c}">${c} — ${n}</option>`).join('');
+
 const template = `
 <div class="min-h-screen">
 
@@ -151,7 +183,7 @@ const template = `
             <button rv-on-click="toggleProfile"
               class="w-full flex items-center justify-between px-md py-sm hover:bg-white/5 transition-all">
               <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant">
-                Profile <span class="normal-case opacity-60">(optional)</span>
+                Profile
               </span>
               <span class="material-symbols-outlined text-on-surface-variant text-lg" rv-text="profileChevron"></span>
             </button>
@@ -188,9 +220,11 @@ const template = `
                   </div>
                   <div>
                     <label class="block font-label-md text-[10px] uppercase text-on-surface-variant mb-xs">Nationality</label>
-                    <input rv-on-input="onProfileInput" data-field="nationality"
-                      class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none text-sm uppercase"
-                      type="text" placeholder="PL" maxlength="2" />
+                    <select rv-on-change="onProfileInput" data-field="nationality"
+                      class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary transition-all outline-none text-sm">
+                      <option value="">— select —</option>
+                      ${countryOptionTags}
+                    </select>
                   </div>
                 </div>
                 <p rv-show="profileError" rv-text="profileError" class="font-body-sm text-error mt-xs"></p>
@@ -221,9 +255,11 @@ const template = `
                   </div>
                   <div>
                     <label class="block font-label-md text-[10px] uppercase text-on-surface-variant mb-xs">Country of incorporation *</label>
-                    <input rv-on-input="onProfileInput" data-field="country_of_incorporation"
-                      class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none text-sm uppercase"
-                      type="text" placeholder="PL" maxlength="2" />
+                    <select rv-on-change="onProfileInput" data-field="country_of_incorporation"
+                      class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary transition-all outline-none text-sm">
+                      <option value="">— select —</option>
+                      ${countryOptionTags}
+                    </select>
                   </div>
                 </div>
                 <p rv-show="profileError" rv-text="profileError" class="font-body-sm text-error mt-xs"></p>
@@ -344,7 +380,7 @@ const template = `
                   class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none text-sm"
                   type="text" placeholder="ul. Testowa 1" />
               </div>
-              <div class="grid grid-cols-2 gap-sm">
+              <div class="grid grid-cols-3 gap-sm">
                 <div>
                   <label class="block font-label-md text-[10px] uppercase text-on-surface-variant mb-xs">City</label>
                   <input rv-on-input="onAddressInput" data-field="city"
@@ -352,10 +388,18 @@ const template = `
                     type="text" placeholder="Warszawa" />
                 </div>
                 <div>
+                  <label class="block font-label-md text-[10px] uppercase text-on-surface-variant mb-xs">Postal code</label>
+                  <input rv-on-input="onAddressInput" data-field="postal_code"
+                    class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none text-sm"
+                    type="text" placeholder="00-000" />
+                </div>
+                <div>
                   <label class="block font-label-md text-[10px] uppercase text-on-surface-variant mb-xs">Country</label>
-                  <input rv-on-input="onAddressInput" data-field="country"
-                    class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none text-sm uppercase"
-                    type="text" placeholder="PL" maxlength="2" />
+                  <select rv-on-change="onAddressInput" data-field="country"
+                    class="w-full bg-surface-container-low border border-white/10 rounded-lg px-3 py-2 text-on-surface font-body-md focus:ring-1 focus:ring-secondary transition-all outline-none text-sm">
+                    <option value="">— select —</option>
+                    ${countryOptionTags}
+                  </select>
                 </div>
               </div>
             </div>
@@ -439,6 +483,7 @@ export function createController({ api, router }) {
       address_type: 'registered',
       address_line1: '',
       address_city: '',
+      address_postal_code: '',
       address_country: '',
     },
 
@@ -556,9 +601,9 @@ export function createController({ api, router }) {
         // 5. Address
         if (f.address_line1 && f.address_city && f.address_country) {
           try {
-            await api.upsertCustomerContact(id, {
-              addresses: [{ type: f.address_type, line1: f.address_line1, city: f.address_city, country: f.address_country.toUpperCase(), is_primary: true }],
-            });
+            const addr = { type: f.address_type, line1: f.address_line1, city: f.address_city, country: f.address_country.toUpperCase(), is_primary: true };
+            if (f.address_postal_code) addr.postal_code = f.address_postal_code;
+            await api.upsertCustomerContact(id, { addresses: [addr] });
           } catch (e) { errors.push(`address: ${e.message}`); }
         }
 
@@ -585,7 +630,7 @@ export function createController({ api, router }) {
         entity_subtype: '', legal_name: '', country_of_incorporation: '',
         identifier_type: '', identifier_value: '',
         document_type: '', document_number: '',
-        address_type: 'registered', address_line1: '', address_city: '', address_country: '',
+        address_type: 'registered', address_line1: '', address_city: '', address_postal_code: '', address_country: '',
       };
       self.isNaturalPerson = true;
       self.isLegalEntity   = false;

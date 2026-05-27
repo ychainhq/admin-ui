@@ -215,4 +215,5 @@ describe('CustomerProfileView — createController', () => {
     expect(e.preventDefault).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith('#/customers/cust_x/profile');
   });
+
 });

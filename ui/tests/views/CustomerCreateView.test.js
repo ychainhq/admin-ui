@@ -392,6 +392,34 @@ describe('CustomerCreateView — submit address', () => {
     await ctrl.submit();
     expect(upsertCustomerContact.mock.calls[0][1].addresses[0].type).toBe('correspondence');
   });
+
+  test('postal_code is included in address payload when provided', async () => {
+    const createCustomer = jest.fn().mockResolvedValue({ id: 'cust_1' });
+    const upsertCustomerContact = jest.fn().mockResolvedValue({});
+    const { ctrl } = setup({ createCustomer, upsertCustomerContact });
+    fillAddress(ctrl);
+    ctrl.onAddressInput({ target: { dataset: { field: 'postal_code' }, value: '00-001' } });
+    await ctrl.submit();
+    expect(upsertCustomerContact.mock.calls[0][1].addresses[0].postal_code).toBe('00-001');
+  });
+
+  test('postal_code is omitted from address payload when empty', async () => {
+    const createCustomer = jest.fn().mockResolvedValue({ id: 'cust_1' });
+    const upsertCustomerContact = jest.fn().mockResolvedValue({});
+    const { ctrl } = setup({ createCustomer, upsertCustomerContact });
+    fillAddress(ctrl);
+    await ctrl.submit();
+    expect(upsertCustomerContact.mock.calls[0][1].addresses[0]).not.toHaveProperty('postal_code');
+  });
+
+  test('createAnother resets address_postal_code', async () => {
+    const createCustomer = jest.fn().mockResolvedValue({ id: 'cust_1' });
+    const { ctrl } = setup({ createCustomer });
+    ctrl.onAddressInput({ target: { dataset: { field: 'postal_code' }, value: '00-001' } });
+    await ctrl.submit();
+    ctrl.createAnother();
+    expect(ctrl._form.address_postal_code).toBe('');
+  });
 });
 
 // ── Success screen ─────────────────────────────────────────────────────────────

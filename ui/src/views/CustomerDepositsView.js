@@ -147,6 +147,80 @@ const template = `
             </div>
           </div>
 
+          <!-- Deposit Addresses list -->
+          <div class="glass-card rounded-xl overflow-hidden mb-md">
+            <div class="px-md py-sm bg-white/[0.03] border-b border-white/5 flex items-center justify-between">
+              <div class="flex items-center gap-sm">
+                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">wallet</span>
+                <span class="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Deposit Addresses</span>
+              </div>
+              <button rv-on-click="generateDepositAddress" rv-attr-disabled="depositGenerating"
+                class="flex items-center gap-xs px-sm py-1 rounded-lg bg-secondary text-on-secondary-fixed text-[12px] font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
+                <span class="material-symbols-outlined text-[14px]">add</span>
+                <span rv-hide="depositGenerating">Generate</span>
+                <span rv-show="depositGenerating">Generating…</span>
+              </button>
+            </div>
+            <div rv-show="depositGenResult" class="px-md py-sm bg-tertiary/10 border-b border-tertiary/20 flex items-center gap-sm">
+              <span class="material-symbols-outlined text-tertiary text-[16px]">check_circle</span>
+              <span rv-text="depositGenResult" class="font-mono-data text-tertiary text-[12px] break-all"></span>
+            </div>
+            <div rv-show="depositGenError" class="px-md py-sm bg-error/10 border-b border-error/20 flex items-center gap-sm">
+              <span class="material-symbols-outlined text-error text-[16px]">error</span>
+              <span rv-text="depositGenError" class="font-body-sm text-error"></span>
+            </div>
+            <div rv-show="depositAddressesEmpty" class="p-lg text-center">
+              <span class="material-symbols-outlined text-[40px] text-on-surface-variant">account_balance_wallet</span>
+              <p class="font-body-sm text-on-surface-variant mt-sm">No deposit addresses yet — click Generate to create one</p>
+            </div>
+            <div rv-hide="depositAddressesEmpty" class="hidden lg:block overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-white/5 bg-white/[0.02]">
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ADDRESS</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CHAIN</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                  <tr rv-each-daddr="depositAddresses" class="hover:bg-white/[0.02]">
+                    <td class="px-md py-3 font-mono-data text-on-surface text-[12px]">
+                      <span rv-text="daddr.addressShort"></span>
+                    </td>
+                    <td class="px-md py-3">
+                      <span rv-text="daddr.chain" class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20"></span>
+                    </td>
+                    <td class="px-md py-3">
+                      <span rv-text="daddr.statusLabel" rv-attr-class="daddr.statusBadgeClass"></span>
+                    </td>
+                    <td class="px-md py-3">
+                      <button rv-on-click="daddr.copy"
+                        class="flex items-center gap-xs px-sm py-1 rounded-lg border border-white/10 text-on-surface-variant hover:bg-white/5 transition-all text-[12px]">
+                        <span class="material-symbols-outlined text-[14px]">content_copy</span>
+                        Copy
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div rv-hide="depositAddressesEmpty" class="lg:hidden divide-y divide-white/5">
+              <div rv-each-daddr="depositAddresses" class="px-md py-3 space-y-xs">
+                <div class="flex items-center justify-between gap-sm">
+                  <span rv-text="daddr.chain" class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20"></span>
+                  <span rv-text="daddr.statusLabel" rv-attr-class="daddr.statusBadgeClass"></span>
+                </div>
+                <p rv-text="daddr.addressShort" class="font-mono-data text-on-surface text-[12px] break-all"></p>
+                <button rv-on-click="daddr.copy"
+                  class="flex items-center gap-xs px-sm py-1 rounded-lg border border-white/10 text-on-surface-variant hover:bg-white/5 transition-all text-[12px]">
+                  <span class="material-symbols-outlined text-[14px]">content_copy</span>
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+
           ${depositSearchTpl}
 
           <div rv-show="error" class="glass-card rounded-xl p-md bg-error/10 border border-error/30 mb-md">
@@ -267,6 +341,11 @@ export function createController({ api, router, id }) {
 
     deposits: [],
     depositsEmpty: true,
+    depositAddresses: [],
+    depositAddressesEmpty: true,
+    depositGenerating: false,
+    depositGenError: null,
+    depositGenResult: null,
     pagination: createPaginationController({ page: 1, total: 0, onPageChange: () => {} }),
     _cursor: undefined,
     _prevCursors: [],
@@ -287,8 +366,22 @@ export function createController({ api, router, id }) {
         self.depositAddr.error = null;
         try {
           const result = await api.createDepositAddress(id, { chain: 'bitcoin' });
-          self.depositAddr.address = result.address || result.depositAddress || '';
+          const addr = result.address || result.depositAddress || '';
+          self.depositAddr.address = addr;
           self.depositAddr.showCreate = false;
+          if (addr) {
+            const isActive = !result.status || result.status === 'active';
+            self.depositAddresses = [{
+              addressShort: addr,
+              chain:        result.chain_id || result.chain || 'bitcoin',
+              statusLabel:  result.status || 'active',
+              statusBadgeClass: isActive
+                ? 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20'
+                : 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
+              copy() { navigator.clipboard?.writeText(addr)?.catch(() => {}); },
+            }, ...self.depositAddresses];
+            self.depositAddressesEmpty = false;
+          }
         } catch (e) {
           self.depositAddr.error = e.message;
         } finally {
@@ -299,6 +392,32 @@ export function createController({ api, router, id }) {
         if (self.depositAddr.address) navigator.clipboard.writeText(self.depositAddr.address).catch(() => {});
       },
       goToDevNodes(e) { e?.preventDefault(); router.navigate('#/nodes/btc-regtest'); },
+    },
+
+    async generateDepositAddress() {
+      self.depositGenerating = true;
+      self.depositGenError = null;
+      self.depositGenResult = null;
+      try {
+        const result = await api.createDepositAddress(id, { chain: 'bitcoin' });
+        const addr = result.address || '';
+        const isActive = !result.status || result.status === 'active';
+        self.depositAddresses = [{
+          addressShort: addr,
+          chain:        result.chain || 'bitcoin',
+          statusLabel:  result.status || 'active',
+          statusBadgeClass: isActive
+            ? 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20'
+            : 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
+          copy() { navigator.clipboard?.writeText(addr)?.catch(() => {}); },
+        }, ...self.depositAddresses];
+        self.depositAddressesEmpty = false;
+        self.depositGenResult = addr;
+      } catch (e) {
+        self.depositGenError = e.message;
+      } finally {
+        self.depositGenerating = false;
+      }
     },
 
     async disableCustomer() {
@@ -348,15 +467,31 @@ export function createController({ api, router, id }) {
       self.loading = true;
       self.error = null;
       try {
-        const [customer, , profileData, contactData] = await Promise.all([
+        const [customer, , profileData, contactData, depositAddrsData] = await Promise.all([
           api.getCustomer(id),
           self.loadDeposits(),
           safeLoad(() => api.getCustomerProfile(id)),
           safeLoad(() => api.getCustomerContact(id)),
+          safeLoad(() => api.getCustomerAddresses(id)),
         ]);
         self.header.setCustomer(customer);
         self.header.setProfile(profileData);
         self.header.setContact(contactData);
+
+        const addrsList = depositAddrsData?.data || [];
+        self.depositAddresses = addrsList.map(a => {
+          const isActive = !a.status || a.status === 'active';
+          return {
+            addressShort: a.address || '—',
+            chain:        a.chain_id || a.chain || '—',
+            statusLabel:  a.status || 'active',
+            statusBadgeClass: isActive
+              ? 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20'
+              : 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
+            copy() { navigator.clipboard?.writeText(a.address)?.catch(() => {}); },
+          };
+        });
+        self.depositAddressesEmpty = self.depositAddresses.length === 0;
       } catch (e) {
         self.error = e.message;
       } finally {
