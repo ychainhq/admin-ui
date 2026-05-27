@@ -291,6 +291,21 @@ export const api = {
   getExternalSigners: () =>
     tenantRequest('/api/external-signers'),
 
+  getCustomerWithdrawals: (customerId, { limit = 20, cursor, status } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit), customerId });
+    if (cursor) params.set('cursor', cursor);
+    if (status) params.set('status', status);
+    return tenantRequest(`/api/withdrawals?${params}`);
+  },
+
+  getBitcoinFees: () =>
+    tenantRequest('/api/chains/bitcoin/fees'),
+
+  getWithdrawalBatchConfig: async () => {
+    const res = await tenantRequest('/api/tenant/withdrawal-batch-config');
+    return res.data ?? res;
+  },
+
   // tenantRequest is exposed so future views can call /api/* with the active tenant key.
   tenantRequest,
 };
