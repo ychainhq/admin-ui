@@ -33,6 +33,15 @@ export function makeMockApi(overrides = {}) {
     getWalletAddresses: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
     getWalletBalances: jest.fn().mockResolvedValue({ balances: {} }),
     createSweep: jest.fn().mockResolvedValue({ id: 'sweep_test' }),
+    createCustomerSession: jest.fn().mockResolvedValue({ accessToken: 'tok_test' }),
+    createWithdrawalAsCustomer: jest.fn().mockResolvedValue({ id: 'wd_test', status: 'queued' }),
+    getCustomerWithdrawals: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
+    getBitcoinFees: jest.fn().mockResolvedValue({ data: { feeRates: { normal: { feeRate: 2 } } } }),
+    getWithdrawalBatchConfig: jest.fn().mockResolvedValue({ withdrawal_fee_coverage: 'tenant_pays', btc_batching_enabled: 1 }),
+    getWithdrawalBatches: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
+    getSigningTasks: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
+    getExternalSigners: jest.fn().mockResolvedValue({ data: [] }),
+    tenantRequest: jest.fn().mockResolvedValue({}),
     ...overrides,
   };
 }

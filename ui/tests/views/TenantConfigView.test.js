@@ -1,6 +1,17 @@
 import { createController } from '../../src/views/TenantConfigView.js';
 import { makeMockApi, makeRouter } from '../mocks/api.js';
 
+const RAW_BATCH_CONFIG = {
+  withdrawal_fee_coverage: 'tenant_pays',
+  btc_batching_enabled: 1,
+  btc_min_outputs_per_batch: 1,
+  btc_max_outputs_per_batch: 200,
+  btc_max_batch_age_seconds: 30,
+  btc_max_fee_rate_sat_vb: 50,
+  btc_target_blocks: 6,
+  btc_rbf_enabled: 1,
+};
+
 const RAW_CONFIG = {
   btcConfirmationsRequired: 1,
   btcFinalityConfirmations: 6,
@@ -17,6 +28,8 @@ function makeCtrl(apiOverrides = {}, tenantId = 'tenant_default') {
   const api = makeMockApi({
     getTenantConfig: jest.fn().mockResolvedValue(RAW_CONFIG),
     saveTenantConfig: jest.fn().mockResolvedValue({}),
+    getWithdrawalBatchConfig: jest.fn().mockResolvedValue(RAW_BATCH_CONFIG),
+    tenantRequest: jest.fn().mockResolvedValue({}),
     ...apiOverrides,
   });
   const router = makeRouter();
@@ -149,6 +162,7 @@ describe('TenantConfigView — createController', () => {
   test('saveConfig clears previous error before saving', async () => {
     const api = makeMockApi({
       getTenantConfig: jest.fn().mockResolvedValue(RAW_CONFIG),
+      getWithdrawalBatchConfig: jest.fn().mockResolvedValue(RAW_BATCH_CONFIG),
       saveTenantConfig: jest.fn()
         .mockRejectedValueOnce(new Error('First failure'))
         .mockResolvedValueOnce({}),
@@ -161,5 +175,92 @@ describe('TenantConfigView — createController', () => {
     await ctrl.saveConfig();
     expect(ctrl.error).toBeNull();
     expect(ctrl.saveSuccess).toBe(true);
+  });
+});
+
+describe('TenantConfigView — withdrawal batch config section', () => {
+  test('load() also fetches withdrawal batch config', async () => {
+    const { ctrl, api } = makeCtrl();
+    await ctrl.load();
+    expect(api.getWithdrawalBatchConfig).toHaveBeenCalled();
+  });
+
+  test('batchConfig.fields is populated after load', async () => {
+    const { ctrl } = makeCtrl();
+    await ctrl.load();
+    expect(ctrl.batchConfig.fields.length).toBeGreaterThan(0);
+  });
+
+  test('withdrawalFeeCoverage field is present in batchConfig', async () => {
+    const { ctrl } = makeCtrl();
+    await ctrl.load();
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'withdrawalFeeCoverage');
+    expect(field).toBeDefined();
+    expect(field.isSelect).toBe(true);
+  });
+
+  test('withdrawalFeeCoverage field shows options for all 3 policies', async () => {
+    const { ctrl } = makeCtrl();
+    await ctrl.load();
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'withdrawalFeeCoverage');
+    const values = field.options.map(o => o.value);
+    expect(values).toContain('tenant_pays');
+    expect(values).toContain('sender_pays');
+    expect(values).toContain('recipient_pays');
+  });
+
+  test('withdrawalFeeCoverage displayValue reflects loaded config', async () => {
+    const { ctrl } = makeCtrl({
+      getWithdrawalBatchConfig: jest.fn().mockResolvedValue({ withdrawal_fee_coverage: 'sender_pays' }),
+    });
+    await ctrl.load();
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'withdrawalFeeCoverage');
+    expect(field.displayValue).toBe('sender_pays');
+  });
+
+  test('load() survives batch config fetch failure', async () => {
+    const { ctrl } = makeCtrl({
+      getWithdrawalBatchConfig: jest.fn().mockRejectedValue(new Error('500')),
+    });
+    await ctrl.load();
+    expect(ctrl.error).toBeNull(); // main config still loaded
+    expect(ctrl.config.fields.length).toBeGreaterThan(0);
+  });
+
+  test('saveBatchConfig() calls tenantRequest with PATCH', async () => {
+    const { ctrl, api } = makeCtrl();
+    await ctrl.load();
+    ctrl._onBatchFieldChange('withdrawalFeeCoverage', 'recipient_pays');
+    await ctrl.saveBatchConfig();
+    expect(api.tenantRequest).toHaveBeenCalledWith(
+      '/api/tenant/withdrawal-batch-config',
+      expect.objectContaining({ method: 'PATCH' })
+    );
+  });
+
+  test('saveBatchConfig() sets batchSaveSuccess on success', async () => {
+    const { ctrl } = makeCtrl();
+    await ctrl.load();
+    await ctrl.saveBatchConfig();
+    expect(ctrl.batchSaveSuccess).toBe(true);
+    expect(ctrl.batchSaving).toBe(false);
+  });
+
+  test('saveBatchConfig() sets batchError on failure', async () => {
+    const { ctrl } = makeCtrl({
+      tenantRequest: jest.fn().mockRejectedValue(new Error('Save failed')),
+    });
+    await ctrl.load();
+    await ctrl.saveBatchConfig();
+    expect(ctrl.batchError).toBe('Save failed');
+    expect(ctrl.batchSaving).toBe(false);
+  });
+
+  test('_onBatchFieldChange updates field displayValue', async () => {
+    const { ctrl } = makeCtrl();
+    await ctrl.load();
+    ctrl._onBatchFieldChange('withdrawalFeeCoverage', 'recipient_pays');
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'withdrawalFeeCoverage');
+    expect(field.displayValue).toBe('recipient_pays');
   });
 });

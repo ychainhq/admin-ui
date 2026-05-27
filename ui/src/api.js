@@ -291,11 +291,13 @@ export const api = {
   getExternalSigners: () =>
     tenantRequest('/api/external-signers'),
 
-  getCustomerWithdrawals: (customerId, { limit = 20, cursor, status } = {}) => {
-    const params = new URLSearchParams({ limit: String(limit), customerId });
+  getCustomerWithdrawals: (sessionToken, { limit = 20, cursor, status } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
     if (status) params.set('status', status);
-    return tenantRequest(`/api/withdrawals?${params}`);
+    return request(`/customer/me/withdrawals?${params}`, {
+      headers: { 'X-Session-Token': sessionToken },
+    });
   },
 
   getBitcoinFees: () =>

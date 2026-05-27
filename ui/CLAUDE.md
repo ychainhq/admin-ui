@@ -9,6 +9,29 @@
 
 ## Architektura — zasady bezwzględne
 
+### Ekrany klienta używają wyłącznie Customer Self-Service API
+
+Wszystkie ekrany działające "na kliencie" (URL `/customers/:id/*`) obowiązuje zasada:
+
+1. **Pobierz Customer Session Token** przez `api.createCustomerSession(customerId)` zanim załadujesz dane specyficzne dla klienta.
+2. **Używaj wyłącznie proxy `/customer/me/*`** (→ engine `/v1/me/*`) z tym tokenem jako `X-Session-Token`.
+3. **Nigdy nie używaj Tenant API** (`/api/*`, `tenantRequest`) do pobierania danych transakcyjnych klienta.
+
+Dlaczego: Tenant API nie wymusza RBAC na poziomie klienta — aktor z X-Actor-Token może pobierać dane dowolnego klienta. Customer Session Token jest skoped do konkretnego klienta, co egzekwuje izolację.
+
+| Operacja | BŁĄD ❌ | POPRAWNIE ✅ |
+|---|---|---|
+| Lista wypłat klienta | `tenantRequest('/api/withdrawals?customerId=...')` | token → `/customer/me/withdrawals` |
+| Lista depozytów klienta | `tenantRequest('/api/deposits?customerId=...')` | token → `/customer/me/deposits` |
+| Saldo klienta | `tenantRequest('/api/customers/:id/balances')` | token → `/customer/me/balances` |
+
+**Wyjątki — dane zarządcze tenanta, nie transakcyjne:**
+- `api.getCustomer(id)` — dane admin tenanta o kliencie (status, profil, AML) — tenant API OK
+- `api.disableCustomer(id)` — akcja tenanta — tenant API OK
+- `api.getWithdrawalBatchConfig()` — konfiguracja tenanta — tenant API OK
+
+**W api.js** — metody korzystające z customer session mają sygnaturę `(sessionToken, opts)`, nie `(customerId, opts)`. Wywołujący kontroler sam tworzy sesję i przekazuje token.
+
 ### Komponenty
 - Każdy komponent w `src/components/` eksportuje:
   - `template` — string HTML z atrybutami `rv-*`

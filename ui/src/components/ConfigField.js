@@ -38,6 +38,146 @@ export const template = `
 </div>
 `;
 
+export const batchConfigTemplate = `
+<div rv-each-field="batchConfig.fields" class="border-b border-white/5 last:border-0 px-md py-md">
+  <div class="flex flex-col lg:flex-row lg:items-start gap-sm lg:gap-md">
+    <div class="lg:w-1/2">
+      <span rv-text="field.label" class="font-mono-data text-on-surface block"></span>
+      <span rv-text="field.description" class="font-body-sm text-on-surface-variant mt-xs block"></span>
+    </div>
+    <div class="lg:w-1/2">
+      <select
+        rv-show="field.isSelect"
+        rv-value="field.displayValue"
+        rv-on-change="field.onChange"
+        rv-attr-name="field.key"
+        class="w-full bg-[#151b2d] border border-[#45474c] rounded-lg px-4 py-3 text-on-surface font-mono-data focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none appearance-none"
+      >
+        <option rv-each-opt="field.options" rv-attr-value="opt.value" rv-text="opt.label"></option>
+      </select>
+      <input
+        rv-hide="field.isSelect"
+        rv-value="field.displayValue"
+        rv-on-input="field.onInput"
+        rv-attr-type="field.inputType"
+        rv-attr-name="field.key"
+        rv-attr-placeholder="field.placeholder"
+        class="w-full bg-[#151b2d] border border-[#45474c] rounded-lg px-4 py-3 text-on-surface font-mono-data focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
+      />
+    </div>
+  </div>
+</div>
+`;
+
+export const BATCH_CONFIG_FIELD_DEFINITIONS = [
+  {
+    key: 'withdrawalFeeCoverage',
+    label: 'withdrawalFeeCoverage',
+    description: 'Who pays the network fee: tenant absorbs it, sender pays on top of the amount, or recipient gets amount minus fee.',
+    inputType: 'select',
+    options: [
+      { value: 'tenant_pays', label: 'tenant_pays — platform absorbs fee (recipient gets full amount)' },
+      { value: 'sender_pays', label: 'sender_pays — customer billed amount + fee' },
+      { value: 'recipient_pays', label: 'recipient_pays — recipient receives amount − fee' },
+    ],
+  },
+  {
+    key: 'btcMinOutputsPerBatch',
+    label: 'btcMinOutputsPerBatch',
+    description: 'Minimum number of queued withdrawals needed to trigger a batch.',
+    inputType: 'number',
+    placeholder: 'e.g. 1',
+  },
+  {
+    key: 'btcMaxOutputsPerBatch',
+    label: 'btcMaxOutputsPerBatch',
+    description: 'Maximum outputs (recipients) included in a single batch transaction.',
+    inputType: 'number',
+    placeholder: 'e.g. 200',
+  },
+  {
+    key: 'btcMaxBatchAgeSeconds',
+    label: 'btcMaxBatchAgeSeconds',
+    description: 'Force a batch when the oldest queued withdrawal is this many seconds old.',
+    inputType: 'number',
+    placeholder: 'e.g. 30',
+  },
+  {
+    key: 'btcMaxFeeRateSatVb',
+    label: 'btcMaxFeeRateSatVb',
+    description: 'Cap on the network fee rate (sat/vByte). Batch is skipped if fee rate exceeds this.',
+    inputType: 'number',
+    placeholder: 'e.g. 50',
+  },
+  {
+    key: 'btcTargetBlocks',
+    label: 'btcTargetBlocks',
+    description: 'Target number of blocks for fee estimation (lower = faster, higher fee).',
+    inputType: 'number',
+    placeholder: 'e.g. 6',
+  },
+  {
+    key: 'btcRbfEnabled',
+    label: 'btcRbfEnabled',
+    description: 'Enable Replace-By-Fee signalling on batch transactions.',
+    inputType: 'select',
+    options: [
+      { value: 'true', label: 'true — RBF enabled (opt-in)' },
+      { value: 'false', label: 'false — RBF disabled' },
+    ],
+  },
+  {
+    key: 'btcBatchingEnabled',
+    label: 'btcBatchingEnabled',
+    description: 'Master switch for the automatic withdrawal batcher worker.',
+    inputType: 'select',
+    options: [
+      { value: 'true', label: 'true — auto-batching on' },
+      { value: 'false', label: 'false — manual only' },
+    ],
+  },
+];
+
+export function createBatchConfigFieldsController(rawConfig, onFieldChange) {
+  return BATCH_CONFIG_FIELD_DEFINITIONS.map(def => {
+    const isSelect = def.inputType === 'select';
+    const raw = rawConfig[def.key];
+    // batch config is snake_case from backend — also try snake_case key
+    const snakeKey = def.key.replace(/([A-Z])/g, c => '_' + c.toLowerCase());
+    const value = raw !== undefined ? raw : (rawConfig[snakeKey] !== undefined ? rawConfig[snakeKey] : null);
+    const displayValue = value === null || value === undefined ? '' : String(value);
+
+    return {
+      key: def.key,
+      label: def.label,
+      description: def.description,
+      inputType: isSelect ? 'select' : def.inputType,
+      placeholder: def.placeholder || '',
+      isSelect,
+      displayValue,
+      options: isSelect ? def.options.map(o => ({ value: o.value, label: o.label })) : [],
+      onInput(e) { onFieldChange(def.key, e.target.value); },
+      onChange(e) { onFieldChange(def.key, e.target.value); },
+    };
+  });
+}
+
+export function collectBatchConfigValues(fields) {
+  const result = {};
+  fields.forEach(field => {
+    const raw = field.displayValue;
+    if (raw === '') return;
+    if (field.inputType === 'select' && (raw === 'true' || raw === 'false')) {
+      result[field.key] = raw === 'true';
+    } else if (field.inputType === 'number' && raw !== '') {
+      result[field.key] = Number(raw);
+    } else {
+      result[field.key] = raw;
+    }
+  });
+  return result;
+}
+
 const FIELD_DEFINITIONS = [
   {
     key: 'btcConfirmationsRequired',

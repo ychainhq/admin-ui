@@ -6,7 +6,11 @@ import { createBottomNavController } from '../components/BottomNav.js';
 import { template as sidebarTpl } from '../components/DesktopSidebar.js';
 import { createSidebarController } from '../components/DesktopSidebar.js';
 import { template as configFieldTpl } from '../components/ConfigField.js';
-import { createConfigFieldsController, collectConfigValues } from '../components/ConfigField.js';
+import {
+  createConfigFieldsController, collectConfigValues,
+  createBatchConfigFieldsController, collectBatchConfigValues,
+  batchConfigTemplate,
+} from '../components/ConfigField.js';
 
 const ROUTE = '/tenants';
 
@@ -75,9 +79,42 @@ const template = `
           </div>
         </div>
 
-        <!-- Config fields form -->
+        <!-- Tenant config fields -->
         <div rv-hide="loading" class="glass-card rounded-xl overflow-hidden">
           ${configFieldTpl}
+        </div>
+
+        <!-- Withdrawal Batch Config section -->
+        <div rv-hide="loading" class="mt-gutter">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-md mb-sm">
+            <div>
+              <h2 class="font-headline-sm text-on-surface">Withdrawal Batch Settings</h2>
+              <p class="font-body-sm text-on-surface-variant mt-xs">Fee coverage policy and batching parameters for outgoing BTC withdrawals.</p>
+            </div>
+            <div class="flex gap-sm shrink-0">
+              <button rv-on-click="saveBatchConfig" rv-attr-disabled="batchSaving" class="bg-secondary text-on-secondary-fixed px-4 py-2 rounded-lg font-label-md font-bold active:scale-95 transition-all hover:brightness-110 disabled:opacity-50">
+                <span rv-hide="batchSaving">Save Batch Config</span>
+                <span rv-show="batchSaving">Saving…</span>
+              </button>
+            </div>
+          </div>
+
+          <div rv-show="batchError" class="glass-card rounded-xl p-md bg-error/10 border border-error/30 mb-sm">
+            <div class="flex items-center gap-sm">
+              <span class="material-symbols-outlined text-error">error</span>
+              <span rv-text="batchError" class="font-body-sm text-error"></span>
+            </div>
+          </div>
+          <div rv-show="batchSaveSuccess" class="glass-card rounded-xl p-md bg-tertiary/10 border border-tertiary/30 mb-sm">
+            <div class="flex items-center gap-sm">
+              <span class="material-symbols-outlined text-tertiary">check_circle</span>
+              <span class="font-body-sm text-tertiary">Batch configuration saved.</span>
+            </div>
+          </div>
+
+          <div class="glass-card rounded-xl overflow-hidden">
+            ${batchConfigTemplate}
+          </div>
         </div>
 
         <!-- Info cards -->
@@ -140,7 +177,13 @@ export function createController({ tenantId, api, router }) {
     saveSuccess: false,
     versionLabel: 'Loading…',
 
+    batchConfig: { fields: [] },
+    batchSaving: false,
+    batchError: null,
+    batchSaveSuccess: false,
+
     _rawConfig: {},
+    _rawBatchConfig: {},
 
     _onFieldChange(key, value) {
       self._rawConfig[key] = value;
@@ -148,11 +191,20 @@ export function createController({ tenantId, api, router }) {
       if (field) field.displayValue = value;
     },
 
+    _onBatchFieldChange(key, value) {
+      self._rawBatchConfig[key] = value;
+      const field = self.batchConfig.fields.find(f => f.key === key);
+      if (field) field.displayValue = value;
+    },
+
     async load() {
       self.loading = true;
       self.error = null;
       try {
-        const data = await api.getTenantConfig(tenantId);
+        const [data, batchData] = await Promise.all([
+          api.getTenantConfig(tenantId),
+          api.getWithdrawalBatchConfig().catch(() => ({})),
+        ]);
         self._rawConfig = { ...data };
         self.config = {
           fields: createConfigFieldsController(data, (k, v) => self._onFieldChange(k, v)),
@@ -160,6 +212,10 @@ export function createController({ tenantId, api, router }) {
         self.versionLabel = data.updated_at
           ? `Last updated on ${new Date(data.updated_at * 1000).toLocaleString()}.`
           : 'Not yet modified.';
+        self._rawBatchConfig = { ...batchData };
+        self.batchConfig = {
+          fields: createBatchConfigFieldsController(batchData, (k, v) => self._onBatchFieldChange(k, v)),
+        };
       } catch (e) {
         self.error = e.message;
       } finally {
@@ -180,6 +236,25 @@ export function createController({ tenantId, api, router }) {
         self.error = e.message;
       } finally {
         self.saving = false;
+      }
+    },
+
+    async saveBatchConfig() {
+      self.batchSaving = true;
+      self.batchError = null;
+      self.batchSaveSuccess = false;
+      try {
+        const payload = collectBatchConfigValues(self.batchConfig.fields);
+        await api.tenantRequest('/api/tenant/withdrawal-batch-config', {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+        self.batchSaveSuccess = true;
+        setTimeout(() => { self.batchSaveSuccess = false; }, 4000);
+      } catch (e) {
+        self.batchError = e.message;
+      } finally {
+        self.batchSaving = false;
       }
     },
 

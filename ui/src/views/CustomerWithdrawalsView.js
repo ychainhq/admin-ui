@@ -435,7 +435,10 @@ export function createController({ api, router, id }) {
 
     async loadWithdrawals() {
       try {
-        const res = await api.getCustomerWithdrawals(id);
+        const session = await api.createCustomerSession(id);
+        const token = session.accessToken || session.token || session.sessionToken;
+        if (!token) throw new Error('No customer session token');
+        const res = await api.getCustomerWithdrawals(token);
         const items = res.data || [];
         self.withdrawals = (Array.isArray(items) ? items : []).map(normalizeWithdrawal);
         self.withdrawalsEmpty = self.withdrawals.length === 0;
