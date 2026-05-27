@@ -263,4 +263,55 @@ describe('TenantConfigView — withdrawal batch config section', () => {
     const field = ctrl.batchConfig.fields.find(f => f.key === 'withdrawalFeeCoverage');
     expect(field.displayValue).toBe('recipient_pays');
   });
+
+  test('btcRbfEnabled displayValue is "true" when backend returns INTEGER 1', async () => {
+    const { ctrl } = makeCtrl({
+      getWithdrawalBatchConfig: jest.fn().mockResolvedValue({ btc_rbf_enabled: 1 }),
+    });
+    await ctrl.load();
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'btcRbfEnabled');
+    expect(field.displayValue).toBe('true');
+  });
+
+  test('btcRbfEnabled displayValue is "false" when backend returns INTEGER 0', async () => {
+    const { ctrl } = makeCtrl({
+      getWithdrawalBatchConfig: jest.fn().mockResolvedValue({ btc_rbf_enabled: 0 }),
+    });
+    await ctrl.load();
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'btcRbfEnabled');
+    expect(field.displayValue).toBe('false');
+  });
+
+  test('btcBatchingEnabled displayValue is "true" when backend returns INTEGER 1', async () => {
+    const { ctrl } = makeCtrl({
+      getWithdrawalBatchConfig: jest.fn().mockResolvedValue({ btc_batching_enabled: 1 }),
+    });
+    await ctrl.load();
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'btcBatchingEnabled');
+    expect(field.displayValue).toBe('true');
+  });
+
+  test('boolean select option has selected=true matching displayValue', async () => {
+    const { ctrl } = makeCtrl({
+      getWithdrawalBatchConfig: jest.fn().mockResolvedValue({ btc_rbf_enabled: 1 }),
+    });
+    await ctrl.load();
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'btcRbfEnabled');
+    const trueOpt = field.options.find(o => o.value === 'true');
+    const falseOpt = field.options.find(o => o.value === 'false');
+    expect(trueOpt.selected).toBe(true);
+    expect(falseOpt.selected).toBe(false);
+  });
+
+  test('withdrawalFeeCoverage option marked selected when matching backend value', async () => {
+    const { ctrl } = makeCtrl({
+      getWithdrawalBatchConfig: jest.fn().mockResolvedValue({ withdrawal_fee_coverage: 'sender_pays' }),
+    });
+    await ctrl.load();
+    const field = ctrl.batchConfig.fields.find(f => f.key === 'withdrawalFeeCoverage');
+    const senderOpt = field.options.find(o => o.value === 'sender_pays');
+    const tenantOpt = field.options.find(o => o.value === 'tenant_pays');
+    expect(senderOpt.selected).toBe(true);
+    expect(tenantOpt.selected).toBe(false);
+  });
 });

@@ -8,13 +8,10 @@ export const template = `
     <div class="lg:w-1/2">
       <select
         rv-show="field.isSelect"
-        rv-value="field.displayValue"
+        rv-html="field.optionsHtml"
         rv-on-change="field.onChange"
-        rv-attr-name="field.key"
         class="w-full bg-[#151b2d] border border-[#45474c] rounded-lg px-4 py-3 text-on-surface font-mono-data focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none appearance-none"
-      >
-        <option rv-each-opt="field.options" rv-attr-value="opt.value" rv-text="opt.label"></option>
-      </select>
+      ></select>
       <textarea
         rv-show="field.isTextarea"
         rv-value="field.displayValue"
@@ -48,13 +45,10 @@ export const batchConfigTemplate = `
     <div class="lg:w-1/2">
       <select
         rv-show="field.isSelect"
-        rv-value="field.displayValue"
+        rv-html="field.optionsHtml"
         rv-on-change="field.onChange"
-        rv-attr-name="field.key"
         class="w-full bg-[#151b2d] border border-[#45474c] rounded-lg px-4 py-3 text-on-surface font-mono-data focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none appearance-none"
-      >
-        <option rv-each-opt="field.options" rv-attr-value="opt.value" rv-text="opt.label"></option>
-      </select>
+      ></select>
       <input
         rv-hide="field.isSelect"
         rv-value="field.displayValue"
@@ -138,6 +132,26 @@ export const BATCH_CONFIG_FIELD_DEFINITIONS = [
   },
 ];
 
+function buildOptionsHtml(options, displayValue) {
+  return options.map(o => {
+    const sel = o.value === displayValue ? ' selected' : '';
+    return `<option value="${o.value}"${sel}>${o.label}</option>`;
+  }).join('');
+}
+
+function normalizeBatchValue(value, def) {
+  if (value === null || value === undefined) return '';
+  if (def.inputType === 'select') {
+    const hasBooleanOptions = def.options.some(o => o.value === 'true' || o.value === 'false');
+    if (hasBooleanOptions) {
+      // Backend sends SQLite INTEGER (0/1) for boolean flags — coerce to 'true'/'false' to match option values.
+      if (value === true || value === 1 || value === '1' || value === 'true') return 'true';
+      if (value === false || value === 0 || value === '0' || value === 'false') return 'false';
+    }
+  }
+  return String(value);
+}
+
 export function createBatchConfigFieldsController(rawConfig, onFieldChange) {
   return BATCH_CONFIG_FIELD_DEFINITIONS.map(def => {
     const isSelect = def.inputType === 'select';
@@ -145,7 +159,7 @@ export function createBatchConfigFieldsController(rawConfig, onFieldChange) {
     // batch config is snake_case from backend — also try snake_case key
     const snakeKey = def.key.replace(/([A-Z])/g, c => '_' + c.toLowerCase());
     const value = raw !== undefined ? raw : (rawConfig[snakeKey] !== undefined ? rawConfig[snakeKey] : null);
-    const displayValue = value === null || value === undefined ? '' : String(value);
+    const displayValue = normalizeBatchValue(value, def);
 
     return {
       key: def.key,
@@ -155,7 +169,10 @@ export function createBatchConfigFieldsController(rawConfig, onFieldChange) {
       placeholder: def.placeholder || '',
       isSelect,
       displayValue,
-      options: isSelect ? def.options.map(o => ({ value: o.value, label: o.label })) : [],
+      optionsHtml: isSelect ? buildOptionsHtml(def.options, displayValue) : '',
+      options: isSelect
+        ? def.options.map(o => ({ value: o.value, label: o.label, selected: o.value === displayValue }))
+        : [],
       onInput(e) { onFieldChange(def.key, e.target.value); },
       onChange(e) { onFieldChange(def.key, e.target.value); },
     };
@@ -276,6 +293,7 @@ export function createConfigFieldsController(rawConfig, onFieldChange) {
       displayValue,
       nullable:     def.nullable || false,
       keepAsString: def.keepAsString || false,
+      optionsHtml: isSelect ? buildOptionsHtml(def.options.map(o => ({ value: o, label: o })), displayValue) : '',
       options: isSelect ? def.options.map(o => ({ value: o, label: o, selected: o === displayValue })) : [],
       onInput(e) { onFieldChange(def.key, e.target.value); },
       onChange(e) { onFieldChange(def.key, e.target.value); },
