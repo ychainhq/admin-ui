@@ -1,6 +1,6 @@
 {
   "name": "ychain-mng-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local test environment for [chain-api v2](../engine/) (multi-tenant Bitcoin custody API).",
   "main": "index.js",
   "scripts": {
