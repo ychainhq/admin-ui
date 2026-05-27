@@ -169,12 +169,19 @@ const template = `
                     </td>
                     <td rv-text="wallet.balance" class="px-md py-3 font-mono-data text-on-surface text-right"></td>
                     <td class="px-md py-3">
-                      <button rv-on-click="wallet.sweep" rv-attr-disabled="wallet.sweeping"
-                        class="flex items-center gap-xs px-sm py-1 rounded-lg border border-secondary/30 text-secondary hover:bg-secondary/10 transition-all text-[12px] font-bold active:scale-95 disabled:opacity-50">
-                        <span class="material-symbols-outlined text-[14px]">merge</span>
-                        <span rv-hide="wallet.sweeping">Sweep</span>
-                        <span rv-show="wallet.sweeping">…</span>
-                      </button>
+                      <div class="flex items-center gap-xs">
+                        <button rv-on-click="wallet.sweep" rv-attr-disabled="wallet.sweeping"
+                          class="flex items-center gap-xs px-sm py-1 rounded-lg border border-secondary/30 text-secondary hover:bg-secondary/10 transition-all text-[12px] font-bold active:scale-95 disabled:opacity-50">
+                          <span class="material-symbols-outlined text-[14px]">merge</span>
+                          <span rv-hide="wallet.sweeping">Sweep</span>
+                          <span rv-show="wallet.sweeping">…</span>
+                        </button>
+                        <button rv-on-click="wallet.viewAddresses"
+                          class="flex items-center gap-xs px-sm py-1 rounded-lg border border-white/10 text-on-surface-variant hover:bg-white/5 transition-all text-[12px]">
+                          <span class="material-symbols-outlined text-[14px]">list</span>
+                          Addresses
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
@@ -196,12 +203,19 @@ const template = `
                   </div>
                   <span rv-text="wallet.balance" class="font-mono-data text-on-surface text-[13px]"></span>
                 </div>
-                <button rv-on-click="wallet.sweep" rv-attr-disabled="wallet.sweeping"
-                  class="mt-sm flex items-center gap-xs px-sm py-1 rounded-lg border border-secondary/30 text-secondary hover:bg-secondary/10 transition-all text-[12px] font-bold active:scale-95 disabled:opacity-50">
-                  <span class="material-symbols-outlined text-[14px]">merge</span>
-                  <span rv-hide="wallet.sweeping">Create Sweep</span>
-                  <span rv-show="wallet.sweeping">Creating…</span>
-                </button>
+                <div class="mt-sm flex items-center gap-xs">
+                  <button rv-on-click="wallet.sweep" rv-attr-disabled="wallet.sweeping"
+                    class="flex items-center gap-xs px-sm py-1 rounded-lg border border-secondary/30 text-secondary hover:bg-secondary/10 transition-all text-[12px] font-bold active:scale-95 disabled:opacity-50">
+                    <span class="material-symbols-outlined text-[14px]">merge</span>
+                    <span rv-hide="wallet.sweeping">Create Sweep</span>
+                    <span rv-show="wallet.sweeping">Creating…</span>
+                  </button>
+                  <button rv-on-click="wallet.viewAddresses"
+                    class="flex items-center gap-xs px-sm py-1 rounded-lg border border-white/10 text-on-surface-variant hover:bg-white/5 transition-all text-[12px]">
+                    <span class="material-symbols-outlined text-[14px]">list</span>
+                    Addresses
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -271,6 +285,9 @@ export function createController({ api, router }) {
             statusBadgeClass: statusBadge(status),
             balance,
             sweeping:      false,
+            viewAddresses() {
+              router.navigate(`#/wallets/${w.id}/addresses`);
+            },
             sweep() {
               const wallet = this;
               wallet.sweeping = true;

@@ -15,6 +15,7 @@ import { CustomerDepositsView } from './views/CustomerDepositsView.js';
 import { CustomerWithdrawalsView } from './views/CustomerWithdrawalsView.js';
 import { WithdrawalBatchesView } from './views/WithdrawalBatchesView.js';
 import { WalletsView } from './views/WalletsView.js';
+import { WalletAddressesView } from './views/WalletAddressesView.js';
 import { SigningTasksView } from './views/SigningTasksView.js';
 import { ExternalSignersView } from './views/ExternalSignersView.js';
 
@@ -42,6 +43,7 @@ router
   // Operations
   .on('/withdrawal-batches', (params) => WithdrawalBatchesView.mount(appEl(), params, deps))
   .on('/wallets',            (params) => WalletsView.mount(appEl(), params, deps))
+  .on('/wallets/:walletId/addresses', (params) => WalletAddressesView.mount(appEl(), params, deps))
   .on('/signing-tasks',      (params) => SigningTasksView.mount(appEl(), params, deps))
   .on('/external-signers',   (params) => ExternalSignersView.mount(appEl(), params, deps))
   .on('/nodes', (params) => NodeListView.mount(appEl(), params, deps))

@@ -252,6 +252,17 @@ export const api = {
   getWallets: () =>
     tenantRequest('/api/wallets'),
 
+  getWallet: async (id) => {
+    const res = await tenantRequest(`/api/wallets/${encodeURIComponent(id)}`);
+    return res.data ?? res;
+  },
+
+  getWalletAddresses: (walletId, { limit = 20, cursor } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return tenantRequest(`/api/wallets/${encodeURIComponent(walletId)}/addresses?${params}`);
+  },
+
   getWalletBalances: async (walletId) => {
     const res = await tenantRequest(`/api/wallets/${encodeURIComponent(walletId)}/balances`);
     return res.data ?? res;
