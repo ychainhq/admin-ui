@@ -15,37 +15,64 @@ function fmtDate(v) {
   try { return new Date(v).toISOString().slice(0, 16).replace('T', ' '); } catch { return '—'; }
 }
 
-function signerHealth(signer) {
-  if (signer.status === 'disabled') return 'disabled';
-  const hb = signer.last_heartbeat_at || signer.lastHeartbeatAt;
-  if (!hb) return 'stale';
-  const diffMs = Date.now() - new Date(hb).getTime();
-  return diffMs > STALE_MINUTES * 60 * 1000 ? 'stale' : 'healthy';
+function parseChains(s) {
+  try {
+    const caps = typeof s.capabilities === 'string' ? JSON.parse(s.capabilities) : (s.capabilities || {});
+    return (caps.chains || []).join(', ') || '—';
+  } catch {
+    return '—';
+  }
+}
+
+function signerHealth(s) {
+  if (!s.is_enabled || s.status === 'disabled') return 'disabled';
+  const lastSeen = s.last_seen_at;
+  if (!lastSeen) return 'offline';
+  const diffMs = Date.now() - new Date(lastSeen).getTime();
+  if (diffMs > STALE_MINUTES * 60 * 1000) return 'stale';
+  return s.last_health_status || 'stale';
 }
 
 const HEALTH_BADGE = {
   healthy:  'inline-flex items-center gap-xs px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20',
   stale:    'inline-flex items-center gap-xs px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
+  offline:  'inline-flex items-center gap-xs px-2 py-0.5 rounded-full text-[11px] font-bold bg-error/10 text-error border border-error/20',
   disabled: 'inline-flex items-center gap-xs px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
 };
 
+const HEALTH_DOT = {
+  healthy:  'w-1.5 h-1.5 rounded-full bg-tertiary shrink-0',
+  stale:    'w-1.5 h-1.5 rounded-full bg-secondary shrink-0',
+  offline:  'w-1.5 h-1.5 rounded-full bg-error shrink-0',
+  disabled: 'w-1.5 h-1.5 rounded-full bg-white/20 shrink-0',
+};
+
+const EDITION_BADGE = {
+  enterprise: 'px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
+  community:  'px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-on-surface-variant border border-white/20',
+};
+
 function normalizeSigner(s) {
-  const health = signerHealth(s);
-  const fp = s.fingerprint || s.public_key_fingerprint || '';
-  const chains = (s.supported_chains || s.supportedChains || []).join(', ') || '—';
+  const health  = signerHealth(s);
+  const fp      = s.signer_fingerprint || '';
+  const edition = s.edition || '';
   return {
     id:               s.id || '—',
     name:             s.name || '—',
     fingerprint:      fp,
-    fpShort:          fp.length > 16 ? fp.slice(0, 8) + '…' + fp.slice(-6) : (fp || '—'),
+    fpShort:          fp.length > 20 ? fp.slice(0, 10) + '…' + fp.slice(-6) : (fp || '—'),
+    edition,
+    editionLabel:     edition.toUpperCase(),
+    editionBadgeClass: EDITION_BADGE[edition] || EDITION_BADGE.community,
+    status:           s.status || '—',
+    connectivityMode: s.connectivity_mode || '—',
     health,
     healthLabel:      health.toUpperCase(),
-    healthBadgeClass: HEALTH_BADGE[health],
-    healthDot:        health === 'healthy' ? 'w-1.5 h-1.5 rounded-full bg-tertiary shrink-0'
-                    : health === 'stale'   ? 'w-1.5 h-1.5 rounded-full bg-secondary shrink-0'
-                    :                        'w-1.5 h-1.5 rounded-full bg-white/20 shrink-0',
-    lastHeartbeat:    fmtDate(s.last_heartbeat_at || s.lastHeartbeatAt),
-    chains,
+    healthBadgeClass: HEALTH_BADGE[health] || HEALTH_BADGE.offline,
+    healthDot:        HEALTH_DOT[health]   || HEALTH_DOT.offline,
+    lastSeen:         fmtDate(s.last_seen_at),
+    lastError:        s.last_error || '',
+    chains:           parseChains(s),
   };
 }
 
@@ -114,30 +141,39 @@ const template = `
 
             <!-- Desktop table -->
             <div rv-hide="signersEmpty" class="hidden lg:block overflow-x-auto">
-              <table class="w-full text-left border-collapse">
+              <table class="w-full text-left border-collapse" style="min-width:900px">
                 <thead>
                   <tr class="border-b border-white/5 bg-white/[0.02]">
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">NAME</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">FINGERPRINT</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">HEALTH</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">LAST HEARTBEAT</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CHAINS</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">NAME</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">EDITION</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">HEALTH</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">LAST SEEN</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">MODE</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CHAINS</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">FINGERPRINT</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-white/5">
                   <tr rv-each-signer="signers" class="hover:bg-white/[0.02]">
-                    <td rv-text="signer.name"          class="px-md py-3 font-body-md text-on-surface font-semibold"></td>
-                    <td class="px-md py-3">
-                      <span rv-text="signer.fpShort" rv-attr-title="signer.fingerprint" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
+                    <td class="px-sm py-3">
+                      <p rv-text="signer.name" class="font-body-md text-on-surface font-semibold text-[13px]"></p>
+                      <p rv-show="signer.lastError" rv-text="signer.lastError" class="font-mono-data text-error text-[11px] mt-xs truncate max-w-[200px]"></p>
                     </td>
-                    <td class="px-md py-3">
+                    <td class="px-sm py-3">
+                      <span rv-text="signer.editionLabel" rv-attr-class="signer.editionBadgeClass"></span>
+                    </td>
+                    <td class="px-sm py-3">
                       <span rv-attr-class="signer.healthBadgeClass" class="flex items-center gap-xs w-fit">
                         <span rv-attr-class="signer.healthDot"></span>
                         <span rv-text="signer.healthLabel"></span>
                       </span>
                     </td>
-                    <td rv-text="signer.lastHeartbeat" class="px-md py-3 font-mono-data text-on-surface-variant text-[12px]"></td>
-                    <td rv-text="signer.chains"        class="px-md py-3 font-body-sm text-on-surface-variant"></td>
+                    <td rv-text="signer.lastSeen"        class="px-sm py-3 font-mono-data text-on-surface-variant text-[12px] whitespace-nowrap"></td>
+                    <td rv-text="signer.connectivityMode" class="px-sm py-3 font-mono-data text-on-surface-variant text-[12px]"></td>
+                    <td rv-text="signer.chains"           class="px-sm py-3 font-body-sm text-on-surface-variant text-[12px]"></td>
+                    <td class="px-sm py-3">
+                      <span rv-text="signer.fpShort" rv-attr-title="signer.fingerprint" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -147,15 +183,22 @@ const template = `
             <div rv-hide="signersEmpty" class="lg:hidden divide-y divide-white/5">
               <div rv-each-signer="signers" class="px-md py-3">
                 <div class="flex items-start justify-between mb-xs">
-                  <p rv-text="signer.name" class="font-body-md text-on-surface font-semibold"></p>
-                  <span rv-attr-class="signer.healthBadgeClass" class="flex items-center gap-xs">
+                  <div>
+                    <p rv-text="signer.name" class="font-body-md text-on-surface font-semibold"></p>
+                    <span rv-text="signer.editionLabel" rv-attr-class="signer.editionBadgeClass" class="mt-xs inline-flex"></span>
+                  </div>
+                  <span rv-attr-class="signer.healthBadgeClass" class="flex items-center gap-xs shrink-0">
                     <span rv-attr-class="signer.healthDot"></span>
                     <span rv-text="signer.healthLabel"></span>
                   </span>
                 </div>
-                <p class="font-mono-data text-on-surface-variant text-[11px]"><span rv-text="signer.fpShort"></span></p>
-                <p class="font-body-sm text-on-surface-variant text-[11px] mt-xs">Chains: <span rv-text="signer.chains"></span></p>
-                <p class="font-mono-data text-on-surface-variant text-[11px] mt-xs">Last HB: <span rv-text="signer.lastHeartbeat"></span></p>
+                <div class="grid grid-cols-2 gap-xs text-[11px] mt-xs">
+                  <span class="text-on-surface-variant">Mode: <span rv-text="signer.connectivityMode" class="font-mono-data text-on-surface"></span></span>
+                  <span class="text-on-surface-variant">Chains: <span rv-text="signer.chains" class="font-mono-data text-on-surface"></span></span>
+                </div>
+                <p class="font-mono-data text-on-surface-variant text-[11px] mt-xs">Last seen: <span rv-text="signer.lastSeen"></span></p>
+                <p class="font-mono-data text-on-surface-variant text-[11px] mt-xs" rv-attr-title="signer.fingerprint"><span rv-text="signer.fpShort"></span></p>
+                <p rv-show="signer.lastError" rv-text="signer.lastError" class="font-mono-data text-error text-[11px] mt-xs"></p>
               </div>
             </div>
 

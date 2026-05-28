@@ -16,28 +16,67 @@ function fmtDate(v) {
   try { return new Date(v).toISOString().slice(0, 16).replace('T', ' '); } catch { return '—'; }
 }
 
+const NEUTRAL = 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-on-surface-variant border border-white/20';
+const ACTIVE  = 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20';
+const DONE    = 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20';
+const ERROR   = 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-error/10 text-error border border-error/20';
+const DIM     = 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10';
+
 const STATUS_BADGE = {
-  pending:  'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-on-surface-variant border border-white/20',
-  claimed:  'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-secondary/10 text-secondary border border-secondary/20',
-  signed:   'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20',
-  rejected: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-error/10 text-error border border-error/20',
-  expired:  'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
+  created:          NEUTRAL,
+  pending_approval: ACTIVE,
+  approved:         ACTIVE,
+  available:        ACTIVE,
+  claimed:          ACTIVE,
+  signing:          ACTIVE,
+  signed:           DONE,
+  submitted:        DONE,
+  rejected:         ERROR,
+  failed:           ERROR,
+  expired:          DIM,
+  cancelled:        DIM,
 };
 
 function taskStatusBadge(status) {
-  return STATUS_BADGE[status] || STATUS_BADGE.pending;
+  return STATUS_BADGE[status] || NEUTRAL;
+}
+
+function shortHash(h) {
+  if (!h) return '—';
+  return h.length > 20 ? h.slice(0, 8) + '…' + h.slice(-6) : h;
+}
+
+function fmtSats(v) {
+  if (!v) return '—';
+  try { return BigInt(v).toLocaleString() + ' sat'; } catch { return v + ' sat'; }
 }
 
 function normalizeTask(t) {
   const status = t.status || '';
+  const fp = t.signer_fingerprint || '';
   return {
-    id:               t.id || '—',
-    type:             (t.type || t.task_type || '—').toUpperCase().replace(/_/g, ' '),
-    statusLabel:      status.toUpperCase(),
-    statusBadgeClass: taskStatusBadge(status),
-    signerName:       t.signer_name || t.signerName || t.external_signer_id || '—',
-    createdAt:        fmtDate(t.created_at || t.createdAt),
-    expiresAt:        fmtDate(t.expires_at || t.expiresAt),
+    id:                  t.id || '—',
+    idShort:             shortHash(t.id),
+    requestType:         (t.request_type || '—').replace(/_/g, ' ').toUpperCase(),
+    statusLabel:         status.replace(/_/g, ' ').toUpperCase(),
+    statusBadgeClass:    taskStatusBadge(status),
+    decisionMode:        (t.decision_mode || '—').toUpperCase(),
+    decisionReason:      t.decision_reason || '',
+    amountSats:          fmtSats(t.amount_raw),
+    feeSats:             fmtSats(t.fee_raw),
+    feeRate:             t.fee_rate_sat_vb ? t.fee_rate_sat_vb + ' sat/vB' : '—',
+    signerFp:            fp ? shortHash(fp) : '—',
+    signerFpFull:        fp,
+    txHash:              shortHash(t.tx_hash),
+    txHashFull:          t.tx_hash || '',
+    rejectionReason:     t.rejection_reason_message || '',
+    failureMessage:      t.failure_message || '',
+    createdAt:           fmtDate(t.created_at),
+    expiresAt:           fmtDate(t.expires_at),
+    claimedAt:           fmtDate(t.claimed_at),
+    signedAt:            fmtDate(t.signed_at),
+    submittedAt:         fmtDate(t.submitted_at),
+    hasError:            !!(t.rejection_reason_message || t.failure_message),
   };
 }
 
@@ -108,27 +147,46 @@ const template = `
 
             <!-- Desktop table -->
             <div rv-hide="tasksEmpty" class="hidden lg:block overflow-x-auto">
-              <table class="w-full text-left border-collapse">
+              <table class="w-full text-left border-collapse" style="min-width:960px">
                 <thead>
                   <tr class="border-b border-white/5 bg-white/[0.02]">
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TASK ID</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TYPE</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">SIGNER</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CREATED</th>
-                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">EXPIRES</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TASK ID</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TYPE</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">DECISION</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">AMOUNT</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">SIGNER FP</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TX HASH</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CREATED</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-white/5">
-                  <tr rv-each-task="tasks" class="hover:bg-white/[0.02]">
-                    <td rv-text="task.id"           class="px-md py-3 font-mono-data text-on-surface text-[12px]"></td>
-                    <td rv-text="task.type"         class="px-md py-3 font-body-sm text-on-surface-variant text-[12px]"></td>
-                    <td class="px-md py-3">
-                      <span rv-text="task.statusLabel" rv-attr-class="task.statusBadgeClass"></span>
+                <tbody rv-each-task="tasks" class="divide-y divide-white/5">
+                  <tr class="hover:bg-white/[0.02]">
+                    <td class="px-sm py-3">
+                      <span rv-text="task.idShort" rv-attr-title="task.id" class="font-mono-data text-on-surface text-[12px] cursor-help"></span>
                     </td>
-                    <td rv-text="task.signerName"   class="px-md py-3 font-body-sm text-on-surface-variant text-[12px]"></td>
-                    <td rv-text="task.createdAt"    class="px-md py-3 font-mono-data text-on-surface-variant text-[12px]"></td>
-                    <td rv-text="task.expiresAt"    class="px-md py-3 font-mono-data text-on-surface-variant text-[12px]"></td>
+                    <td rv-text="task.requestType"    class="px-sm py-3 font-body-sm text-on-surface-variant text-[12px] whitespace-nowrap"></td>
+                    <td class="px-sm py-3">
+                      <span rv-text="task.statusLabel" rv-attr-class="task.statusBadgeClass" class="whitespace-nowrap"></span>
+                    </td>
+                    <td class="px-sm py-3">
+                      <span rv-text="task.decisionMode" class="font-mono-data text-on-surface-variant text-[11px]"></span>
+                      <p rv-show="task.decisionReason" rv-text="task.decisionReason" class="font-body-sm text-on-surface-variant text-[10px] mt-0.5 opacity-60"></p>
+                    </td>
+                    <td rv-text="task.amountSats"      class="px-sm py-3 font-mono-data text-on-surface-variant text-[12px] whitespace-nowrap"></td>
+                    <td class="px-sm py-3">
+                      <span rv-text="task.signerFp" rv-attr-title="task.signerFpFull" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
+                    </td>
+                    <td class="px-sm py-3">
+                      <span rv-text="task.txHash" rv-attr-title="task.txHashFull" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
+                    </td>
+                    <td rv-text="task.createdAt"       class="px-sm py-3 font-mono-data text-on-surface-variant text-[12px] whitespace-nowrap"></td>
+                  </tr>
+                  <tr rv-show="task.hasError" class="bg-error/5">
+                    <td colspan="8" class="px-sm pb-2 pt-0">
+                      <p rv-show="task.rejectionReason" class="font-mono-data text-error text-[11px]">Rejection: <span rv-text="task.rejectionReason"></span></p>
+                      <p rv-show="task.failureMessage"  class="font-mono-data text-error text-[11px]">Failure: <span rv-text="task.failureMessage"></span></p>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -139,15 +197,20 @@ const template = `
               <div rv-each-task="tasks" class="px-md py-3">
                 <div class="flex items-start justify-between mb-xs">
                   <div>
-                    <p rv-text="task.id" class="font-mono-data text-on-surface text-[12px]"></p>
-                    <p rv-text="task.type" class="font-body-sm text-on-surface-variant mt-xs"></p>
+                    <p rv-text="task.idShort" rv-attr-title="task.id" class="font-mono-data text-on-surface text-[12px] cursor-help"></p>
+                    <p rv-text="task.requestType" class="font-body-sm text-on-surface-variant mt-xs text-[11px]"></p>
                   </div>
                   <span rv-text="task.statusLabel" rv-attr-class="task.statusBadgeClass"></span>
                 </div>
-                <p class="font-body-sm text-on-surface-variant text-[11px]">Signer: <span rv-text="task.signerName"></span></p>
-                <div class="flex gap-md mt-xs">
-                  <span class="font-mono-data text-on-surface-variant text-[11px]">Created: <span rv-text="task.createdAt"></span></span>
+                <div class="grid grid-cols-2 gap-xs text-[11px] mt-xs">
+                  <span class="text-on-surface-variant">Decision: <span rv-text="task.decisionMode" class="font-mono-data text-on-surface"></span></span>
+                  <span class="text-on-surface-variant">Amount: <span rv-text="task.amountSats" class="font-mono-data text-on-surface"></span></span>
                 </div>
+                <p rv-show="task.signerFpFull" class="font-mono-data text-on-surface-variant text-[11px] mt-xs">Signer: <span rv-text="task.signerFp" rv-attr-title="task.signerFpFull"></span></p>
+                <p rv-show="task.txHashFull" class="font-mono-data text-on-surface-variant text-[11px] mt-xs">TX: <span rv-text="task.txHash" rv-attr-title="task.txHashFull"></span></p>
+                <p class="font-mono-data text-on-surface-variant text-[11px] mt-xs">Created: <span rv-text="task.createdAt"></span></p>
+                <p rv-show="task.rejectionReason" rv-text="task.rejectionReason" class="font-mono-data text-error text-[11px] mt-xs"></p>
+                <p rv-show="task.failureMessage"  rv-text="task.failureMessage"  class="font-mono-data text-error text-[11px] mt-xs"></p>
               </div>
             </div>
 
