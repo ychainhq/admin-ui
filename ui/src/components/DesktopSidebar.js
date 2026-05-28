@@ -56,7 +56,6 @@ const INACTIVE_DRAWER_CLASS = `${BASE_DRAWER_CLASS} text-on-surface-variant hove
 
 const NAV_ITEMS = [
   { label: 'Platform Dashboard', icon: 'dashboard',              route: '/dashboard' },
-  { label: 'Audit Logs',         icon: 'receipt_long',           route: '/audit-logs' },
   { label: 'Global Config',      icon: 'settings_applications',  route: '/global-config' },
   { label: 'Tenant List',        icon: 'corporate_fare',         route: '/tenants' },
   { label: 'Customers',          icon: 'group',                  route: '/customers' },
@@ -65,6 +64,8 @@ const NAV_ITEMS = [
   { label: 'Customer Assets',    icon: 'account_balance_wallet', route: '/customer-assets' },
   { label: 'Transactions',       icon: 'swap_horiz',             route: '/transactions' },
   { label: 'Support',            icon: 'contact_support',        route: '/support' },
+  { separator: true,             label: 'Audit' },
+  { label: 'Audit Logs',         icon: 'receipt_long',           route: '/audit-logs' },
   { separator: true,             label: 'Operations' },
   { label: 'Wallets',            icon: 'account_balance',        route: '/wallets' },
   { label: 'Withdrawal Batches', icon: 'pending_actions',        route: '/withdrawal-batches' },

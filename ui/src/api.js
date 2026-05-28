@@ -314,6 +314,18 @@ export const api = {
     return res.data ?? res;
   },
 
+  getTicklers: ({ limit = 50, cursor, category, subcategory, entity_id, actor_login, from, to } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor)      params.set('cursor', cursor);
+    if (category)    params.set('category', category);
+    if (subcategory) params.set('subcategory', subcategory);
+    if (entity_id)   params.set('entity_id', entity_id);
+    if (actor_login) params.set('actor_login', actor_login);
+    if (from)        params.set('from', String(from));
+    if (to)          params.set('to', String(to));
+    return tenantRequest(`/api/ticklers?${params}`);
+  },
+
   // tenantRequest is exposed so future views can call /api/* with the active tenant key.
   tenantRequest,
 };
