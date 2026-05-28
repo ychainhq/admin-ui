@@ -296,6 +296,29 @@ export const api = {
   getExternalSigners: () =>
     tenantRequest('/api/external-signers'),
 
+  approveSigningTask: (taskId) =>
+    tenantRequest(`/api/signing-tasks/${encodeURIComponent(taskId)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  rejectSigningTask: (taskId, reason) =>
+    tenantRequest(`/api/signing-tasks/${encodeURIComponent(taskId)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  getSignerPolicies: async () => {
+    const res = await tenantRequest('/api/external-signers/policies');
+    return res.data ?? res;
+  },
+
+  saveSignerPolicies: (policies) =>
+    tenantRequest('/api/external-signers/policies', {
+      method: 'PUT',
+      body: JSON.stringify({ policies }),
+    }),
+
   getCustomerWithdrawals: (sessionToken, { limit = 20, cursor, status, toAddress } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);

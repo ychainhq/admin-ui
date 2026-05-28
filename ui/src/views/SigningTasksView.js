@@ -77,6 +77,7 @@ function normalizeTask(t) {
     signedAt:            fmtDate(t.signed_at),
     submittedAt:         fmtDate(t.submitted_at),
     hasError:            !!(t.rejection_reason_message || t.failure_message),
+    isPendingApproval:   status === 'pending_approval',
   };
 }
 
@@ -147,7 +148,7 @@ const template = `
 
             <!-- Desktop table -->
             <div rv-hide="tasksEmpty" class="hidden lg:block overflow-x-auto">
-              <table class="w-full text-left border-collapse" style="min-width:960px">
+              <table class="w-full text-left border-collapse" style="min-width:1100px">
                 <thead>
                   <tr class="border-b border-white/5 bg-white/[0.02]">
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TASK ID</th>
@@ -158,6 +159,7 @@ const template = `
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">SIGNER FP</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TX HASH</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CREATED</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody rv-each-task="tasks" class="divide-y divide-white/5">
@@ -181,9 +183,27 @@ const template = `
                       <span rv-text="task.txHash" rv-attr-title="task.txHashFull" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
                     </td>
                     <td rv-text="task.createdAt"       class="px-sm py-3 font-mono-data text-on-surface-variant text-[12px] whitespace-nowrap"></td>
+                    <td class="px-sm py-3">
+                      <div rv-show="task.isPendingApproval" class="flex gap-xs">
+                        <button rv-on-click="task.confirmApprove" class="px-2 py-1 rounded text-[11px] font-bold bg-tertiary/20 text-tertiary border border-tertiary/30 hover:bg-tertiary/30 transition-all whitespace-nowrap">✓ Approve</button>
+                        <button rv-on-click="task.toggleReject"   class="px-2 py-1 rounded text-[11px] font-bold bg-error/20 text-error border border-error/30 hover:bg-error/30 transition-all whitespace-nowrap">✗ Reject</button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr rv-show="task.rejectExpanded" class="bg-error/5">
+                    <td colspan="9" class="px-sm py-2">
+                      <div class="flex items-start gap-sm">
+                        <textarea rv-value="task.rejectReason" placeholder="Rejection reason (required)..." rows="2" class="flex-1 bg-surface-container-low border border-white/10 rounded px-sm py-xs text-[12px] font-mono-data text-on-surface resize-none focus:outline-none focus:border-error/50 placeholder:text-on-surface-variant/50"></textarea>
+                        <div class="flex flex-col gap-xs shrink-0">
+                          <button rv-on-click="task.confirmReject" class="px-sm py-1 rounded text-[11px] font-bold bg-error text-white hover:brightness-110 transition-all whitespace-nowrap">Confirm reject</button>
+                          <button rv-on-click="task.toggleReject"  class="px-sm py-1 rounded text-[11px] font-bold bg-white/10 text-on-surface-variant hover:bg-white/20 transition-all whitespace-nowrap">Cancel</button>
+                        </div>
+                      </div>
+                      <p rv-show="task.actionError" rv-text="task.actionError" class="font-mono-data text-error text-[11px] mt-xs"></p>
+                    </td>
                   </tr>
                   <tr rv-show="task.hasError" class="bg-error/5">
-                    <td colspan="8" class="px-sm pb-2 pt-0">
+                    <td colspan="9" class="px-sm pb-2 pt-0">
                       <p rv-show="task.rejectionReason" class="font-mono-data text-error text-[11px]">Rejection: <span rv-text="task.rejectionReason"></span></p>
                       <p rv-show="task.failureMessage"  class="font-mono-data text-error text-[11px]">Failure: <span rv-text="task.failureMessage"></span></p>
                     </td>
@@ -211,6 +231,18 @@ const template = `
                 <p class="font-mono-data text-on-surface-variant text-[11px] mt-xs">Created: <span rv-text="task.createdAt"></span></p>
                 <p rv-show="task.rejectionReason" rv-text="task.rejectionReason" class="font-mono-data text-error text-[11px] mt-xs"></p>
                 <p rv-show="task.failureMessage"  rv-text="task.failureMessage"  class="font-mono-data text-error text-[11px] mt-xs"></p>
+                <div rv-show="task.isPendingApproval" class="flex gap-xs mt-sm">
+                  <button rv-on-click="task.confirmApprove" class="flex-1 py-2 rounded text-[12px] font-bold bg-tertiary/20 text-tertiary border border-tertiary/30">✓ Approve</button>
+                  <button rv-on-click="task.toggleReject"   class="flex-1 py-2 rounded text-[12px] font-bold bg-error/20 text-error border border-error/30">✗ Reject</button>
+                </div>
+                <div rv-show="task.rejectExpanded" class="mt-sm">
+                  <textarea rv-value="task.rejectReason" placeholder="Rejection reason..." rows="2" class="w-full bg-surface-container-low border border-white/10 rounded px-sm py-xs text-[12px] font-mono-data text-on-surface resize-none focus:outline-none focus:border-error/50 mb-xs"></textarea>
+                  <div class="flex gap-xs">
+                    <button rv-on-click="task.confirmReject" class="flex-1 py-1 rounded text-[11px] font-bold bg-error text-white">Confirm</button>
+                    <button rv-on-click="task.toggleReject"  class="flex-1 py-1 rounded text-[11px] font-bold bg-white/10 text-on-surface-variant">Cancel</button>
+                  </div>
+                  <p rv-show="task.actionError" rv-text="task.actionError" class="font-mono-data text-error text-[11px] mt-xs"></p>
+                </div>
               </div>
             </div>
 
@@ -270,7 +302,40 @@ export function createController({ api, router }) {
         });
         const items = res.data || res || [];
         self._nextCursor = res.pagination?.nextCursor || undefined;
-        self.tasks = (Array.isArray(items) ? items : []).map(normalizeTask);
+        self.tasks = (Array.isArray(items) ? items : []).map(raw => {
+          const t = normalizeTask(raw);
+          if (t.isPendingApproval) {
+            t.rejectExpanded = false;
+            t.rejectReason = '';
+            t.actionError = '';
+            t.confirmApprove = async (e) => {
+              e?.preventDefault();
+              try {
+                await api.approveSigningTask(raw.id);
+                self.load();
+              } catch (err) {
+                t.actionError = err.message;
+              }
+            };
+            t.toggleReject = (e) => {
+              e?.preventDefault();
+              t.rejectExpanded = !t.rejectExpanded;
+              t.actionError = '';
+            };
+            t.confirmReject = async (e) => {
+              e?.preventDefault();
+              const reason = (t.rejectReason || '').trim();
+              if (!reason) { t.actionError = 'Reason is required'; return; }
+              try {
+                await api.rejectSigningTask(raw.id, reason);
+                self.load();
+              } catch (err) {
+                t.actionError = err.message;
+              }
+            };
+          }
+          return t;
+        });
         self.tasksEmpty = self.tasks.length === 0;
         const currentPage = self._prevCursors.length + 1;
         self.pagination = createPaginationController({

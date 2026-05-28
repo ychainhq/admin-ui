@@ -71,6 +71,7 @@ const NAV_ITEMS = [
   { label: 'Withdrawal Batches', icon: 'pending_actions',        route: '/withdrawal-batches' },
   { label: 'Signing Tasks',      icon: 'task_alt',               route: '/signing-tasks' },
   { label: 'External Signers',   icon: 'verified_user',          route: '/external-signers' },
+  { label: 'Signer Policies',   icon: 'tune',                   route: '/external-signer-policies' },
   { separator: true,             label: 'Dev Tools' },
   { label: 'Dev Nodes',          icon: 'hub',                    route: '/nodes' },
 ];

@@ -19,6 +19,7 @@ import { WalletAddressesView } from './views/WalletAddressesView.js';
 import { SigningTasksView } from './views/SigningTasksView.js';
 import { ExternalSignersView } from './views/ExternalSignersView.js';
 import { AuditLogsView } from './views/AuditLogsView.js';
+import { SignerPoliciesView } from './views/SignerPoliciesView.js';
 
 const router = createRouter();
 const deps = { api, router };
@@ -46,7 +47,8 @@ router
   .on('/wallets',            (params) => WalletsView.mount(appEl(), params, deps))
   .on('/wallets/:walletId/addresses', (params) => WalletAddressesView.mount(appEl(), params, deps))
   .on('/signing-tasks',      (params) => SigningTasksView.mount(appEl(), params, deps))
-  .on('/external-signers',   (params) => ExternalSignersView.mount(appEl(), params, deps))
+  .on('/external-signers',         (params) => ExternalSignersView.mount(appEl(), params, deps))
+  .on('/external-signer-policies', (params) => SignerPoliciesView.mount(appEl(), params, deps))
   .on('/nodes', (params) => NodeListView.mount(appEl(), params, deps))
   .on('/nodes/:nodeId', (params) => NodeDetailView.mount(appEl(), params, deps))
   .on('/audit-logs', (params) => AuditLogsView.mount(appEl(), params, deps));
