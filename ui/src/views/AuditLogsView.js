@@ -45,13 +45,25 @@ function categoryBadgeClass(category) {
   return `${base} ${color}`;
 }
 
+function formatJson(v) {
+  if (v === null || v === undefined) return null;
+  try {
+    const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return String(v);
+  }
+}
+
 function normalizeTickler(t) {
   const category = t.category || '';
   const subcategory = t.subcategory || '';
   const entityId = t.entity_id || '';
   const details = [t.field1, t.field2, t.field3].filter(Boolean).join(' · ') || '';
+  const prevJson = formatJson(t.prev_value);
+  const newJson  = formatJson(t.new_value);
 
-  return {
+  const entry = {
     id:                t.id || '',
     category,
     subcategory,
@@ -63,7 +75,20 @@ function normalizeTickler(t) {
     actorLogin:        t.actor_login || '—',
     details,
     occurredAt:        fmtDate(t.occurred_at),
+    prevJson:          prevJson || '—',
+    newJson:           newJson  || '—',
+    hasPrev:           prevJson !== null,
+    hasNew:            newJson  !== null,
+    hasDiff:           prevJson !== null || newJson !== null,
+    expanded:          false,
   };
+
+  entry.toggleExpand = function(e) {
+    e?.preventDefault();
+    entry.expanded = !entry.expanded;
+  };
+
+  return entry;
 }
 
 const desktopTopBarTpl = desktopTopBarHtml({
@@ -133,9 +158,10 @@ const template = `
 
             <!-- Desktop table -->
             <div rv-hide="itemsEmpty" class="hidden lg:block overflow-x-auto">
-              <table class="w-full text-left border-collapse" style="min-width:900px">
+              <table class="w-full text-left border-collapse" style="min-width:940px">
                 <thead>
                   <tr class="border-b border-white/5 bg-white/[0.02]">
+                    <th class="w-8 px-sm py-3"></th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">OCCURRED</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CATEGORY</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">SUBCATEGORY</th>
@@ -144,8 +170,15 @@ const template = `
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">DETAILS</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-white/5">
-                  <tr rv-each-entry="entries" class="hover:bg-white/[0.02]">
+                <tbody rv-each-entry="entries" class="border-b border-white/5">
+                  <tr class="hover:bg-white/[0.02]">
+                    <td class="pl-sm py-3 w-8">
+                      <button rv-show="entry.hasDiff" rv-on-click="entry.toggleExpand"
+                        class="text-on-surface-variant hover:text-secondary transition-colors">
+                        <span rv-show="entry.expanded"  class="material-symbols-outlined text-[16px]">expand_less</span>
+                        <span rv-hide="entry.expanded" class="material-symbols-outlined text-[16px]">expand_more</span>
+                      </button>
+                    </td>
                     <td rv-text="entry.occurredAt" class="px-sm py-3 font-mono-data text-on-surface-variant text-[12px] whitespace-nowrap"></td>
                     <td class="px-sm py-3">
                       <span rv-text="entry.categoryLabel" rv-attr-class="entry.categoryBadgeClass"></span>
@@ -157,6 +190,24 @@ const template = `
                     <td rv-text="entry.actorLogin" class="px-sm py-3 font-mono-data text-on-surface-variant text-[12px]"></td>
                     <td rv-text="entry.details"   class="px-sm py-3 font-mono-data text-on-surface-variant text-[11px] max-w-[200px] truncate"></td>
                   </tr>
+                  <tr rv-show="entry.expanded" class="bg-black/20">
+                    <td colspan="7" class="px-md py-sm">
+                      <div class="grid grid-cols-2 gap-sm">
+                        <div>
+                          <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold mb-xs">Before</p>
+                          <pre rv-show="entry.hasPrev" rv-text="entry.prevJson"
+                            class="text-[11px] font-mono-data text-tertiary bg-black/30 rounded-lg p-sm overflow-x-auto max-h-[300px] whitespace-pre-wrap break-all"></pre>
+                          <p rv-hide="entry.hasPrev" class="text-[11px] font-mono-data text-on-surface-variant/40 italic">no prev value</p>
+                        </div>
+                        <div>
+                          <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold mb-xs">After</p>
+                          <pre rv-show="entry.hasNew" rv-text="entry.newJson"
+                            class="text-[11px] font-mono-data text-secondary bg-black/30 rounded-lg p-sm overflow-x-auto max-h-[300px] whitespace-pre-wrap break-all"></pre>
+                          <p rv-hide="entry.hasNew" class="text-[11px] font-mono-data text-on-surface-variant/40 italic">no new value</p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -166,7 +217,14 @@ const template = `
               <div rv-each-entry="entries" class="px-md py-3">
                 <div class="flex items-start justify-between mb-xs">
                   <span rv-text="entry.categoryLabel" rv-attr-class="entry.categoryBadgeClass"></span>
-                  <span rv-text="entry.occurredAt" class="font-mono-data text-on-surface-variant text-[11px]"></span>
+                  <div class="flex items-center gap-xs">
+                    <span rv-text="entry.occurredAt" class="font-mono-data text-on-surface-variant text-[11px]"></span>
+                    <button rv-show="entry.hasDiff" rv-on-click="entry.toggleExpand"
+                      class="text-on-surface-variant hover:text-secondary transition-colors">
+                      <span rv-show="entry.expanded"  class="material-symbols-outlined text-[16px]">expand_less</span>
+                      <span rv-hide="entry.expanded" class="material-symbols-outlined text-[16px]">expand_more</span>
+                    </button>
+                  </div>
                 </div>
                 <p class="font-mono-data text-on-surface text-[12px] mb-xs">
                   <span rv-text="entry.subcategoryLabel"></span>
@@ -177,6 +235,18 @@ const template = `
                 <div class="flex items-center justify-between text-[11px] text-on-surface-variant">
                   <span rv-text="entry.actorLogin" class="font-mono-data"></span>
                   <span rv-text="entry.details" class="font-mono-data truncate ml-sm max-w-[50%]"></span>
+                </div>
+                <div rv-show="entry.expanded" class="mt-sm space-y-sm">
+                  <div rv-show="entry.hasPrev">
+                    <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold mb-xs">Before</p>
+                    <pre rv-text="entry.prevJson"
+                      class="text-[11px] font-mono-data text-tertiary bg-black/30 rounded-lg p-sm overflow-x-auto max-h-[200px] whitespace-pre-wrap break-all"></pre>
+                  </div>
+                  <div rv-show="entry.hasNew">
+                    <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold mb-xs">After</p>
+                    <pre rv-text="entry.newJson"
+                      class="text-[11px] font-mono-data text-secondary bg-black/30 rounded-lg p-sm overflow-x-auto max-h-[200px] whitespace-pre-wrap break-all"></pre>
+                  </div>
                 </div>
               </div>
             </div>
