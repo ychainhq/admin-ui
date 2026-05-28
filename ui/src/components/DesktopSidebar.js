@@ -55,25 +55,30 @@ const ACTIVE_DRAWER_CLASS = `${BASE_DRAWER_CLASS} bg-secondary/10 text-secondary
 const INACTIVE_DRAWER_CLASS = `${BASE_DRAWER_CLASS} text-on-surface-variant hover:bg-white/5`;
 
 const NAV_ITEMS = [
-  { label: 'Platform Dashboard', icon: 'dashboard',              route: '/dashboard' },
-  { label: 'Global Config',      icon: 'settings_applications',  route: '/global-config' },
-  { label: 'Tenant List',        icon: 'corporate_fare',         route: '/tenants' },
-  { label: 'Customers',          icon: 'group',                  route: '/customers' },
-  { label: 'Onboarding',         icon: 'person_add',             route: '/onboarding' },
-  { label: 'API Keys',           icon: 'key',                    route: '/api-keys' },
-  { label: 'Customer Assets',    icon: 'account_balance_wallet', route: '/customer-assets' },
-  { label: 'Transactions',       icon: 'swap_horiz',             route: '/transactions' },
-  { label: 'Support',            icon: 'contact_support',        route: '/support' },
-  { separator: true,             label: 'Audit' },
-  { label: 'Audit Logs',         icon: 'receipt_long',           route: '/audit-logs' },
   { separator: true,             label: 'Operations' },
+  { label: 'Customers',          icon: 'group',                  route: '/customers' },    
+  { separator: true,             label: 'Management' },
+  
   { label: 'Wallets',            icon: 'account_balance',        route: '/wallets' },
   { label: 'Withdrawal Batches', icon: 'pending_actions',        route: '/withdrawal-batches' },
   { label: 'Signing Tasks',      icon: 'task_alt',               route: '/signing-tasks' },
   { label: 'External Signers',   icon: 'verified_user',          route: '/external-signers' },
   { label: 'Signer Policies',   icon: 'tune',                   route: '/external-signer-policies' },
+  { separator: true,             label: 'Audit' },
+  { label: 'Audit Logs',         icon: 'receipt_long',           route: '/audit-logs' },  
   { separator: true,             label: 'Dev Tools' },
   { label: 'Dev Nodes',          icon: 'hub',                    route: '/nodes' },
+  { separator: true,             label: 'Platform' },
+  { label: 'Tenant List',        icon: 'corporate_fare',         route: '/tenants' },
+  { label: 'Platform Dashboard', icon: 'dashboard',              route: '/dashboard' },
+  { label: 'Global Config',      icon: 'settings_applications',  route: '/global-config' },
+  { label: 'Onboarding',         icon: 'person_add',             route: '/onboarding' },
+  { label: 'API Keys',           icon: 'key',                    route: '/api-keys' },
+  { label: 'Customer Assets',    icon: 'account_balance_wallet', route: '/customer-assets' },
+  { label: 'Transactions',       icon: 'swap_horiz',             route: '/transactions' },
+  { label: 'Support',            icon: 'contact_support',        route: '/support' },
+  
+  
 ];
 
 export function createSidebarController({ activeRoute, router, onCreateTenant }) {
