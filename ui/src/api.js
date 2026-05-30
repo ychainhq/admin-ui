@@ -332,6 +332,12 @@ export const api = {
   getBitcoinFees: () =>
     tenantRequest('/api/chains/bitcoin/fees'),
 
+  resolveAddress: async (address) => {
+    const params = new URLSearchParams({ address });
+    const res = await tenantRequest(`/api/addresses/resolve?${params}`);
+    return res.data ?? res;
+  },
+
   getWithdrawalBatchConfig: async () => {
     const res = await tenantRequest('/api/tenant/withdrawal-batch-config');
     return res.data ?? res;

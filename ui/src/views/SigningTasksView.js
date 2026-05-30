@@ -65,6 +65,7 @@ function normalizeTask(t) {
     amountSats:          fmtSats(t.amount_raw),
     feeSats:             fmtSats(t.fee_raw),
     feeRate:             t.fee_rate_sat_vb ? t.fee_rate_sat_vb + ' sat/vB' : '—',
+    signerName:          t.signer_name || t.external_signer_id || '—',
     signerFp:            fp ? shortHash(fp) : '—',
     signerFpFull:        fp,
     txHash:              shortHash(t.tx_hash),

@@ -4,7 +4,7 @@ import { makeMockApi, makeRouter } from '../mocks/api.js';
 const SAMPLE_TASK = {
   id: 'sigtsk_abc123',
   status: 'pending',
-  task_type: 'btc_withdrawal_batch',
+  request_type: 'btc_withdrawal_batch',
   signer_name: 'Ledger Signer',
   created_at: '2026-05-01T12:00:00Z',
   expires_at: '2026-05-01T13:00:00Z',
@@ -103,7 +103,7 @@ describe('SigningTasksView — load()', () => {
       }),
     });
     await ctrl.load();
-    expect(ctrl.tasks[0].type).toBe('BTC WITHDRAWAL BATCH');
+    expect(ctrl.tasks[0].requestType).toBe('BTC WITHDRAWAL BATCH');
   });
 
   test('signerName falls back to external_signer_id when signer_name absent', async () => {
@@ -205,7 +205,8 @@ describe('SigningTasksView — search form integration', () => {
     const { ctrl } = makeCtrl({ getSigningTasks });
 
     ctrl.signingTaskSearchForm.onFormInput({
-      target: { tagName: 'SELECT', name: 'status', value: 'Signed', selectedIndex: 3 },
+      // index 7 = 'signed' (0=All,1=created,2=pending_approval,3=approved,4=available,5=claimed,6=signing,7=signed)
+      target: { tagName: 'SELECT', name: 'status', value: 'Signed', selectedIndex: 7 },
     });
     ctrl.signingTaskSearchForm.onSearch({ preventDefault: jest.fn() });
     await new Promise(r => setTimeout(r, 0));
@@ -261,7 +262,8 @@ describe('SigningTasksView — search form integration', () => {
     const { ctrl } = makeCtrl({ getSigningTasks });
 
     ctrl.signingTaskSearchForm.onFormInput({
-      target: { tagName: 'SELECT', name: 'status', value: 'Signed', selectedIndex: 3 },
+      // index 7 = 'signed' (0=All,1=created,2=pending_approval,3=approved,4=available,5=claimed,6=signing,7=signed)
+      target: { tagName: 'SELECT', name: 'status', value: 'Signed', selectedIndex: 7 },
     });
     ctrl.signingTaskSearchForm.onSearch({ preventDefault: jest.fn() });
     await new Promise(r => setTimeout(r, 0));

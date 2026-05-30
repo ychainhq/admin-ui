@@ -27,11 +27,11 @@ describe('createSigningTaskSearchFormController', () => {
     expect(ctrl.optionSets.status[0].label).toBe('All statuses');
   });
 
-  test('status optionSet contains all 5 task statuses', () => {
+  test('status optionSet contains all task statuses', () => {
     const { ctrl } = setup();
     const values = ctrl.optionSets.status.map(o => o.value).filter(Boolean);
     expect(values).toEqual(expect.arrayContaining([
-      'pending', 'claimed', 'signed', 'rejected', 'expired',
+      'pending_approval', 'claimed', 'signed', 'rejected', 'expired',
     ]));
   });
 
@@ -55,9 +55,10 @@ describe('createSigningTaskSearchFormController', () => {
   // ─── search ─────────────────────────────────────────────────────────────────
   test('onSearch passes status filter', () => {
     const { ctrl, onSearch } = setup();
-    ctrl.onFormInput({ target: { tagName: 'SELECT', name: 'status', value: 'Pending', selectedIndex: 1 } });
+    // selectedIndex 2 = 'pending_approval' (0=All, 1=created, 2=pending_approval)
+    ctrl.onFormInput({ target: { tagName: 'SELECT', name: 'status', value: 'Pending approval', selectedIndex: 2 } });
     ctrl.onSearch({ preventDefault: jest.fn() });
-    expect(onSearch).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending' }));
+    expect(onSearch).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending_approval' }));
   });
 
   test('onSearch passes requestType filter', () => {

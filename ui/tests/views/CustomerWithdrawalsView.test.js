@@ -331,6 +331,171 @@ describe('CustomerWithdrawalsView — form submit', () => {
   });
 });
 
+describe('CustomerWithdrawalsView — address resolution and mode switching', () => {
+  test('_updateModeUI default state: submitLabel=Submit Withdrawal, submitIcon=send', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.form._updateModeUI();
+    expect(ctrl.form.submitLabel).toBe('Submit Withdrawal');
+    expect(ctrl.form.submitIcon).toBe('send');
+  });
+
+  test('_updateModeUI isInternal=true preferExternal=false → bolt + Send Internal Transfer, internal btn active', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.preferExternal = false;
+    ctrl.form._updateModeUI();
+    expect(ctrl.form.submitLabel).toBe('Send Internal Transfer');
+    expect(ctrl.form.submitIcon).toBe('bolt');
+    expect(ctrl.form.internalBtnClass).toContain('bg-secondary');
+    expect(ctrl.form.externalBtnClass).not.toContain('bg-secondary');
+  });
+
+  test('_updateModeUI isInternal=true preferExternal=true → send + Submit On-chain Withdrawal, external btn active', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.preferExternal = true;
+    ctrl.form._updateModeUI();
+    expect(ctrl.form.submitLabel).toBe('Submit On-chain Withdrawal');
+    expect(ctrl.form.submitIcon).toBe('send');
+    expect(ctrl.form.externalBtnClass).toContain('bg-secondary');
+    expect(ctrl.form.internalBtnClass).not.toContain('bg-secondary');
+  });
+
+  test('setPreferExternalTrue() sets preferExternal=true and updates labels', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.setPreferExternalTrue({ preventDefault: jest.fn() });
+    expect(ctrl.form.preferExternal).toBe(true);
+    expect(ctrl.form.submitLabel).toBe('Submit On-chain Withdrawal');
+  });
+
+  test('setPreferExternalFalse() sets preferExternal=false and updates labels', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.preferExternal = true;
+    ctrl.form.setPreferExternalFalse({ preventDefault: jest.fn() });
+    expect(ctrl.form.preferExternal).toBe(false);
+    expect(ctrl.form.submitLabel).toBe('Send Internal Transfer');
+  });
+
+  test('onAddressInput with non-empty address: immediately resets isInternalAddress and sets resolving=true', () => {
+    jest.useFakeTimers();
+    const { ctrl } = makeCtrl();
+    ctrl.form.isInternalAddress = true; // previous state
+    ctrl.form.onAddressInput({ target: { value: 'bcrt1qtest' } });
+    expect(ctrl.form.isInternalAddress).toBe(false); // reset before debounce fires
+    expect(ctrl.form.resolving).toBe(true);
+    jest.useRealTimers();
+  });
+
+  test('onAddressInput calls resolveAddress after 600ms debounce and sets isInternalAddress=true', async () => {
+    jest.useFakeTimers();
+    const resolveAddress = jest.fn().mockResolvedValue({ isInternal: true, customerId: 'cust_x' });
+    const { ctrl } = makeCtrl({ resolveAddress });
+    ctrl.form.onAddressInput({ target: { value: 'bcrt1qinternal' } });
+    expect(resolveAddress).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(600);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolveAddress).toHaveBeenCalledWith('bcrt1qinternal');
+    expect(ctrl.form.isInternalAddress).toBe(true);
+    expect(ctrl.form.resolving).toBe(false);
+    jest.useRealTimers();
+  });
+
+  test('onAddressInput with empty string: sets resolving=false immediately, never calls resolveAddress', () => {
+    jest.useFakeTimers();
+    const resolveAddress = jest.fn();
+    const { ctrl } = makeCtrl({ resolveAddress });
+    ctrl.form.onAddressInput({ target: { value: '' } });
+    expect(ctrl.form.resolving).toBe(false);
+    jest.advanceTimersByTime(600);
+    expect(resolveAddress).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  test('onAddressInput: failed resolveAddress leaves isInternalAddress=false and resolving=false', async () => {
+    jest.useFakeTimers();
+    const resolveAddress = jest.fn().mockRejectedValue(new Error('network'));
+    const { ctrl } = makeCtrl({ resolveAddress });
+    ctrl.form.onAddressInput({ target: { value: 'bcrt1qtest' } });
+    jest.advanceTimersByTime(600);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(ctrl.form.isInternalAddress).toBe(false);
+    expect(ctrl.form.resolving).toBe(false);
+    jest.useRealTimers();
+  });
+});
+
+describe('CustomerWithdrawalsView — fee estimate for internal transfer mode', () => {
+  test('fee estimate hidden when isInternalAddress=true and preferExternal=false', () => {
+    const { ctrl } = makeCtrl();
+    ctrl._feeRateNormal = 2;
+    ctrl.form.amount = '10000';
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.preferExternal = false;
+    ctrl._updateFeeEstimate();
+    expect(ctrl.feeEstimate.visible).toBe(false);
+  });
+
+  test('fee estimate visible when isInternalAddress=true but preferExternal=true (on-chain override)', () => {
+    const { ctrl } = makeCtrl();
+    ctrl._feeRateNormal = 2;
+    ctrl.form.amount = '10000';
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.preferExternal = true;
+    ctrl._updateFeeEstimate();
+    expect(ctrl.feeEstimate.visible).toBe(true);
+  });
+});
+
+describe('CustomerWithdrawalsView — submit with internal transfer mode', () => {
+  test('submit passes forceExternal=true when isInternal=true and preferExternal=true', async () => {
+    const createWithdrawal = jest.fn().mockResolvedValue({ id: 'wd_ext', status: 'queued', withdrawal_type: 'external' });
+    const { ctrl } = makeCtrl({ createWithdrawalAsCustomer: createWithdrawal });
+    ctrl.form.address = 'bcrt1qinternal';
+    ctrl.form.amount = '5000';
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.preferExternal = true;
+    await ctrl.form.submit();
+    expect(createWithdrawal).toHaveBeenCalledWith('tok_test', expect.objectContaining({ forceExternal: true }));
+  });
+
+  test('submit does not pass forceExternal when isInternal=true and preferExternal=false', async () => {
+    const createWithdrawal = jest.fn().mockResolvedValue({ id: 'wd_int', status: 'confirmed', withdrawal_type: 'internal' });
+    const { ctrl } = makeCtrl({ createWithdrawalAsCustomer: createWithdrawal });
+    ctrl.form.address = 'bcrt1qinternal';
+    ctrl.form.amount = '5000';
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.preferExternal = false;
+    await ctrl.form.submit();
+    const payload = createWithdrawal.mock.calls[0][1];
+    expect(payload.forceExternal).toBeFalsy();
+  });
+
+  test('submit success message contains "Internal transfer" for internal result', async () => {
+    const createWithdrawal = jest.fn().mockResolvedValue({ id: 'wd_int', status: 'confirmed', withdrawal_type: 'internal' });
+    const { ctrl } = makeCtrl({ createWithdrawalAsCustomer: createWithdrawal });
+    ctrl.form.address = 'bcrt1qinternal';
+    ctrl.form.amount = '5000';
+    await ctrl.form.submit();
+    expect(ctrl.form.success).toContain('Internal transfer');
+    expect(ctrl.lastWithdrawalWasInternal).toBe(true);
+  });
+
+  test('submit clears isInternalAddress and preferExternal after success', async () => {
+    const { ctrl } = makeCtrl();
+    ctrl.form.address = 'bcrt1qtest';
+    ctrl.form.amount = '5000';
+    ctrl.form.isInternalAddress = true;
+    ctrl.form.preferExternal = true;
+    await ctrl.form.submit();
+    expect(ctrl.form.isInternalAddress).toBe(false);
+    expect(ctrl.form.preferExternal).toBe(false);
+  });
+});
+
 describe('CustomerWithdrawalsView — navigation', () => {
   test('goToBatches() navigates to withdrawal-batches', () => {
     const { ctrl, router } = makeCtrl();

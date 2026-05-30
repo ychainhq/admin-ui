@@ -55,11 +55,18 @@ function formatJson(v) {
   }
 }
 
-function normalizeTickler(t) {
+export function normalizeTickler(t) {
   const category = t.category || '';
   const subcategory = t.subcategory || '';
   const entityId = t.entity_id || '';
-  const details = [t.field1, t.field2, t.field3].filter(Boolean).join(' · ') || '';
+  const fields = [
+    t.field1 ? { label: 'field1', value: t.field1 } : null,
+    t.field2 ? { label: 'field2', value: t.field2 } : null,
+    t.field3 ? { label: 'field3', value: t.field3 } : null,
+    t.field4 ? { label: 'field4', value: t.field4 } : null,
+    t.field5 ? { label: 'field5', value: t.field5 } : null,
+  ].filter(Boolean);
+  const details = fields.map(f => f.value).join(' · ') || '';
   const prevJson = formatJson(t.prev_value);
   const newJson  = formatJson(t.new_value);
 
@@ -74,12 +81,15 @@ function normalizeTickler(t) {
     entityIdShort:     shortId(entityId),
     actorLogin:        t.actor_login || '—',
     details,
+    fields,
     occurredAt:        fmtDate(t.occurred_at),
     prevJson:          prevJson || '—',
     newJson:           newJson  || '—',
     hasPrev:           prevJson !== null,
     hasNew:            newJson  !== null,
     hasDiff:           prevJson !== null || newJson !== null,
+    hasFields:         fields.length > 0,
+    hasExpandable:     fields.length > 0 || prevJson !== null || newJson !== null,
     expanded:          false,
   };
 
@@ -173,7 +183,7 @@ const template = `
                 <tbody rv-each-entry="entries" class="border-b border-white/5">
                   <tr class="hover:bg-white/[0.02]">
                     <td class="pl-sm py-3 w-8">
-                      <button rv-show="entry.hasDiff" rv-on-click="entry.toggleExpand"
+                      <button rv-show="entry.hasExpandable" rv-on-click="entry.toggleExpand"
                         class="text-on-surface-variant hover:text-secondary transition-colors">
                         <span rv-show="entry.expanded"  class="material-symbols-outlined text-[16px]">expand_less</span>
                         <span rv-hide="entry.expanded" class="material-symbols-outlined text-[16px]">expand_more</span>
@@ -188,10 +198,26 @@ const template = `
                       <span rv-text="entry.entityIdShort" rv-attr-title="entry.entityId" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
                     </td>
                     <td rv-text="entry.actorLogin" class="px-sm py-3 font-mono-data text-on-surface-variant text-[12px]"></td>
-                    <td rv-text="entry.details"   class="px-sm py-3 font-mono-data text-on-surface-variant text-[11px] max-w-[200px] truncate"></td>
+                    <td class="px-sm py-3 max-w-[200px]">
+                      <button rv-show="entry.hasFields" rv-on-click="entry.toggleExpand"
+                        rv-attr-title="entry.details"
+                        class="font-mono-data text-on-surface-variant text-[11px] truncate max-w-full text-left hover:text-secondary transition-colors cursor-pointer">
+                        <span rv-text="entry.details"></span>
+                      </button>
+                      <span rv-hide="entry.hasFields" class="font-mono-data text-on-surface-variant/30 text-[11px]">—</span>
+                    </td>
                   </tr>
                   <tr rv-show="entry.expanded" class="bg-black/20">
                     <td colspan="7" class="px-md py-sm">
+                      <div rv-show="entry.hasFields" class="mb-sm">
+                        <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold mb-xs">Details</p>
+                        <div class="space-y-1">
+                          <div rv-each-field="entry.fields" class="flex gap-sm items-start">
+                            <span rv-text="field.label" class="text-[10px] font-mono-data text-on-surface-variant/50 w-12 shrink-0 pt-px"></span>
+                            <span rv-text="field.value" class="text-[11px] font-mono-data text-on-surface break-all"></span>
+                          </div>
+                        </div>
+                      </div>
                       <div class="grid grid-cols-2 gap-sm">
                         <div>
                           <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold mb-xs">Before</p>
@@ -219,7 +245,7 @@ const template = `
                   <span rv-text="entry.categoryLabel" rv-attr-class="entry.categoryBadgeClass"></span>
                   <div class="flex items-center gap-xs">
                     <span rv-text="entry.occurredAt" class="font-mono-data text-on-surface-variant text-[11px]"></span>
-                    <button rv-show="entry.hasDiff" rv-on-click="entry.toggleExpand"
+                    <button rv-show="entry.hasExpandable" rv-on-click="entry.toggleExpand"
                       class="text-on-surface-variant hover:text-secondary transition-colors">
                       <span rv-show="entry.expanded"  class="material-symbols-outlined text-[16px]">expand_less</span>
                       <span rv-hide="entry.expanded" class="material-symbols-outlined text-[16px]">expand_more</span>
@@ -232,11 +258,23 @@ const template = `
                 <p class="font-mono-data text-on-surface-variant text-[11px] mb-xs">
                   <span rv-text="entry.entityIdShort" rv-attr-title="entry.entityId" class="cursor-help"></span>
                 </p>
-                <div class="flex items-center justify-between text-[11px] text-on-surface-variant">
+                <div class="flex items-center justify-between text-[11px] text-on-surface-variant mt-xs">
                   <span rv-text="entry.actorLogin" class="font-mono-data"></span>
-                  <span rv-text="entry.details" class="font-mono-data truncate ml-sm max-w-[50%]"></span>
+                  <button rv-show="entry.hasFields" rv-on-click="entry.toggleExpand"
+                    class="font-mono-data truncate ml-sm max-w-[50%] text-right hover:text-secondary transition-colors">
+                    <span rv-text="entry.details"></span>
+                  </button>
                 </div>
                 <div rv-show="entry.expanded" class="mt-sm space-y-sm">
+                  <div rv-show="entry.hasFields">
+                    <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold mb-xs">Details</p>
+                    <div class="space-y-1">
+                      <div rv-each-field="entry.fields" class="flex gap-sm items-start">
+                        <span rv-text="field.label" class="text-[10px] font-mono-data text-on-surface-variant/50 w-12 shrink-0 pt-px"></span>
+                        <span rv-text="field.value" class="text-[11px] font-mono-data text-on-surface break-all"></span>
+                      </div>
+                    </div>
+                  </div>
                   <div rv-show="entry.hasPrev">
                     <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold mb-xs">Before</p>
                     <pre rv-text="entry.prevJson"

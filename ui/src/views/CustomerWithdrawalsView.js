@@ -137,9 +137,41 @@ const template = `
 
               <div>
                 <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Destination Address</label>
-                <input rv-on-input="form.onAddressInput"
-                  class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
-                  type="text" placeholder="bcrt1q…" autocomplete="off" />
+                <div class="relative">
+                  <input rv-on-input="form.onAddressInput"
+                    class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 pr-8 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
+                    type="text" placeholder="bcrt1q…" autocomplete="off" />
+                  <span rv-show="form.resolving"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-secondary border-t-transparent animate-spin"></span>
+                </div>
+              </div>
+
+              <!-- Internal transfer detection banner -->
+              <div rv-show="form.isInternalAddress" class="rounded-xl border overflow-hidden">
+                <!-- Header -->
+                <div class="flex items-center gap-sm px-sm py-xs bg-secondary/10 border-b border-secondary/20">
+                  <span class="material-symbols-outlined text-secondary text-[16px]">bolt</span>
+                  <span class="font-label-md text-secondary text-[12px] font-semibold">Platform address detected — choose transfer mode</span>
+                </div>
+                <!-- Options -->
+                <div class="grid grid-cols-2 divide-x divide-white/10">
+                  <!-- Internal (default) -->
+                  <button rv-on-click="form.setPreferExternalFalse"
+                    class="flex flex-col items-center gap-xs px-sm py-sm transition-all"
+                    rv-attr-class="form.internalBtnClass">
+                    <span class="material-symbols-outlined text-[20px]">bolt</span>
+                    <span class="font-label-md text-[11px] font-bold">Internal transfer</span>
+                    <span class="font-body-sm text-[10px] text-center opacity-70">Instant · no fee · ledger only</span>
+                  </button>
+                  <!-- Blockchain -->
+                  <button rv-on-click="form.setPreferExternalTrue"
+                    class="flex flex-col items-center gap-xs px-sm py-sm transition-all"
+                    rv-attr-class="form.externalBtnClass">
+                    <span class="material-symbols-outlined text-[20px]">link</span>
+                    <span class="font-label-md text-[11px] font-bold">On-chain transfer</span>
+                    <span class="font-body-sm text-[10px] text-center opacity-70">Batched · network fee applies</span>
+                  </button>
+                </div>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
@@ -176,8 +208,8 @@ const template = `
 
               <button rv-on-click="form.submit" rv-attr-disabled="form.loading"
                 class="flex items-center gap-xs bg-secondary text-on-secondary-fixed px-md py-2 rounded-lg font-label-md font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
-                <span class="material-symbols-outlined text-[18px]">send</span>
-                <span rv-hide="form.loading">Submit Withdrawal</span>
+                <span rv-text="form.submitIcon" class="material-symbols-outlined text-[18px]"></span>
+                <span rv-hide="form.loading" rv-text="form.submitLabel"></span>
                 <span rv-show="form.loading">Submitting…</span>
               </button>
             </div>
@@ -370,7 +402,64 @@ export function createController({ api, router, id }) {
       loading: false,
       error: null,
       success: null,
-      onAddressInput(e) { self.form.address = e.target.value; },
+      // Address resolution state
+      resolving: false,
+      isInternalAddress: false,
+      preferExternal: false,
+      submitLabel: 'Submit Withdrawal',
+      submitIcon: 'send',
+      internalBtnClass: '',
+      externalBtnClass: '',
+      _resolveTimer: null,
+      _updateModeUI() {
+        const isInt = self.form.isInternalAddress;
+        const prefExt = self.form.preferExternal;
+        const activeClass = 'flex flex-col items-center gap-xs px-sm py-sm transition-all bg-secondary/15 text-secondary';
+        const inactiveClass = 'flex flex-col items-center gap-xs px-sm py-sm transition-all text-on-surface-variant hover:bg-white/5';
+        self.form.internalBtnClass = (!prefExt) ? activeClass : inactiveClass;
+        self.form.externalBtnClass = prefExt ? activeClass : inactiveClass;
+        if (isInt && !prefExt) {
+          self.form.submitLabel = 'Send Internal Transfer';
+          self.form.submitIcon = 'bolt';
+        } else if (isInt && prefExt) {
+          self.form.submitLabel = 'Submit On-chain Withdrawal';
+          self.form.submitIcon = 'send';
+        } else {
+          self.form.submitLabel = 'Submit Withdrawal';
+          self.form.submitIcon = 'send';
+        }
+      },
+      onAddressInput(e) {
+        self.form.address = e.target.value;
+        self.form.isInternalAddress = false;
+        self.form.preferExternal = false;
+        self.form._updateModeUI();
+        clearTimeout(self.form._resolveTimer);
+        const addr = e.target.value.trim();
+        if (!addr) { self.form.resolving = false; return; }
+        self.form.resolving = true;
+        self.form._resolveTimer = setTimeout(async () => {
+          try {
+            const result = await api.resolveAddress(addr);
+            self.form.isInternalAddress = !!result.isInternal;
+          } catch { self.form.isInternalAddress = false; }
+          finally { self.form.resolving = false; }
+          self.form._updateModeUI();
+          self._updateFeeEstimate();
+        }, 600);
+      },
+      setPreferExternalFalse(e) {
+        e?.preventDefault();
+        self.form.preferExternal = false;
+        self.form._updateModeUI();
+        self._updateFeeEstimate();
+      },
+      setPreferExternalTrue(e) {
+        e?.preventDefault();
+        self.form.preferExternal = true;
+        self.form._updateModeUI();
+        self._updateFeeEstimate();
+      },
       onAmountInput(e) {
         self.form.amount = e.target.value;
         self._updateFeeEstimate();
@@ -398,23 +487,26 @@ export function createController({ api, router, id }) {
           const token = session.accessToken || session.token || session.sessionToken;
           if (!token) throw new Error('No session token returned');
 
+          const forceExternal = self.form.isInternalAddress && self.form.preferExternal;
           const result = await api.createWithdrawalAsCustomer(token, {
             chain: 'bitcoin',
             assetId: 'bitcoin:BTC',
             amountSats: amountStr,
             toAddress: address,
             note: self.form.note.trim() || undefined,
+            forceExternal: forceExternal || undefined,
           });
 
           const isInternal = (result.withdrawal_type || result.withdrawalType) === 'internal';
           self.form.success = isInternal
             ? `Internal transfer completed instantly — ${result.id || 'OK'} (no blockchain fee)`
             : `Withdrawal ${result.id || 'OK'} queued — enters batch in ~30s`;
-          self._lastWithdrawalWasInternal = isInternal;
           self.lastWithdrawalWasInternal = isInternal;
           self.form.address = '';
           self.form.amount = '';
           self.form.note = '';
+          self.form.isInternalAddress = false;
+          self.form.preferExternal = false;
           self.feeEstimate.visible = false;
           // Reload withdrawal list
           self.loadWithdrawals();
@@ -431,7 +523,8 @@ export function createController({ api, router, id }) {
       let amount = 0n;
       try { amount = BigInt(amountStr); } catch { /* invalid input */ }
 
-      if (amount <= 0n) {
+      const willBeInternal = self.form.isInternalAddress && !self.form.preferExternal;
+      if (amount <= 0n || willBeInternal) {
         self.feeEstimate.visible = false;
         return;
       }
@@ -551,6 +644,7 @@ export function createController({ api, router, id }) {
     },
 
     init() {
+      self.form._updateModeUI();
       if (!self.noActiveTenant) self.load();
     },
   };

@@ -41,6 +41,7 @@ export function makeMockApi(overrides = {}) {
     getWithdrawalBatches: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
     getSigningTasks: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
     getExternalSigners: jest.fn().mockResolvedValue({ data: [] }),
+    resolveAddress: jest.fn().mockResolvedValue({ isInternal: false, customerId: null }),
     tenantRequest: jest.fn().mockResolvedValue({}),
     ...overrides,
   };
