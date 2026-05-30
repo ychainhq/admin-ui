@@ -41,13 +41,18 @@ const WD_STATUS_BADGE = {
   cancelled: 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
 };
 
+const WD_TYPE_BADGE_CLASS = 'inline-flex items-center gap-[3px] px-2 py-0.5 rounded-full text-[10px] font-bold bg-secondary/15 text-secondary border border-secondary/25';
+
 function normalizeWithdrawal(w) {
   const status = w.status || '';
   const txHash = w.tx_hash || w.txHash || '';
+  const isInternal = (w.withdrawal_type || 'external') === 'internal';
   return {
     id:           w.id || '—',
     statusLabel:  status.toUpperCase().replace(/_/g, ' '),
     statusBadgeClass: WD_STATUS_BADGE[status] || WD_STATUS_BADGE.queued,
+    isInternal,
+    typeBadgeClass: WD_TYPE_BADGE_CLASS,
     toAddress:    w.to_address || w.toAddress || '—',
     toAddressShort: (w.to_address || w.toAddress || '').slice(0, 12) + (((w.to_address || w.toAddress) || '').length > 12 ? '…' : '') || '—',
     amountRaw:    w.amount_raw || w.amountRaw || '—',
@@ -218,6 +223,7 @@ const template = `
                 <thead>
                   <tr class="border-b border-white/5 bg-white/[0.02]">
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TYPE</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TO ADDRESS</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">AMOUNT (sats)</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">FEE (sats)</th>
@@ -229,6 +235,13 @@ const template = `
                   <tr rv-each-wd="withdrawals" class="hover:bg-white/[0.02]">
                     <td class="px-md py-3">
                       <span rv-text="wd.statusLabel" rv-attr-class="wd.statusBadgeClass"></span>
+                    </td>
+                    <td class="px-md py-3">
+                      <span rv-show="wd.isInternal" rv-attr-class="wd.typeBadgeClass">
+                        <span class="material-symbols-outlined text-[11px]">bolt</span>
+                        Internal
+                      </span>
+                      <span rv-hide="wd.isInternal" class="text-on-surface-variant text-[11px] font-mono-data">On-chain</span>
                     </td>
                     <td class="px-md py-3">
                       <span rv-text="wd.toAddressShort" rv-attr-title="wd.toAddress" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
@@ -265,13 +278,22 @@ const template = `
             </div>
           </div>
 
-          <!-- Info: see batches -->
-          <div rv-hide="loading" class="glass-card rounded-xl p-md flex items-start gap-sm">
+          <!-- Info: see batches (hidden for internal transfers) -->
+          <div rv-hide="loading" rv-hide="lastWithdrawalWasInternal" class="glass-card rounded-xl p-md flex items-start gap-sm">
             <span class="material-symbols-outlined text-on-surface-variant shrink-0 mt-xs text-[18px]">info</span>
             <p class="font-body-sm text-on-surface-variant">
               After submitting, the withdrawal enters a batch (batcher runs every 30s).
               Track batch progress in
               <a rv-on-click="goToBatches" href="#" class="text-secondary underline hover:brightness-110">Withdrawal Batches</a>.
+            </p>
+          </div>
+
+          <!-- Info: internal transfer completed -->
+          <div rv-show="lastWithdrawalWasInternal" class="glass-card rounded-xl p-md flex items-start gap-sm bg-secondary/5 border border-secondary/20">
+            <span class="material-symbols-outlined text-secondary shrink-0 mt-xs text-[18px]">bolt</span>
+            <p class="font-body-sm text-on-surface-variant">
+              Last transfer was <strong class="text-secondary">on-platform</strong> — settled instantly on the ledger.
+              No blockchain transaction, no network fee.
             </p>
           </div>
 
@@ -304,6 +326,7 @@ export function createController({ api, router, id }) {
     noActiveTenant: !getActiveTenantKey(),
     loading: false,
     error: null,
+    lastWithdrawalWasInternal: false,
 
     // Fee coverage (loaded from tenant batch config)
     feeCoverageIcon:  'shield',
@@ -383,7 +406,12 @@ export function createController({ api, router, id }) {
             note: self.form.note.trim() || undefined,
           });
 
-          self.form.success = `Withdrawal ${result.id || 'OK'} submitted — status: ${result.status || 'queued'}`;
+          const isInternal = (result.withdrawal_type || result.withdrawalType) === 'internal';
+          self.form.success = isInternal
+            ? `Internal transfer completed instantly — ${result.id || 'OK'} (no blockchain fee)`
+            : `Withdrawal ${result.id || 'OK'} queued — enters batch in ~30s`;
+          self._lastWithdrawalWasInternal = isInternal;
+          self.lastWithdrawalWasInternal = isInternal;
           self.form.address = '';
           self.form.amount = '';
           self.form.note = '';
