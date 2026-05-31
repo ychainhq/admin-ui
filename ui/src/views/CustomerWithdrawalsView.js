@@ -440,7 +440,10 @@ export function createController({ api, router, id }) {
         self.form.resolving = true;
         self.form._resolveTimer = setTimeout(async () => {
           try {
-            const result = await api.resolveAddress(addr);
+            const session = await api.createCustomerSession(id);
+            const token = session.accessToken || session.token || session.sessionToken;
+            if (!token) throw new Error('No session token');
+            const result = await api.resolveAddressAsCustomer(token, addr);
             self.form.isInternalAddress = !!result.isInternal;
           } catch { self.form.isInternalAddress = false; }
           finally { self.form.resolving = false; }

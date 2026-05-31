@@ -388,38 +388,40 @@ describe('CustomerWithdrawalsView — address resolution and mode switching', ()
     jest.useRealTimers();
   });
 
-  test('onAddressInput calls resolveAddress after 600ms debounce and sets isInternalAddress=true', async () => {
+  test('onAddressInput calls createCustomerSession + resolveAddressAsCustomer after 600ms debounce and sets isInternalAddress=true', async () => {
     jest.useFakeTimers();
-    const resolveAddress = jest.fn().mockResolvedValue({ isInternal: true, customerId: 'cust_x' });
-    const { ctrl } = makeCtrl({ resolveAddress });
+    const resolveAddressAsCustomer = jest.fn().mockResolvedValue({ isInternal: true, customerId: 'cust_x' });
+    const { ctrl } = makeCtrl({ resolveAddressAsCustomer });
     ctrl.form.onAddressInput({ target: { value: 'bcrt1qinternal' } });
-    expect(resolveAddress).not.toHaveBeenCalled();
+    expect(resolveAddressAsCustomer).not.toHaveBeenCalled();
     jest.advanceTimersByTime(600);
     await Promise.resolve();
     await Promise.resolve();
-    expect(resolveAddress).toHaveBeenCalledWith('bcrt1qinternal');
+    await Promise.resolve();
+    expect(resolveAddressAsCustomer).toHaveBeenCalledWith('tok_test', 'bcrt1qinternal');
     expect(ctrl.form.isInternalAddress).toBe(true);
     expect(ctrl.form.resolving).toBe(false);
     jest.useRealTimers();
   });
 
-  test('onAddressInput with empty string: sets resolving=false immediately, never calls resolveAddress', () => {
+  test('onAddressInput with empty string: sets resolving=false immediately, never calls resolveAddressAsCustomer', () => {
     jest.useFakeTimers();
-    const resolveAddress = jest.fn();
-    const { ctrl } = makeCtrl({ resolveAddress });
+    const resolveAddressAsCustomer = jest.fn();
+    const { ctrl } = makeCtrl({ resolveAddressAsCustomer });
     ctrl.form.onAddressInput({ target: { value: '' } });
     expect(ctrl.form.resolving).toBe(false);
     jest.advanceTimersByTime(600);
-    expect(resolveAddress).not.toHaveBeenCalled();
+    expect(resolveAddressAsCustomer).not.toHaveBeenCalled();
     jest.useRealTimers();
   });
 
-  test('onAddressInput: failed resolveAddress leaves isInternalAddress=false and resolving=false', async () => {
+  test('onAddressInput: failed resolveAddressAsCustomer leaves isInternalAddress=false and resolving=false', async () => {
     jest.useFakeTimers();
-    const resolveAddress = jest.fn().mockRejectedValue(new Error('network'));
-    const { ctrl } = makeCtrl({ resolveAddress });
+    const resolveAddressAsCustomer = jest.fn().mockRejectedValue(new Error('network'));
+    const { ctrl } = makeCtrl({ resolveAddressAsCustomer });
     ctrl.form.onAddressInput({ target: { value: 'bcrt1qtest' } });
     jest.advanceTimersByTime(600);
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
     expect(ctrl.form.isInternalAddress).toBe(false);

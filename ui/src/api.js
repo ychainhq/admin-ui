@@ -338,6 +338,14 @@ export const api = {
     return res.data ?? res;
   },
 
+  resolveAddressAsCustomer: async (sessionToken, address) => {
+    const params = new URLSearchParams({ address });
+    const res = await request(`/customer/me/addresses/resolve?${params}`, {
+      headers: { 'X-Session-Token': sessionToken },
+    });
+    return res.data ?? res;
+  },
+
   getWithdrawalBatchConfig: async () => {
     const res = await tenantRequest('/api/tenant/withdrawal-batch-config');
     return res.data ?? res;
