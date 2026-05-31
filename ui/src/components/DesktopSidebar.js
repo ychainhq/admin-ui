@@ -60,6 +60,7 @@ const NAV_ITEMS = [
   { separator: true,             label: 'Management' },
   
   { label: 'Wallets',            icon: 'account_balance',        route: '/wallets' },
+  { label: 'Sweeps',             icon: 'swap_vert',              route: '/sweeps' },
   { label: 'Withdrawal Batches', icon: 'pending_actions',        route: '/withdrawal-batches' },
   { label: 'Signing Tasks',      icon: 'task_alt',               route: '/signing-tasks' },
   { label: 'External Signers',   icon: 'verified_user',          route: '/external-signers' },

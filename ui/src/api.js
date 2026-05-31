@@ -284,6 +284,23 @@ export const api = {
     return res.data ?? res;
   },
 
+  getSweepsSummary: async () => {
+    const res = await tenantRequest('/api/sweeps/summary');
+    return res.data ?? res;
+  },
+
+  getSweeps: ({ limit = 20, cursor, status } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    if (status) params.set('status', status);
+    return tenantRequest(`/api/sweeps?${params}`);
+  },
+
+  getSweep: async (id) => {
+    const res = await tenantRequest(`/api/sweeps/${encodeURIComponent(id)}`);
+    return res.data ?? res;
+  },
+
   getSigningTasks: ({ limit = 20, cursor, status, chainId, requestType } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
@@ -344,6 +361,11 @@ export const api = {
       headers: { 'X-Session-Token': sessionToken },
     });
     return res.data ?? res;
+  },
+
+  getActiveTenantConfig: async () => {
+    const res = await tenantRequest('/api/tenant/config');
+    return keysToCamel(res.data ?? res);
   },
 
   getWithdrawalBatchConfig: async () => {

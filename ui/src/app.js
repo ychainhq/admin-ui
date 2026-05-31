@@ -14,6 +14,7 @@ import { CustomerBalancesView } from './views/CustomerBalancesView.js';
 import { CustomerDepositsView } from './views/CustomerDepositsView.js';
 import { CustomerWithdrawalsView } from './views/CustomerWithdrawalsView.js';
 import { WithdrawalBatchesView } from './views/WithdrawalBatchesView.js';
+import { SweepsView } from './views/SweepsView.js';
 import { WalletsView } from './views/WalletsView.js';
 import { WalletAddressesView } from './views/WalletAddressesView.js';
 import { SigningTasksView } from './views/SigningTasksView.js';
@@ -43,6 +44,7 @@ router
   .on('/customers/:id/withdrawals', (params) => CustomerWithdrawalsView.mount(appEl(), params, deps))
   .on('/customers/:id', (params) => { router.navigate(`#/customers/${params.id}/profile`); return null; })
   // Operations
+  .on('/sweeps',             (params) => SweepsView.mount(appEl(), params, deps))
   .on('/withdrawal-batches', (params) => WithdrawalBatchesView.mount(appEl(), params, deps))
   .on('/wallets',            (params) => WalletsView.mount(appEl(), params, deps))
   .on('/wallets/:walletId/addresses', (params) => WalletAddressesView.mount(appEl(), params, deps))
