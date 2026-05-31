@@ -355,21 +355,24 @@ step_build_engine() {
 step_derive_wif() {
   header "Step 4 — Derive hot-wallet signing key"
 
-  local xprv
-  xprv=$(env_get "$ENGINE_ENV" "BTC_DEV_XPRV")
+  local xprv_local
+  xprv_local=$(env_get "$ENGINE_ENV" "BTC_DEV_XPRV")
 
-  if [ -z "$xprv" ]; then
+  if [ -z "$xprv_local" ]; then
     warn "BTC_DEV_XPRV not in engine/.env — re-running seed to capture it..."
     local seed_out
     seed_out=$(cd "$ENGINE_DIR" && npm run db:seed 2>&1) || true
-    xprv=$(echo "$seed_out" | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)
-    [ -n "$xprv" ] && { env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$xprv"; ok "BTC xprv captured"; } \
+    xprv_local=$(echo "$seed_out" | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)
+    [ -n "$xprv_local" ] && { env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$xprv_local"; ok "BTC xprv captured"; } \
       || die "BTC_DEV_XPRV not found — try: ./start.sh reset --signer $SIGNER_MODE"
   fi
 
+  # Expose account xprv globally so _enroll_signer can write it to signer .env files
+  ACCOUNT_XPRV="$xprv_local"
+
   info "Deriving hot-wallet WIF (account m/1/0)..."
   HOT_WALLET_WIF=$(
-    cd "$ENGINE_DIR" && BTC_DEV_XPRV="$xprv" node --no-warnings -e "
+    cd "$ENGINE_DIR" && BTC_DEV_XPRV="$xprv_local" node --no-warnings -e "
       const { BIP32Factory } = require('bip32');
       const ecc = require('tiny-secp256k1');
       const bitcoin = require('bitcoinjs-lib');
@@ -498,6 +501,7 @@ SIGNER_PUBLIC_KEY=ed25519:devpubkey:${edition}:regtest
 
 BTC_SIGNING_MODE=dev_env_key
 BTC_DEV_PRIVATE_KEY_WIF=${HOT_WALLET_WIF}
+BTC_DEV_ACCOUNT_XPRV=${ACCOUNT_XPRV}
 BTC_NETWORK=regtest
 
 POLL_INTERVAL_MS=3000
@@ -529,6 +533,7 @@ SIGNER_PUBLIC_KEY=ed25519:devpubkey:${edition}:regtest
 
 KEY_PROVIDER=env
 BTC_DEV_PRIVATE_KEY_WIF=${HOT_WALLET_WIF}
+BTC_DEV_ACCOUNT_XPRV=${ACCOUNT_XPRV}
 BTC_NETWORK=regtest
 
 POLL_INTERVAL_MS=1000
