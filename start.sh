@@ -1,21 +1,51 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# start.sh — Bitcoin regtest + chain-api engine + optional signer(s)
+# start.sh — Ychain / chain-api development environment launcher
 #
-# Usage:
-#   ./start.sh                            start engine only  (default)
-#   ./start.sh --signer oss              start engine + OSS signer
-#   ./start.sh --signer enterprise       start engine + Enterprise signer
-#   ./start.sh --signer both             start engine + both signers
-#   ./start.sh --debug                   start with Node.js inspector (VSCode attach)
-#   ./start.sh --signer oss --debug      engine + OSS signer, both debuggable
-#   ./start.sh reset [--signer ...]      wipe data and start fresh
-#   ./start.sh stop                      stop Bitcoin Core + running signers
+# MODES
+# ──────
+#   Default (no --v3):  single BTC Core (regtest), SQLite, one engine
+#   --v3:               2 × BTC Core (regtest, peered), PostgreSQL,
+#                       2 × engine (active-active cluster), 2 × btc-indexer
 #
-# Debug ports (used with --debug):
-#   Engine:             9229   → "Attach: Engine" in .vscode/launch.json
-#   OSS Signer:         9230   → "Attach: OSS Signer"
-#   Enterprise Signer:  9231   → "Attach: Enterprise Signer"
+# USAGE
+# ──────
+#   ./start.sh                            start (default mode, engine only)
+#   ./start.sh --v3                       start v3 (full stack, Docker Compose)
+#   ./start.sh --v3 --signer oss          v3 + OSS signer
+#   ./start.sh --v3 --signer both         v3 + both signers
+#   ./start.sh --signer oss               default mode + OSS signer
+#   ./start.sh --signer enterprise        default mode + Enterprise signer
+#   ./start.sh --signer both              default mode + both signers
+#   ./start.sh --debug                    default mode with Node.js inspector
+#   ./start.sh --v3 --debug               v3 mode with debugger on engine-1
+#   ./start.sh reset                      wipe + restart (default mode)
+#   ./start.sh reset --v3                 wipe + restart (v3 mode)
+#   ./start.sh stop                       stop everything
+#
+# V3 ARCHITECTURE (--v3)
+# ──────────────────────
+#   btc-node-1   — Bitcoin Core regtest (primary, mines blocks)
+#   btc-node-2   — Bitcoin Core regtest (standby, syncs via P2P)
+#   postgres     — PostgreSQL 16 (shared DB for both engines)
+#   engine-1     — chain-api (active, cluster leader candidate)
+#   engine-2     — chain-api (active-active, SKIP LOCKED for work distribution)
+#   btc-indexer-1 — scans btc-node-1 blocks → chain_events
+#   btc-indexer-2 — scans btc-node-2 blocks → chain_events (dedup via UNIQUE)
+#   ui           — test proxy (http://localhost:3002)
+#
+# RPC endpoints in v3 mode:
+#   engine-1:          http://localhost:3000
+#   engine-2:          http://localhost:3001
+#   btc-node-1 RPC:    http://localhost:18443
+#   btc-node-2 RPC:    http://localhost:18453
+#   PostgreSQL:        localhost:5432  (user: chainapi, db: chainapi)
+#
+# DEBUG PORTS (used with --debug)
+# ──────────────────────────────
+#   Engine:            9229   → "Attach: Engine" in .vscode/launch.json
+#   OSS Signer:        9230   → "Attach: OSS Signer"
+#   Enterprise Signer: 9231   → "Attach: Enterprise Signer"
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -30,24 +60,28 @@ ENGINE_ENV="$ENGINE_DIR/.env"
 ENGINE_DB="$ENGINE_DIR/data/chain-api.db"
 MINING_WALLET="btcminer"
 
-# PID files for background processes
+# PID files for local (non-v3) mode
 ENGINE_PIDFILE="$ENGINE_DIR/.engine.pid"
 SIGNER_OSS_PIDFILE="$SIGNER_OSS_DIR/.signer.pid"
 SIGNER_ENT_PIDFILE="$SIGNER_ENT_DIR/.signer.pid"
 
-# Stable fingerprints — survive reset (enrollment is idempotent on fingerprint)
+# Stable fingerprints for signer enrollment
 SIGNER_OSS_FINGERPRINT="btc:regtest:dev_oss"
 SIGNER_ENT_FINGERPRINT="btc:regtest:dev_enterprise"
 
-# Debug ports (Node.js --inspect, used with --debug flag)
+# Debug ports
 ENGINE_DEBUG_PORT=9229
 SIGNER_OSS_DEBUG_PORT=9230
 SIGNER_ENT_DEBUG_PORT=9231
 
+# v3 compose file
+V3_COMPOSE="$SCRIPT_DIR/docker-compose.v3.yml"
+V3_COMPOSE_CMD="docker compose -f $V3_COMPOSE"
+
 # ─── Colors ──────────────────────────────────────────────────────────────────
 C_GREEN='\033[0;32m'; C_YELLOW='\033[1;33m'; C_CYAN='\033[0;36m'
 C_RED='\033[0;31m';   C_BOLD='\033[1m';       C_RESET='\033[0m'
-C_MAGENTA='\033[0;35m'
+C_MAGENTA='\033[0;35m'; C_BLUE='\033[0;34m'
 
 ok()     { echo -e "${C_GREEN}  ✓  $*${C_RESET}"; }
 info()   { echo -e "${C_CYAN}  ▶  $*${C_RESET}"; }
@@ -55,15 +89,18 @@ warn()   { echo -e "${C_YELLOW}  ⚠  $*${C_RESET}"; }
 err()    { echo -e "${C_RED}  ✗  $*${C_RESET}" >&2; }
 header() { echo -e "\n${C_BOLD}━━━  $*  ━━━${C_RESET}\n"; }
 die()    { err "$*"; exit 1; }
+detail() { echo -e "     ${C_BLUE}$*${C_RESET}"; }
 
 # ─── Argument parsing ─────────────────────────────────────────────────────────
 CMD="start"
 SIGNER_MODE="none"
 DEBUG_MODE=false
+V3_MODE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     start|reset|stop|-h|--help|help) CMD="$1"; shift ;;
+    --v3) V3_MODE=true; shift ;;
     --signer)
       [[ $# -ge 2 ]] || die "--signer requires an argument: oss|enterprise|both"
       SIGNER_MODE="$2"; shift 2 ;;
@@ -78,9 +115,22 @@ done
 [[ "$SIGNER_MODE" =~ ^(none|oss|enterprise|both)$ ]] || \
   die "Invalid --signer value: '$SIGNER_MODE'. Use: oss, enterprise, both"
 
-# ─── Bitcoin CLI wrapper ──────────────────────────────────────────────────────
+# ─── Bitcoin CLI wrappers ─────────────────────────────────────────────────────
+# Default (non-v3): single node via docker-compose.yml
 BTC() {
   docker compose -f "$SCRIPT_DIR/docker-compose.yml" exec -T bitcoin-core \
+    bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin "$@"
+}
+
+# v3: node-1 via docker-compose.v3.yml
+BTC1() {
+  $V3_COMPOSE_CMD exec -T btc-node-1 \
+    bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin "$@"
+}
+
+# v3: node-2 via docker-compose.v3.yml
+BTC2() {
+  $V3_COMPOSE_CMD exec -T btc-node-2 \
     bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin "$@"
 }
 
@@ -98,23 +148,21 @@ env_set() {
   fi
 }
 
-# ─── Cleanup — kills all background processes ─────────────────────────────────
-cleanup() {
+# ─── Cleanup — local mode ─────────────────────────────────────────────────────
+cleanup_local() {
   echo ""
   local engine_pid signer_oss_pid signer_ent_pid
   engine_pid=$(cat "$ENGINE_PIDFILE" 2>/dev/null || true)
   signer_oss_pid=$(cat "$SIGNER_OSS_PIDFILE" 2>/dev/null || true)
   signer_ent_pid=$(cat "$SIGNER_ENT_PIDFILE" 2>/dev/null || true)
 
-  local any_running=false
+  local any=false
   for pid in $engine_pid $signer_oss_pid $signer_ent_pid; do
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      any_running=true; break
-    fi
+    [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && any=true && break
   done
 
-  if [[ "$any_running" == "true" ]]; then
-    info "Shutting down..."
+  if [[ "$any" == "true" ]]; then
+    info "Shutting down local processes..."
     for pid in $engine_pid $signer_oss_pid $signer_ent_pid; do
       [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
     done
@@ -124,255 +172,361 @@ cleanup() {
   rm -f "$ENGINE_PIDFILE" "$SIGNER_OSS_PIDFILE" "$SIGNER_ENT_PIDFILE"
 }
 
-# ─── stop ─────────────────────────────────────────────────────────────────────
-cmd_stop() {
-  header "Stop"
-  cleanup
-  cd "$SCRIPT_DIR"
-  docker compose down
-  ok "Bitcoin Core stopped"
-  echo ""
+# ─────────────────────────────────────────────────────────────────────────────
+#  V3 MODE — full stack via docker-compose.v3.yml
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─── v3: stop ─────────────────────────────────────────────────────────────────
+cmd_v3_stop() {
+  header "V3 Stop"
+  $V3_COMPOSE_CMD down
+  ok "All v3 services stopped"
+  cleanup_local
 }
 
-# ─── reset ────────────────────────────────────────────────────────────────────
-cmd_reset() {
-  header "Reset"
+# ─── v3: reset ────────────────────────────────────────────────────────────────
+cmd_v3_reset() {
+  header "V3 Reset"
   echo -e "  ${C_YELLOW}This will destroy:${C_RESET}"
-  echo    "    • Bitcoin Core blockchain data (regtest volume)"
-  echo    "    • chain-api database (chain-api.db)"
-  echo    "    • All generated API keys + xprv (fresh ones will be created)"
+  echo    "    • PostgreSQL data volume"
+  echo    "    • Both Bitcoin Core blockchain volumes (btc_node_1, btc_node_2)"
+  echo    "    • All Docker images (rebuild required)"
   [[ "$SIGNER_MODE" != "none" ]] && \
-    echo "    • Signer .env file(s) — fresh ID will be enrolled"
+    echo "    • Signer .env file(s)"
   echo ""
   read -r -p "  Continue? [y/N] " confirm
   [[ "$confirm" =~ ^[Yy]$ ]] || { echo "  Aborted."; exit 0; }
   echo ""
 
-  cleanup
-
-  cd "$SCRIPT_DIR"
-  info "Stopping containers and removing volume..."
-  docker compose down -v 2>/dev/null || docker compose down 2>/dev/null || true
-  ok "Containers stopped, volume removed"
-
-  info "Removing chain-api database..."
-  rm -f "$ENGINE_DB" "${ENGINE_DB}-shm" "${ENGINE_DB}-wal"
-  ok "Database removed"
-
-  info "Clearing keys from engine/.env..."
-  if [ -f "$ENGINE_ENV" ]; then
-    env_set "$ENGINE_ENV" "API_KEY"       ""
-    env_set "$ENGINE_ENV" "ADMIN_KEY"     ""
-    env_set "$ENGINE_ENV" "BTC_DEV_XPRV"  ""
-    env_set "$ENGINE_ENV" "BTC_DEV_XPUB"  ""
-  fi
-  ok "Keys cleared — will be regenerated on seed"
+  $V3_COMPOSE_CMD down -v 2>/dev/null || true
+  ok "Containers stopped and volumes removed"
 
   if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && [ -f "$SIGNER_OSS_DIR/.env" ]; then
     rm -f "$SIGNER_OSS_DIR/.env"
-    ok "signer-oss/.env removed — fresh signer ID will be enrolled"
+    ok "signer-oss/.env removed"
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && [ -f "$SIGNER_ENT_DIR/.env" ]; then
     rm -f "$SIGNER_ENT_DIR/.env"
-    ok "signer/.env removed — fresh signer ID will be enrolled"
+    ok "signer/.env removed"
   fi
-  echo ""
 }
 
-# ─── step 1: Bitcoin Core ─────────────────────────────────────────────────────
-step_btc() {
-  header "Step 1 — Bitcoin Core"
-  cd "$SCRIPT_DIR"
+# ─── v3: build images ─────────────────────────────────────────────────────────
+step_v3_build() {
+  header "V3 Step 1 — Build Docker images"
+  info "Building engine, btc-indexer, and ui images..."
+  $V3_COMPOSE_CMD build engine-1 engine-2 btc-indexer-1 btc-indexer-2 ui
+  ok "All images built"
+}
 
-  info "Rebuilding UI proxy Docker image..."
-  docker compose build ui
-  ok "UI proxy image rebuilt"
+# ─── v3: start infrastructure (postgres + btc nodes) ─────────────────────────
+step_v3_infra() {
+  header "V3 Step 2 — Start PostgreSQL + Bitcoin Core nodes"
 
-  if docker compose ps 2>/dev/null | grep -qE "bitcoin-core.*(Up|running)"; then
-    info "Applying rebuilt UI image..."
-    docker compose up -d ui > /dev/null 2>&1
-    ok "UI proxy container updated"
-  else
-    info "Starting containers (docker compose up -d)..."
-    docker compose up -d
-    ok "Containers started"
-  fi
+  info "Starting postgres + btc-node-1 + btc-node-2..."
+  $V3_COMPOSE_CMD up -d postgres btc-node-1 btc-node-2
 
-  info "Waiting for Bitcoin Core RPC..."
+  info "Waiting for PostgreSQL..."
   local tries=0
-  until BTC getblockchaininfo > /dev/null 2>&1; do
+  until $V3_COMPOSE_CMD exec -T postgres pg_isready -U chainapi -d chainapi > /dev/null 2>&1; do
     printf "."
     sleep 2
-    tries=$((tries + 1))
-    [ "$tries" -le 30 ] || die "Bitcoin Core did not respond after 60s"
+    tries=$((tries+1))
+    [ "$tries" -le 30 ] || die "PostgreSQL did not become ready after 60s"
   done
   echo " OK"
+  ok "PostgreSQL ready on localhost:5432"
 
-  info "Ensuring mining wallet '$MINING_WALLET'..."
-  if BTC createwallet "$MINING_WALLET" false false "" false true false > /dev/null 2>&1; then
-    ok "Wallet '$MINING_WALLET' created"
-  elif BTC loadwallet "$MINING_WALLET" > /dev/null 2>&1; then
-    ok "Wallet '$MINING_WALLET' loaded from disk"
+  info "Waiting for btc-node-1 RPC..."
+  tries=0
+  until BTC1 getblockchaininfo > /dev/null 2>&1; do
+    printf "."
+    sleep 2
+    tries=$((tries+1))
+    [ "$tries" -le 30 ] || die "btc-node-1 did not respond after 60s"
+  done
+  echo " OK"
+  ok "btc-node-1 ready on localhost:18443"
+
+  info "Waiting for btc-node-2 RPC..."
+  tries=0
+  until BTC2 getblockchaininfo > /dev/null 2>&1; do
+    printf "."
+    sleep 2
+    tries=$((tries+1))
+    [ "$tries" -le 45 ] || die "btc-node-2 did not respond after 90s (it syncs from node-1)"
+  done
+  echo " OK"
+  ok "btc-node-2 ready on localhost:18453"
+
+  # Verify P2P peering
+  local node2_peers
+  node2_peers=$(BTC2 getpeerinfo 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d))" 2>/dev/null || echo "0")
+  if [ "$node2_peers" -gt "0" ]; then
+    ok "btc-node-2 peered with btc-node-1 ($node2_peers peer(s))"
   else
-    ok "Wallet '$MINING_WALLET' already loaded"
+    warn "btc-node-2 has no peers yet — blocks may take a moment to propagate"
   fi
+}
+
+# ─── v3: mine genesis blocks ──────────────────────────────────────────────────
+step_v3_genesis() {
+  header "V3 Step 3 — Genesis blocks (btc-node-1)"
+
+  info "Ensuring mining wallet '$MINING_WALLET' on btc-node-1..."
+  BTC1 createwallet "$MINING_WALLET" false false "" false true false > /dev/null 2>&1 \
+    || BTC1 loadwallet "$MINING_WALLET" > /dev/null 2>&1 \
+    || true  # already loaded
 
   local height
-  height=$(BTC getblockcount 2>/dev/null || echo "0")
+  height=$(BTC1 getblockcount 2>/dev/null || echo "0")
+
   if [ "$height" -lt 101 ]; then
-    info "Mining 101 genesis blocks (current height: $height)..."
+    info "Mining 101 genesis blocks on btc-node-1 (current height: $height)..."
     local addr
-    addr=$(BTC -rpcwallet="$MINING_WALLET" getnewaddress "genesis" "bech32")
-    BTC -rpcwallet="$MINING_WALLET" generatetoaddress 101 "$addr" > /dev/null
-    ok "Genesis blocks mined → height: $(BTC getblockcount)"
+    addr=$(BTC1 -rpcwallet="$MINING_WALLET" getnewaddress "genesis" "bech32")
+    BTC1 -rpcwallet="$MINING_WALLET" generatetoaddress 101 "$addr" > /dev/null
+    ok "Genesis blocks mined → height: $(BTC1 getblockcount)"
   else
     ok "Chain at height $height — genesis mining not needed"
   fi
+
+  # Verify node-2 synced
+  info "Waiting for btc-node-2 to sync genesis blocks..."
+  local tries=0
+  until [ "$(BTC2 getblockcount 2>/dev/null || echo 0)" -ge "$(BTC1 getblockcount 2>/dev/null || echo 101)" ]; do
+    printf "."
+    sleep 2
+    tries=$((tries+1))
+    [ "$tries" -le 30 ] || { echo ""; warn "btc-node-2 sync is slow — continuing anyway"; break; }
+  done
+  echo ""
+  local h1 h2
+  h1=$(BTC1 getblockcount 2>/dev/null || echo "?")
+  h2=$(BTC2 getblockcount 2>/dev/null || echo "?")
+  ok "Block sync: btc-node-1=$h1 btc-node-2=$h2"
 }
 
-# ─── step 2: engine DB + keys ─────────────────────────────────────────────────
-step_engine_setup() {
-  header "Step 2 — chain-api DB & API keys"
+# ─── v3: set up engine .env ───────────────────────────────────────────────────
+step_v3_engine_env() {
+  header "V3 Step 4 — Engine environment"
 
-  [ -d "$ENGINE_DIR" ] || die "Engine directory not found at $ENGINE_DIR"
-  [ -f "$ENGINE_DIR/package.json" ] || die "No package.json in $ENGINE_DIR"
+  [ -d "$ENGINE_DIR" ] || die "Engine directory not found: $ENGINE_DIR"
 
   if [ ! -f "$ENGINE_ENV" ]; then
     if [ -f "$ENGINE_DIR/.env.example" ]; then
       cp "$ENGINE_DIR/.env.example" "$ENGINE_ENV"
       info "Created engine/.env from .env.example"
     else
-      die "No engine/.env found and no .env.example to copy from"
+      # Create minimal .env for v3
+      cat > "$ENGINE_ENV" <<'ENVEOF'
+# chain-api engine — v3 dev environment
+# Keys will be populated by seed
+DB_TYPE=postgres
+DATABASE_URL=postgres://chainapi:chainapi_dev@localhost:5432/chainapi
+BITCOIN_RPC_URL=http://localhost:18443
+BITCOIN_RPC_USER=bitcoin
+BITCOIN_RPC_PASSWORD=bitcoin
+BITCOIN_NETWORK=regtest
+BITCOIN_CORE_PROVISIONING_ENABLED=false
+PORT=3000
+LOG_LEVEL=info
+WORKERS_ENABLED=true
+CLUSTER_ENABLED=false
+API_KEY=
+ADMIN_KEY=
+CUSTOMER_SESSION_SECRET=change-me-in-production-min-32-chars!!
+ENVEOF
+      info "Created engine/.env (v3 defaults)"
     fi
   fi
 
-  if [ ! -f "$UI_ENV" ]; then
-    cat > "$UI_ENV" <<'ENVEOF'
-# UI proxy config — auto-managed by start.sh
-CHAIN_API_URL=http://host.docker.internal:3000
-CHAIN_API_KEY=
-CHAIN_API_ADMIN_KEY=
-ENVEOF
-    info "Created btc-test-ui/.env"
-  fi
+  # Ensure DB_TYPE=postgres in engine .env (v3 always uses postgres)
+  env_set "$ENGINE_ENV" "DB_TYPE" "postgres"
+  env_set "$ENGINE_ENV" "DATABASE_URL" "postgres://chainapi:chainapi_dev@localhost:5432/chainapi"
+  env_set "$ENGINE_ENV" "BITCOIN_NETWORK" "regtest"
+  env_set "$ENGINE_ENV" "BITCOIN_CORE_PROVISIONING_ENABLED" "false"
+  ok "engine/.env configured for v3 (PostgreSQL)"
+}
+
+# ─── v3: run migrations + seed (via local ts-node against postgres) ───────────
+step_v3_seed() {
+  header "V3 Step 5 — DB migrations + seed"
+
+  # Temporarily set DATABASE_URL for local ts-node run
+  local original_db_type
+  original_db_type=$(env_get "$ENGINE_ENV" "DB_TYPE" || echo "sqlite")
+
+  info "Running migrations on PostgreSQL..."
+  local seed_out
+  seed_out=$(cd "$ENGINE_DIR" && DB_TYPE=postgres DATABASE_URL="postgres://chainapi:chainapi_dev@localhost:5432/chainapi" \
+    npm run db:seed 2>&1) || {
+    echo "$seed_out"
+    die "Seed failed — see output above"
+  }
+
+  local new_api new_admin new_xpub new_xprv
+  new_api=$(echo "$seed_out"   | grep -oE 'API_KEY=cak_[a-f0-9]+'       | head -1 | cut -d= -f2 || true)
+  new_admin=$(echo "$seed_out" | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+'     | head -1 | cut -d= -f2 || true)
+  new_xpub=$(echo "$seed_out"  | grep -oE 'BTC_DEV_XPUB=[A-Za-z0-9]+'  | head -1 | cut -d= -f2 || true)
+  new_xprv=$(echo "$seed_out"  | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+'  | head -1 | cut -d= -f2 || true)
 
   local engine_api_key engine_admin_key
   engine_api_key=$(env_get "$ENGINE_ENV" "API_KEY")
   engine_admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
 
-  local need_seed=false
-  [ ! -f "$ENGINE_DB" ] && { info "Database not found — seeding required"; need_seed=true; }
-  { [ -z "$engine_api_key" ] || [ -z "$engine_admin_key" ]; } && \
-    { info "API keys missing — seeding required"; need_seed=true; }
+  [ -n "$new_api"   ] && { env_set "$ENGINE_ENV" "API_KEY"       "$new_api";   engine_api_key="$new_api"; }
+  [ -n "$new_admin" ] && { env_set "$ENGINE_ENV" "ADMIN_KEY"     "$new_admin"; engine_admin_key="$new_admin"; }
+  [ -n "$new_xpub"  ] && env_set "$ENGINE_ENV" "BTC_DEV_XPUB" "$new_xpub"
+  [ -n "$new_xprv"  ] && env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$new_xprv"
 
-  if [ "$need_seed" = "true" ]; then
-    info "Running npm run db:seed..."
-    local seed_out
-    seed_out=$(cd "$ENGINE_DIR" && npm run db:seed 2>&1) || {
-      echo "$seed_out"
-      die "Seed failed — see output above"
-    }
+  # Re-read if not captured from seed output
+  [ -z "$engine_api_key"   ] && engine_api_key=$(env_get "$ENGINE_ENV" "API_KEY")
+  [ -z "$engine_admin_key" ] && engine_admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
 
-    local new_api new_admin new_xpub new_xprv
-    new_api=$(echo "$seed_out"    | grep -oE 'API_KEY=cak_[a-f0-9]+'       | head -1 | cut -d= -f2 || true)
-    new_admin=$(echo "$seed_out"  | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+'     | head -1 | cut -d= -f2 || true)
-    new_xpub=$(echo "$seed_out"   | grep -oE 'BTC_DEV_XPUB=[A-Za-z0-9]+'  | head -1 | cut -d= -f2 || true)
-    new_xprv=$(echo "$seed_out"   | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+'  | head -1 | cut -d= -f2 || true)
+  [ -n "$engine_api_key" ] && [ -n "$engine_admin_key" ] || \
+    die "Seed ran but API keys not found — check engine/.env"
 
-    [ -n "$new_api"   ] && { env_set "$ENGINE_ENV" "API_KEY"      "$new_api";   engine_api_key="$new_api";   ok "New API key saved → engine/.env"; }
-    [ -n "$new_admin" ] && { env_set "$ENGINE_ENV" "ADMIN_KEY"    "$new_admin"; engine_admin_key="$new_admin"; ok "New admin key saved → engine/.env"; }
-    [ -n "$new_xpub"  ] && { env_set "$ENGINE_ENV" "BTC_DEV_XPUB" "$new_xpub"; ok "BTC xpub saved → engine/.env"; }
-    [ -n "$new_xprv"  ] && { env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$new_xprv"; ok "BTC xprv saved → engine/.env (regtest dev key)"; }
-
-    if [ -z "$engine_api_key" ] || [ -z "$engine_admin_key" ]; then
-      engine_api_key=$(env_get "$ENGINE_ENV" "API_KEY")
-      engine_admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
-    fi
-    [ -n "$engine_api_key" ] && [ -n "$engine_admin_key" ] || \
-      die "Seed ran but keys missing — set API_KEY and ADMIN_KEY in engine/.env manually"
-    ok "Seed complete"
-  else
-    info "Running npm run db:seed (idempotent)..."
-    local seed_log
-    seed_log=$(cd "$ENGINE_DIR" && npm run db:seed 2>&1) || { warn "Seed returned non-zero (continuing)"; }
-    # Capture xprv if printed (only happens on first generation)
-    local xprv_check
-    xprv_check=$(echo "$seed_log" | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)
-    [ -n "$xprv_check" ] && env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$xprv_check"
-    echo "$seed_log" | grep -iE "wallet|WARN|ERROR" | head -8 || true
-    ok "Seed complete"
-  fi
-
-  # Sync keys → btc-test-ui/.env
-  local ui_api ui_admin
-  ui_api=$(env_get "$UI_ENV" "CHAIN_API_KEY")
-  ui_admin=$(env_get "$UI_ENV" "CHAIN_API_ADMIN_KEY")
-
-  local keys_changed=false
-  if [ "$ui_api" != "$engine_api_key" ] || [ "$ui_admin" != "$engine_admin_key" ]; then
-    env_set "$UI_ENV" "CHAIN_API_KEY"       "$engine_api_key"
-    env_set "$UI_ENV" "CHAIN_API_ADMIN_KEY" "$engine_admin_key"
-    keys_changed=true
-    ok "Keys synced → btc-test-ui/.env"
-  else
-    ok "Keys already in sync"
-  fi
-
-  if [ "$keys_changed" = "true" ] || [ -z "$ui_api" ] || [ -z "$ui_admin" ]; then
-    info "Applying new keys to UI proxy container..."
-    cd "$SCRIPT_DIR" && docker compose up -d ui > /dev/null 2>&1
-    ok "UI proxy updated"
-    info "Ensuring btcminer wallet after container recreation..."
-    local tries=0
-    until BTC getblockchaininfo > /dev/null 2>&1; do
-      sleep 1; tries=$((tries+1)); [ "$tries" -le 15 ] || break
-    done
-    BTC createwallet "$MINING_WALLET" false false "" false true false > /dev/null 2>&1 \
-      || BTC loadwallet "$MINING_WALLET" > /dev/null 2>&1 || true
-  fi
-
-  local dev_xpub
-  dev_xpub=$(env_get "$ENGINE_ENV" "BTC_DEV_XPUB")
-
+  ok "Migrations + seed complete"
   echo ""
   echo -e "  ${C_CYAN}API key${C_RESET}    ${engine_api_key}"
   echo -e "  ${C_CYAN}Admin key${C_RESET}  ${engine_admin_key}"
-  [ -n "$dev_xpub" ] && echo -e "  ${C_CYAN}BTC xpub${C_RESET}   ${dev_xpub}"
+  [ -n "$new_xpub" ] && echo -e "  ${C_CYAN}BTC xpub${C_RESET}   ${new_xpub}"
+
+  # Export for downstream steps
+  V3_API_KEY="$engine_api_key"
+  V3_ADMIN_KEY="$engine_admin_key"
 }
 
-# ─── step 3: build engine ─────────────────────────────────────────────────────
-step_build_engine() {
-  header "Step 3 — Building engine"
-  cd "$ENGINE_DIR"
-  info "Compiling TypeScript (npm run build)..."
-  npm run build || die "Engine build failed"
-  ok "Engine built → dist/"
+# ─── v3: start engines ────────────────────────────────────────────────────────
+step_v3_engines() {
+  header "V3 Step 6 — Start engine-1 and engine-2"
+
+  local api_key admin_key
+  api_key=$(env_get "$ENGINE_ENV" "API_KEY")
+  admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+
+  # Inject keys into compose environment file
+  # docker-compose.v3.yml reads API_KEY and ADMIN_KEY from host env
+  export API_KEY="$api_key"
+  export ADMIN_KEY="$admin_key"
+  export CUSTOMER_SESSION_SECRET=$(env_get "$ENGINE_ENV" "CUSTOMER_SESSION_SECRET" || echo "change-me-in-production-min-32-chars!!")
+
+  info "Starting engine-1 (cluster leader candidate)..."
+  $V3_COMPOSE_CMD up -d engine-1
+
+  info "Waiting for engine-1 /health..."
+  local tries=0
+  until curl -sf "http://localhost:3000/health" > /dev/null 2>&1; do
+    printf "."
+    sleep 2
+    tries=$((tries+1))
+    [ "$tries" -le 30 ] || die "engine-1 did not respond after 60s"
+  done
+  echo " OK"
+  ok "engine-1 healthy → http://localhost:3000"
+
+  info "Starting engine-2 (active-active standby)..."
+  $V3_COMPOSE_CMD up -d engine-2
+
+  info "Waiting for engine-2 /health..."
+  tries=0
+  until curl -sf "http://localhost:3001/health" > /dev/null 2>&1; do
+    printf "."
+    sleep 2
+    tries=$((tries+1))
+    [ "$tries" -le 30 ] || die "engine-2 did not respond after 60s"
+  done
+  echo " OK"
+  ok "engine-2 healthy → http://localhost:3001"
 }
 
-# ─── step 4: derive hot-wallet WIF (only when signer mode active) ─────────────
-# The hot wallet key is at path m/1/0 from the account xprv (m/44'/1'/0' for regtest).
-# Same path used by engine seed to derive the hot wallet address.
-step_derive_wif() {
-  header "Step 4 — Derive hot-wallet signing key"
+# ─── v3: register chain_nodes ─────────────────────────────────────────────────
+step_v3_register_nodes() {
+  header "V3 Step 7 — Register chain nodes"
 
-  local xprv_local
-  xprv_local=$(env_get "$ENGINE_ENV" "BTC_DEV_XPRV")
+  local api_key admin_key base
+  admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+  base="http://localhost:3000"
 
-  if [ -z "$xprv_local" ]; then
-    warn "BTC_DEV_XPRV not in engine/.env — re-running seed to capture it..."
-    local seed_out
-    seed_out=$(cd "$ENGINE_DIR" && npm run db:seed 2>&1) || true
-    xprv_local=$(echo "$seed_out" | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)
-    [ -n "$xprv_local" ] && { env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$xprv_local"; ok "BTC xprv captured"; } \
-      || die "BTC_DEV_XPRV not found — try: ./start.sh reset --signer $SIGNER_MODE"
-  fi
+  _register_node() {
+    local label="$1" role="$2" priority="$3" rpc_url="$4" pwd_ref="$5"
 
-  # Expose account xprv globally so _enroll_signer can write it to signer .env files
-  ACCOUNT_XPRV="$xprv_local"
+    info "Registering chain node: $label ($role, priority=$priority)..."
+    local body result
+    body=$(printf '{"chainId":"bitcoin","label":"%s","rpcUrl":"%s","rpcUser":"bitcoin","rpcPasswordRef":"%s","network":"regtest","role":"%s","priority":%d}' \
+      "$label" "$rpc_url" "$pwd_ref" "$role" "$priority")
 
+    result=$(curl -sf -X POST "${base}/admin/v1/chain-nodes" \
+      -H "X-Admin-Key: $admin_key" \
+      -H "Content-Type: application/json" \
+      -d "$body" 2>/dev/null) || { warn "Failed to register $label — may already exist"; return; }
+
+    local node_id
+    node_id=$(echo "$result" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['id'])" 2>/dev/null || true)
+    [ -n "$node_id" ] && ok "Registered: $label → $node_id" || warn "Registration response: $result"
+  }
+
+  # btc-node-1 is primary (full node, priority 10)
+  # rpcPasswordRef uses env: prefix — engine reads from BTC_NODE_1_PASSWORD env var
+  # In regtest dev, password is stored plaintext via env: reference
+  _register_node "btc-node-1 (primary)" "full"         10  "http://btc-node-1:18443" "env:BTC_NODE_1_RPC_PASSWORD"
+  _register_node "btc-node-2 (standby)" "full"         20  "http://btc-node-2:18443" "env:BTC_NODE_2_RPC_PASSWORD"
+
+  ok "Chain nodes registered (btc-node-1 priority=10, btc-node-2 priority=20)"
+  detail "Note: chain_nodes use env: password refs. In production set:"
+  detail "  BTC_NODE_1_RPC_PASSWORD=<password> in engine environment"
+  detail "  BTC_NODE_2_RPC_PASSWORD=<password> in engine environment"
+}
+
+# ─── v3: start indexers ───────────────────────────────────────────────────────
+step_v3_indexers() {
+  header "V3 Step 8 — Start btc-indexers"
+
+  info "Starting btc-indexer-1 (watches btc-node-1)..."
+  $V3_COMPOSE_CMD up -d btc-indexer-1
+
+  info "Starting btc-indexer-2 (watches btc-node-2)..."
+  $V3_COMPOSE_CMD up -d btc-indexer-2
+
+  # Give them a few seconds to initialize
+  sleep 3
+
+  ok "btc-indexer-1 started — watching btc-node-1 (port 18443)"
+  ok "btc-indexer-2 started — watching btc-node-2 (port 18453)"
+  detail "Indexers scan blocks every 5s → write to chain_events table"
+  detail "Deduplication: ON CONFLICT DO NOTHING if both detect the same tx"
+}
+
+# ─── v3: start nginx + UI proxy ──────────────────────────────────────────────
+step_v3_nginx_ui() {
+  header "V3 Step 9 — nginx load balancer + UI proxy"
+
+  info "Starting nginx (engine-1 + engine-2 upstream → localhost:3009)..."
+  $V3_COMPOSE_CMD up -d nginx
+  local tries=0
+  until curl -sf "http://localhost:3009/nginx-health" > /dev/null 2>&1; do
+    printf "."; sleep 2; tries=$((tries+1))
+    [ "$tries" -le 15 ] || die "nginx did not respond after 30s"
+  done
+  echo " OK"
+  ok "nginx ready → http://localhost:3009  (routes to engine-1 + engine-2)"
+
+  info "Starting test UI proxy..."
+  $V3_COMPOSE_CMD up -d ui
+  ok "UI proxy started → http://localhost:3002"
+}
+
+# ─── v3: derive WIF ───────────────────────────────────────────────────────────
+step_v3_derive_wif() {
+  header "V3 Step — Derive signing key"
+  local xprv
+  xprv=$(env_get "$ENGINE_ENV" "BTC_DEV_XPRV")
+  [ -n "$xprv" ] || die "BTC_DEV_XPRV not in engine/.env — try: ./start.sh reset --v3 --signer $SIGNER_MODE"
+  ACCOUNT_XPRV="$xprv"
   info "Deriving hot-wallet WIF (account m/1/0)..."
   HOT_WALLET_WIF=$(
-    cd "$ENGINE_DIR" && BTC_DEV_XPRV="$xprv_local" node --no-warnings -e "
+    cd "$ENGINE_DIR" && BTC_DEV_XPRV="$xprv" node --no-warnings -e "
       const { BIP32Factory } = require('bip32');
       const ecc = require('tiny-secp256k1');
       const bitcoin = require('bitcoinjs-lib');
@@ -380,451 +534,634 @@ step_derive_wif() {
       const node = bip32.fromBase58(process.env.BTC_DEV_XPRV, bitcoin.networks.regtest);
       process.stdout.write(node.derive(1).derive(0).toWIF() + '\n');
     " 2>/dev/null
-  ) || die "WIF derivation failed — ensure bip32, tiny-secp256k1, bitcoinjs-lib are in engine/node_modules"
-
-  ok "Hot-wallet WIF derived (key at m/1/0)"
+  ) || die "WIF derivation failed"
+  ok "Hot-wallet WIF derived"
 }
 
-# ─── step 5: build signer(s) ──────────────────────────────────────────────────
-step_build_signers() {
-  header "Step 5 — Building signer(s)"
-
-  if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
-    [ -d "$SIGNER_OSS_DIR" ] || die "signer-oss directory not found at $SIGNER_OSS_DIR"
-    info "Installing signer-oss dependencies..."
-    (cd "$SIGNER_OSS_DIR" && npm install --silent) || warn "npm install in signer-oss had warnings"
-    info "Building signer-oss..."
-    (cd "$SIGNER_OSS_DIR" && npm run build) || die "signer-oss build failed"
-    ok "signer-oss built → dist/"
-  fi
-
-  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
-    [ -d "$SIGNER_ENT_DIR" ] || die "signer (enterprise) directory not found at $SIGNER_ENT_DIR"
-    info "Installing signer (enterprise) dependencies..."
-    (cd "$SIGNER_ENT_DIR" && npm install --silent) || warn "npm install in signer had warnings"
-    info "Building signer (enterprise)..."
-    (cd "$SIGNER_ENT_DIR" && npm run build) || die "Enterprise signer build failed"
-    ok "signer (enterprise) built → dist/"
-  fi
-}
-
-# ─── step 6: start engine in background ───────────────────────────────────────
-step_start_engine_bg() {
-  header "Step 6 — Starting engine (background)"
-
-  ENGINE_PORT=$(env_get "$ENGINE_ENV" "PORT"); ENGINE_PORT="${ENGINE_PORT:-3000}"
-
-  local inspect_flag=""
-  if [[ "$DEBUG_MODE" == "true" ]]; then
-    inspect_flag="--inspect=127.0.0.1:${ENGINE_DEBUG_PORT}"
-    info "Starting engine on port ${ENGINE_PORT} [debugger: 127.0.0.1:${ENGINE_DEBUG_PORT}]..."
-  else
-    info "Starting engine on port ${ENGINE_PORT}..."
-  fi
-
-  (
-    cd "$ENGINE_DIR"
-    node $inspect_flag dist/main.js &
-    printf '%s\n' "$!" > "$ENGINE_PIDFILE"
-    wait
-  ) 2>&1 | awk '{printf "\033[0;36m[engine]\033[0m %s\n", $0; fflush()}' &
-
-  sleep 0.3   # give subshell time to write PID file
-
-  info "Waiting for engine /health..."
-  local tries=0
-  until curl -sf "http://127.0.0.1:${ENGINE_PORT}/health" > /dev/null 2>&1; do
-    printf "."
-    sleep 2
-    tries=$((tries+1))
-    if [ "$tries" -ge 30 ]; then
-      echo ""
-      die "Engine did not respond after 60s — check logs above"
-    fi
-    # Abort early if engine process died
-    local epid
-    epid=$(cat "$ENGINE_PIDFILE" 2>/dev/null || true)
-    [[ -n "$epid" ]] && kill -0 "$epid" 2>/dev/null || { echo ""; die "Engine process died — check logs above"; }
-  done
-  echo " OK"
-
-  ok "Engine running on http://127.0.0.1:${ENGINE_PORT}"
-}
-
-# ─── step 7: enroll + configure signers ───────────────────────────────────────
-# Writes signer .env files with enrolled SIGNER_ID and the derived WIF.
-# Enrollment via the engine API is idempotent on signerFingerprint.
-step_enroll_and_configure_signers() {
-  header "Step 7 — Enroll signer(s) + configure auto-sign policy"
-
-  local api_key
+# ─── v3: enroll + configure signers ───────────────────────────────────────────
+# Enrollment hits nginx (localhost:3009) → stored in shared PostgreSQL → visible
+# to both engine-1 and engine-2. Signer .env points to nginx, not a single engine.
+step_v3_enroll_signers() {
+  header "V3 Step — Enroll signer(s)"
+  local api_key base
   api_key=$(env_get "$ENGINE_ENV" "API_KEY")
-  local base="http://127.0.0.1:${ENGINE_PORT:-3000}"
+  # Enroll via nginx LB — any healthy engine handles it, result stored in shared DB
+  base="http://localhost:3009"
 
-  _enroll_signer() {
-    local edition="$1"         # community | enterprise
-    local fingerprint="$2"     # e.g. btc:regtest:dev_oss
-    local name="$3"            # display name
-    local signer_dir="$4"      # path to signer directory
-    local port="$5"            # health port (3101 | 3102)
-    local node_env_file="$signer_dir/.env"
+  _enroll_signer_v3() {
+    local edition="$1" fingerprint="$2" name="$3" signer_dir="$4" port="$5"
 
-    info "Enrolling '$name' (fingerprint: $fingerprint)..."
-    local body
+    [ -d "$signer_dir" ] || die "$name directory not found: $signer_dir"
+    info "Enrolling '$name' via nginx → shared DB..."
+    local body result signer_id
     body=$(printf '{"name":"%s","signerFingerprint":"%s","publicKey":"ed25519:devpubkey:%s","capabilities":{"chains":["bitcoin"],"assets":["bitcoin:BTC"],"formats":["btc_psbt"]},"edition":"%s","connectivityMode":"polling","keyProvider":"env"}' \
       "$name" "$fingerprint" "$edition" "$edition")
-
-    local result
     result=$(curl -sf -X POST "${base}/v1/external-signers/enroll" \
       -H "Authorization: Bearer $api_key" \
       -H "Content-Type: application/json" \
-      -d "$body") || die "Enrollment API call failed for $name (is engine running?)"
-
-    local signer_id
+      -d "$body") || die "Enrollment failed for $name"
     signer_id=$(echo "$result" | python3 -c \
       "import sys,json; d=json.load(sys.stdin); print(d['data']['id'])" 2>/dev/null) \
-      || die "Failed to parse enrollment response for $name: $result"
+      || die "Parse error: $result"
+    ok "Enrolled → $signer_id (stored in shared DB, visible to both engines)"
 
-    ok "Enrolled → signer_id: $signer_id"
-
-    # Write signer .env
+    # Write signer .env — CHAIN_API_BASE_URL points to nginx, not engine-1 directly.
+    # Signer gets automatic engine failover: nginx retries next engine on connection errors.
+    # CHAIN_API_FALLBACK_URLS is empty because nginx already handles routing.
     if [ "$edition" = "community" ]; then
-      cat > "$node_env_file" <<EOF
-# chain-api OSS Signer — auto-generated by start.sh (regtest dev environment)
-CHAIN_API_BASE_URL=${base}
+      cat > "$signer_dir/.env" <<EOF
+# chain-api OSS Signer — auto-generated by start.sh (v3 regtest dev)
+# CHAIN_API_BASE_URL points to nginx LB (http://localhost:3009).
+# nginx routes to engine-1:3000 and engine-2:3000 round-robin with passive health checks.
+# If one engine goes down, nginx automatically routes to the other.
+CHAIN_API_BASE_URL=http://localhost:3009
+CHAIN_API_FALLBACK_URLS=
 SIGNER_API_KEY=${api_key}
 SIGNER_ID=${signer_id}
 TENANT_ID=tenant_default
 SIGNER_NAME=${name}
 SIGNER_FINGERPRINT=${fingerprint}
-SIGNER_PUBLIC_KEY=ed25519:devpubkey:${edition}:regtest
-
+SIGNER_PUBLIC_KEY=ed25519:devpubkey:community:regtest
 BTC_SIGNING_MODE=dev_env_key
 BTC_DEV_PRIVATE_KEY_WIF=${HOT_WALLET_WIF}
 BTC_DEV_ACCOUNT_XPRV=${ACCOUNT_XPRV}
 BTC_NETWORK=regtest
-
 POLL_INTERVAL_MS=3000
 TASK_BATCH_SIZE=5
 SUPPORTED_CHAINS=bitcoin
 SUPPORTED_ASSETS=bitcoin:BTC
 SUPPORTED_FORMATS=btc_psbt
-
 MAX_AUTO_SIGN_AMOUNT_SATS=100000000
 MAX_FEE_RATE_SAT_VB=50
 MAX_OUTPUTS_PER_BATCH=200
-
 SIGNER_PORT=${port}
-SIGNER_BIND_HOST=127.0.0.1
+SIGNER_BIND_HOST=0.0.0.0
 SIGNER_AUTO_ENROLL=true
 AUDIT_STDOUT=true
 AUDIT_LOG_FILE=./data/audit.log
 EOF
     else
-      cat > "$node_env_file" <<EOF
-# chain-api Enterprise Signer — auto-generated by start.sh (regtest dev environment)
-CHAIN_API_BASE_URL=${base}
+      # Enterprise signer: additional fields (concurrency, config provider, etc.)
+      cat > "$signer_dir/.env" <<EOF
+# chain-api Enterprise Signer — auto-generated by start.sh (v3 regtest dev)
+CHAIN_API_BASE_URL=http://localhost:3009
+CHAIN_API_FALLBACK_URLS=
 SIGNER_API_KEY=${api_key}
 SIGNER_ID=${signer_id}
 TENANT_ID=tenant_default
 SIGNER_NAME=${name}
 SIGNER_FINGERPRINT=${fingerprint}
-SIGNER_PUBLIC_KEY=ed25519:devpubkey:${edition}:regtest
-
+SIGNER_PUBLIC_KEY=ed25519:devpubkey:enterprise:regtest
 KEY_PROVIDER=env
 BTC_DEV_PRIVATE_KEY_WIF=${HOT_WALLET_WIF}
 BTC_DEV_ACCOUNT_XPRV=${ACCOUNT_XPRV}
 BTC_NETWORK=regtest
-
 POLL_INTERVAL_MS=1000
 TASK_BATCH_SIZE=20
 SIGNER_CONCURRENCY=4
-
-SIGNER_PORT=${port}
-SIGNER_BIND_HOST=127.0.0.1
+CONFIG_PROVIDER=env
 TRANSPORT_SECURITY=https
+SIGNER_PORT=${port}
+SIGNER_BIND_HOST=0.0.0.0
 AUDIT_SINK=stdout
 EOF
     fi
-    ok ".env written → $node_env_file"
+    ok ".env written → $signer_dir/.env  (CHAIN_API_BASE_URL=http://localhost:3009)"
 
-    # Set auto-sign policy so the batcher dispatches to this signer automatically
-    info "Configuring auto-sign policy for $name..."
-    local policy_body
-    policy_body=$(printf '{"policies":[{"signerId":"%s","autoSignLimitRaw":"100000000","dailyAutoSignLimitRaw":"1000000000","maxFeeRateSatVb":50,"maxOutputsPerBatch":200}]}' \
-      "$signer_id")
+    info "Setting auto-sign policy for $name..."
     curl -sf -X PUT "${base}/v1/external-signers/policies" \
       -H "Authorization: Bearer $api_key" \
       -H "Content-Type: application/json" \
-      -d "$policy_body" > /dev/null \
-      || warn "Policy setup failed for $name (manual approval will be required)"
-    ok "Auto-sign policy set (limit: 1 BTC per batch, 10 BTC daily)"
+      -d "{\"policies\":[{\"signerId\":\"$signer_id\",\"autoSignLimitRaw\":\"100000000\",\"dailyAutoSignLimitRaw\":\"1000000000\",\"maxFeeRateSatVb\":50,\"maxOutputsPerBatch\":200}]}" \
+      > /dev/null || warn "Policy setup failed (manual approval needed)"
+    ok "Auto-sign policy set"
   }
 
-  if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
-    _enroll_signer "community" "$SIGNER_OSS_FINGERPRINT" "Dev OSS Signer (regtest)" "$SIGNER_OSS_DIR" "3101"
-  fi
-  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
-    _enroll_signer "enterprise" "$SIGNER_ENT_FINGERPRINT" "Dev Enterprise Signer (regtest)" "$SIGNER_ENT_DIR" "3102"
-  fi
+  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && \
+    _enroll_signer_v3 "community"  "$SIGNER_OSS_FINGERPRINT" "Dev OSS Signer"        "$SIGNER_OSS_DIR" "3101"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
+    _enroll_signer_v3 "enterprise" "$SIGNER_ENT_FINGERPRINT" "Dev Enterprise Signer" "$SIGNER_ENT_DIR" "3102"
 }
 
-# ─── step 8: start signer(s) in background ────────────────────────────────────
-step_start_signers_bg() {
-  header "Step 8 — Starting signer(s) (background)"
+# ─── v3: start signers via Docker Compose profiles ───────────────────────────
+# Signers run as Docker containers using the .env files written by enroll step.
+# Profile "signer-oss" starts signer-oss container.
+# Profile "signer-enterprise" starts signer-enterprise container.
+# The container overrides CHAIN_API_BASE_URL → http://nginx:3009 (Docker DNS).
+step_v3_signers_docker() {
+  header "V3 Step — Start signer(s) via Docker Compose"
 
-  _start_signer_bg() {
-    local signer_dir="$1"
-    local label="$2"        # e.g. "signer-oss"
-    local color="$3"        # ANSI color code
-    local app_port="$4"     # health port
-    local pid_file="$5"
-    local debug_port="$6"   # Node.js --inspect port (empty = no debug)
+  # Determine which compose profile to activate
+  local profile=""
+  [[ "$SIGNER_MODE" == "oss" ]]        && profile="signer-oss"
+  [[ "$SIGNER_MODE" == "enterprise" ]] && profile="signer-enterprise"
+  [[ "$SIGNER_MODE" == "both" ]]       && profile="signer-all"
 
-    local inspect_flag=""
-    if [[ "$DEBUG_MODE" == "true" && -n "$debug_port" ]]; then
-      inspect_flag="--inspect=127.0.0.1:${debug_port}"
-      info "Starting $label on health-port ${app_port} [debugger: 127.0.0.1:${debug_port}]..."
-    else
-      info "Starting $label on health-port ${app_port}..."
-    fi
+  [ -z "$profile" ] && return
 
-    (
-      cd "$signer_dir"
-      node $inspect_flag dist/main.js &
-      printf '%s\n' "$!" > "$pid_file"
-      wait
-    ) 2>&1 | awk -v lbl="$label" -v col="$color" \
-      '{printf "%s[%s]\033[0m %s\n", col, lbl, $0; fflush()}' &
+  info "Building and starting signer(s) (profile: $profile)..."
+  $V3_COMPOSE_CMD --profile "$profile" build
+  $V3_COMPOSE_CMD --profile "$profile" up -d
 
-    sleep 0.3
-  }
+  sleep 3
 
   if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
-    _start_signer_bg "$SIGNER_OSS_DIR" "signer-oss" '\033[1;33m' "3101" "$SIGNER_OSS_PIDFILE" "$SIGNER_OSS_DEBUG_PORT"
+    ok "signer-oss container started → localhost:3101"
+    detail "Polling: http://nginx:3009 (container) = http://localhost:3009 (host)"
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
-    _start_signer_bg "$SIGNER_ENT_DIR" "signer-ent" '\033[0;35m' "3102" "$SIGNER_ENT_PIDFILE" "$SIGNER_ENT_DEBUG_PORT"
+    ok "signer-enterprise container started → localhost:3102"
   fi
+  detail "Signer .env → CHAIN_API_BASE_URL=http://localhost:3009 (overridden to nginx in container)"
+}
 
-  # Wait for signer(s) /health
-  _wait_signer_health() {
-    local port="$1" label="$2" pid_file="$3"
+# ─── v3: build + start signers ────────────────────────────────────────────────
+# Kept for reference — replaced by step_v3_signers_docker in v3 mode.
+step_v3_signers_bg() {
+  header "V3 Step — Start signer(s) (background, legacy)"
+
+  _start_bg() {
+    local dir="$1" label="$2" color="$3" port="$4" pid_file="$5" dbg_port="$6"
+    [ -d "$dir" ] || die "$label directory not found: $dir"
+    (cd "$dir" && npm install --silent) || warn "npm install in $label had warnings"
+    (cd "$dir" && npm run build) || die "$label build failed"
+
+    local inspect_flag=""
+    [[ "$DEBUG_MODE" == "true" && -n "$dbg_port" ]] && inspect_flag="--inspect=127.0.0.1:${dbg_port}"
+
+    (cd "$dir" && node $inspect_flag dist/main.js &
+     printf '%s\n' "$!" > "$pid_file"
+     wait) 2>&1 | awk -v lbl="$label" -v col="$color" '{printf "%s[%s]\033[0m %s\n",col,lbl,$0; fflush()}' &
+
+    sleep 0.3
+    info "Waiting for $label /health on port $port..."
     local tries=0
-    info "Waiting for $label /health on port ${port}..."
     until curl -sf "http://127.0.0.1:${port}/health" > /dev/null 2>&1; do
       printf "."
       sleep 2
       tries=$((tries+1))
-      if [ "$tries" -ge 20 ]; then
-        echo ""
-        warn "$label did not respond after 40s — check logs above (continuing)"
-        return
-      fi
-      local spid
-      spid=$(cat "$pid_file" 2>/dev/null || true)
-      [[ -n "$spid" ]] && kill -0 "$spid" 2>/dev/null || { echo ""; warn "$label process died — check logs above"; return; }
+      [ "$tries" -le 20 ] || { echo ""; warn "$label did not respond — check logs"; return; }
     done
     echo " OK"
-    ok "$label healthy → http://127.0.0.1:${port}/health"
+    ok "$label → http://127.0.0.1:${port}"
   }
 
+  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && \
+    _start_bg "$SIGNER_OSS_DIR" "signer-oss" '\033[1;33m' "3101" "$SIGNER_OSS_PIDFILE" "$SIGNER_OSS_DEBUG_PORT"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
+    _start_bg "$SIGNER_ENT_DIR" "signer-ent" '\033[0;35m' "3102" "$SIGNER_ENT_PIDFILE" "$SIGNER_ENT_DEBUG_PORT"
+}
+
+# ─── v3: verify cluster ───────────────────────────────────────────────────────
+step_v3_verify_cluster() {
+  header "V3 Step 10 — Verify cluster"
+
+  local admin_key
+  admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+
+  info "Checking cluster status via engine-1..."
+  local status
+  status=$(curl -sf -H "X-Admin-Key: $admin_key" \
+    "http://localhost:3000/admin/v1/cluster/status" 2>/dev/null) || { warn "Cluster status unavailable"; return; }
+
+  local leader instance_count
+  leader=$(echo "$status" | python3 -c \
+    "import sys,json; d=json.load(sys.stdin)['data']; print(d.get('currentLeader',{}).get('id','none') if d.get('currentLeader') else 'none')" 2>/dev/null || echo "unknown")
+  instance_count=$(echo "$status" | python3 -c \
+    "import sys,json; d=json.load(sys.stdin)['data']; print(len(d.get('instances',[])))" 2>/dev/null || echo "?")
+
+  ok "Cluster instances: $instance_count"
+  ok "Current leader: $leader"
+}
+
+# ─── v3: print status ─────────────────────────────────────────────────────────
+step_v3_status() {
+  local api_key admin_key
+  api_key=$(env_get "$ENGINE_ENV" "API_KEY")
+  admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+
+  echo ""
+  echo -e "${C_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+  echo -e "${C_BOLD}  Ychain chain-api v3 — dev environment ready${C_RESET}"
+  echo -e "${C_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+  echo ""
+  echo -e "  ${C_CYAN}API key${C_RESET}           ${api_key}"
+  echo -e "  ${C_CYAN}Admin key${C_RESET}         ${admin_key}"
+  echo ""
+  echo -e "  ${C_BOLD}── Engines (active-active) ─────────────────────────────${C_RESET}"
+  echo -e "  ${C_GREEN}engine-1${C_RESET}          →  http://localhost:3000  (leader candidate)"
+  echo -e "  ${C_GREEN}engine-2${C_RESET}          →  http://localhost:3001  (active standby)"
+  echo ""
+  echo -e "  ${C_BOLD}── Bitcoin Core (regtest, peered) ──────────────────────${C_RESET}"
+  echo -e "  ${C_GREEN}btc-node-1${C_RESET}        →  http://localhost:18443  (primary, mines)"
+  echo -e "  ${C_GREEN}btc-node-2${C_RESET}        →  http://localhost:18453  (standby, syncs)"
+  echo ""
+  echo -e "  ${C_BOLD}── Block Indexers ──────────────────────────────────────${C_RESET}"
+  echo -e "  ${C_GREEN}btc-indexer-1${C_RESET}     →  watches btc-node-1 → chain_events"
+  echo -e "  ${C_GREEN}btc-indexer-2${C_RESET}     →  watches btc-node-2 → chain_events (dedup)"
+  echo ""
+  echo -e "  ${C_BOLD}── Database ────────────────────────────────────────────${C_RESET}"
+  echo -e "  ${C_GREEN}PostgreSQL${C_RESET}        →  localhost:5432  db=chainapi  user=chainapi"
+  echo ""
+  echo -e "  ${C_BOLD}── Load Balancer (nginx) ────────────────────────────────${C_RESET}"
+  echo -e "  ${C_GREEN}nginx${C_RESET}             →  http://localhost:3009  (engine-1 + engine-2 upstream)"
+  detail "Signers + test clients should use localhost:3009 (not a single engine)"
+  echo ""
+  echo -e "  ${C_BOLD}── Test UI ─────────────────────────────────────────────${C_RESET}"
+  echo -e "  ${C_GREEN}ui${C_RESET}                →  http://localhost:3002"
+  echo ""
   if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
-    _wait_signer_health "3101" "signer-oss" "$SIGNER_OSS_PIDFILE"
+    echo -e "  ${C_BOLD}── Signers ─────────────────────────────────────────────${C_RESET}"
+    echo -e "  ${C_GREEN}signer-oss${C_RESET}        →  http://localhost:3101  (Docker, polls nginx:3009)"
+    detail "Signer polls nginx (failover across engines). Task claims safe: PostgreSQL isolation."
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
-    _wait_signer_health "3102" "signer-ent" "$SIGNER_ENT_PIDFILE"
+    echo -e "  ${C_GREEN}signer-ent${C_RESET}        →  http://localhost:3102  (Docker, polls nginx:3009)"
+  fi
+  echo ""
+  echo -e "  ${C_BOLD}── Useful commands ─────────────────────────────────────${C_RESET}"
+  echo ""
+  local btcli="docker compose -f $SCRIPT_DIR/docker-compose.v3.yml exec -T btc-node-1 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -rpcwallet=$MINING_WALLET"
+  echo -e "  ${C_CYAN}Mine a block (confirms deposits):${C_RESET}"
+  echo "    ADDR=\$($btcli getnewaddress mine bech32) && $btcli generatetoaddress 1 \$ADDR"
+  echo ""
+  echo -e "  ${C_CYAN}Send to deposit address:${C_RESET}"
+  echo "    $btcli sendtoaddress <deposit_addr> 0.001"
+  echo ""
+  echo -e "  ${C_CYAN}API via nginx LB (stable endpoint):${C_RESET}"
+  echo "    curl -s -H 'Authorization: Bearer $api_key' http://localhost:3009/v1/deposits | python3 -m json.tool"
+  echo ""
+  echo -e "  ${C_CYAN}Check chain_events (deposits detected by indexers):${C_RESET}"
+  echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml exec -T postgres \\"
+  echo "      psql -U chainapi -d chainapi -c 'SELECT event_type,address,amount_raw,confirmations,node_id FROM chain_events ORDER BY created_at DESC LIMIT 10;'"
+  echo ""
+  echo -e "  ${C_CYAN}Cluster status:${C_RESET}"
+  echo "    curl -s -H 'X-Admin-Key: $admin_key' http://localhost:3009/admin/v1/cluster/status | python3 -m json.tool"
+  echo ""
+  echo -e "  ${C_CYAN}Signers (if enrolled):${C_RESET}"
+  echo "    curl -s -H 'Authorization: Bearer $api_key' http://localhost:3009/v1/external-signers | python3 -m json.tool"
+  echo ""
+  echo -e "  ${C_CYAN}Logs:${C_RESET}"
+  echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f engine-1 engine-2 nginx"
+  echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f btc-indexer-1 btc-indexer-2"
+  [[ "$SIGNER_MODE" != "none" ]] && \
+    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise"
+  echo ""
+  echo -e "  ${C_YELLOW}Stop:  ./start.sh stop --v3${C_RESET}"
+  echo -e "  ${C_YELLOW}Reset: ./start.sh reset --v3${C_RESET}"
+  echo ""
+}
+
+# ─── v3: wait + tail logs ─────────────────────────────────────────────────────
+step_v3_tail() {
+  trap "cmd_v3_stop; exit 0" INT TERM
+  local services="engine-1 engine-2 btc-indexer-1 btc-indexer-2 nginx"
+  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && services="$services signer-oss"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && services="$services signer-enterprise"
+  info "Tailing logs: $services (Ctrl+C to stop all)..."
+  $V3_COMPOSE_CMD logs -f $services &
+  wait
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  LEGACY (DEFAULT) MODE — single BTC node, SQLite, one engine
+#  All original step_btc, step_engine_setup, etc. functions preserved below
+# ─────────────────────────────────────────────────────────────────────────────
+
+cmd_stop() {
+  header "Stop"
+  cleanup_local
+  if [[ "$V3_MODE" == "true" ]]; then
+    cmd_v3_stop
+  else
+    cd "$SCRIPT_DIR"
+    docker compose down
+    ok "Bitcoin Core stopped"
+  fi
+  echo ""
+}
+
+step_btc() {
+  header "Step 1 — Bitcoin Core (default mode)"
+  cd "$SCRIPT_DIR"
+  docker compose build ui
+  ok "UI proxy image rebuilt"
+  if docker compose ps 2>/dev/null | grep -qE "bitcoin-core.*(Up|running)"; then
+    docker compose up -d ui > /dev/null 2>&1
+    ok "UI proxy container updated"
+  else
+    docker compose up -d
+    ok "Containers started"
+  fi
+
+  info "Waiting for Bitcoin Core RPC..."
+  local tries=0
+  until BTC getblockchaininfo > /dev/null 2>&1; do
+    printf "."; sleep 2; tries=$((tries+1))
+    [ "$tries" -le 30 ] || die "Bitcoin Core did not respond after 60s"
+  done
+  echo " OK"
+
+  info "Ensuring mining wallet '$MINING_WALLET'..."
+  BTC createwallet "$MINING_WALLET" false false "" false true false > /dev/null 2>&1 \
+    || BTC loadwallet "$MINING_WALLET" > /dev/null 2>&1 || true
+
+  local height
+  height=$(BTC getblockcount 2>/dev/null || echo "0")
+  if [ "$height" -lt 101 ]; then
+    info "Mining 101 genesis blocks..."
+    local addr; addr=$(BTC -rpcwallet="$MINING_WALLET" getnewaddress "genesis" "bech32")
+    BTC -rpcwallet="$MINING_WALLET" generatetoaddress 101 "$addr" > /dev/null
+    ok "Genesis blocks mined → height: $(BTC getblockcount)"
+  else
+    ok "Chain at height $height"
   fi
 }
 
-# ─── step 4 (no signer): start engine ────────────────────────────────────────
-# Without --debug: foreground exec (existing behavior)
-# With --debug:    background with --inspect, print attach info, wait
-step_engine_start_fg() {
-  header "Step 4 — Starting engine"
+step_engine_setup() {
+  header "Step 2 — chain-api DB & API keys (default mode)"
+  [ -d "$ENGINE_DIR" ] || die "Engine not found: $ENGINE_DIR"
 
+  if [ ! -f "$ENGINE_ENV" ]; then
+    [ -f "$ENGINE_DIR/.env.example" ] && cp "$ENGINE_DIR/.env.example" "$ENGINE_ENV" \
+      || die "No engine/.env and no .env.example"
+  fi
+
+  if [ ! -f "$UI_ENV" ]; then
+    printf 'CHAIN_API_URL=http://host.docker.internal:3000\nCHAIN_API_KEY=\nCHAIN_API_ADMIN_KEY=\n' > "$UI_ENV"
+  fi
+
+  local api_key admin_key need_seed=false
+  api_key=$(env_get "$ENGINE_ENV" "API_KEY")
+  admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+
+  { [ ! -f "$ENGINE_DB" ] || [ -z "$api_key" ] || [ -z "$admin_key" ]; } && need_seed=true
+
+  if [ "$need_seed" = "true" ]; then
+    info "Running db:seed..."
+    local out; out=$(cd "$ENGINE_DIR" && npm run db:seed 2>&1) || { echo "$out"; die "Seed failed"; }
+    local na nd xp xv
+    na=$(echo "$out" | grep -oE 'API_KEY=cak_[a-f0-9]+' | head -1 | cut -d= -f2 || true)
+    nd=$(echo "$out" | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+' | head -1 | cut -d= -f2 || true)
+    xp=$(echo "$out" | grep -oE 'BTC_DEV_XPUB=[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)
+    xv=$(echo "$out" | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)
+    [ -n "$na" ] && { env_set "$ENGINE_ENV" "API_KEY" "$na"; api_key="$na"; }
+    [ -n "$nd" ] && { env_set "$ENGINE_ENV" "ADMIN_KEY" "$nd"; admin_key="$nd"; }
+    [ -n "$xp" ] && env_set "$ENGINE_ENV" "BTC_DEV_XPUB" "$xp"
+    [ -n "$xv" ] && env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$xv"
+    ok "Seed complete"
+  else
+    info "Running db:seed (idempotent)..."
+    cd "$ENGINE_DIR" && npm run db:seed > /dev/null 2>&1 || warn "Seed returned non-zero"
+    ok "Seed complete"
+  fi
+
+  env_set "$UI_ENV" "CHAIN_API_KEY" "$api_key"
+  env_set "$UI_ENV" "CHAIN_API_ADMIN_KEY" "$admin_key"
+  cd "$SCRIPT_DIR" && docker compose up -d ui > /dev/null 2>&1
+
+  echo ""
+  echo -e "  ${C_CYAN}API key${C_RESET}    $api_key"
+  echo -e "  ${C_CYAN}Admin key${C_RESET}  $admin_key"
+}
+
+step_build_engine() {
+  header "Step 3 — Build engine"
+  cd "$ENGINE_DIR" && npm run build || die "Engine build failed"
+  ok "Engine built → dist/"
+}
+
+step_derive_wif() {
+  header "Step 4 — Derive signing key"
+  local xprv; xprv=$(env_get "$ENGINE_ENV" "BTC_DEV_XPRV")
+  [ -n "$xprv" ] || die "BTC_DEV_XPRV missing — try: ./start.sh reset --signer $SIGNER_MODE"
+  ACCOUNT_XPRV="$xprv"
+  HOT_WALLET_WIF=$(
+    cd "$ENGINE_DIR" && BTC_DEV_XPRV="$xprv" node --no-warnings -e "
+      const bip32 = require('bip32').BIP32Factory(require('tiny-secp256k1'));
+      const btc = require('bitcoinjs-lib');
+      const node = bip32.fromBase58(process.env.BTC_DEV_XPRV, btc.networks.regtest);
+      process.stdout.write(node.derive(1).derive(0).toWIF()+'\n');
+    " 2>/dev/null
+  ) || die "WIF derivation failed"
+  ok "Hot-wallet WIF derived"
+}
+
+step_build_signers() {
+  header "Step 5 — Build signer(s)"
+  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && {
+    (cd "$SIGNER_OSS_DIR" && npm install --silent && npm run build) || die "signer-oss build failed"
+    ok "signer-oss built"
+  }
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && {
+    (cd "$SIGNER_ENT_DIR" && npm install --silent && npm run build) || die "signer-ent build failed"
+    ok "signer-ent built"
+  }
+}
+
+step_start_engine_bg() {
+  header "Step 6 — Start engine (background)"
   ENGINE_PORT=$(env_get "$ENGINE_ENV" "PORT"); ENGINE_PORT="${ENGINE_PORT:-3000}"
+  local inspect_flag=""
+  [[ "$DEBUG_MODE" == "true" ]] && inspect_flag="--inspect=127.0.0.1:${ENGINE_DEBUG_PORT}"
+  (cd "$ENGINE_DIR" && { node $inspect_flag dist/main.js & printf '%s\n' "$!" > "$ENGINE_PIDFILE"; wait; }) \
+    2>&1 | awk '{printf "\033[0;36m[engine]\033[0m %s\n", $0; fflush()}' &
+  sleep 0.3
+  info "Waiting for engine /health..."
+  local tries=0
+  until curl -sf "http://127.0.0.1:${ENGINE_PORT}/health" > /dev/null 2>&1; do
+    printf "."; sleep 2; tries=$((tries+1))
+    [ "$tries" -le 30 ] || die "Engine did not respond after 60s"
+    local epid; epid=$(cat "$ENGINE_PIDFILE" 2>/dev/null || true)
+    [[ -n "$epid" ]] && kill -0 "$epid" 2>/dev/null || die "Engine process died"
+  done
+  echo " OK"
+  ok "Engine → http://127.0.0.1:${ENGINE_PORT}"
+}
 
+step_enroll_and_configure_signers() {
+  header "Step 7 — Enroll signer(s)"
+  local api_key base
+  api_key=$(env_get "$ENGINE_ENV" "API_KEY")
+  base="http://127.0.0.1:${ENGINE_PORT:-3000}"
+
+  _enroll() {
+    local edition="$1" fp="$2" name="$3" dir="$4" port="$5"
+    info "Enrolling '$name'..."
+    local body result sid
+    body=$(printf '{"name":"%s","signerFingerprint":"%s","publicKey":"ed25519:devpubkey:%s","capabilities":{"chains":["bitcoin"],"assets":["bitcoin:BTC"],"formats":["btc_psbt"]},"edition":"%s","connectivityMode":"polling","keyProvider":"env"}' \
+      "$name" "$fp" "$edition" "$edition")
+    result=$(curl -sf -X POST "${base}/v1/external-signers/enroll" \
+      -H "Authorization: Bearer $api_key" -H "Content-Type: application/json" -d "$body") || die "Enrollment failed"
+    sid=$(echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])" 2>/dev/null) || die "Parse error: $result"
+    ok "Enrolled → $sid"
+    cat > "$dir/.env" <<EOF
+CHAIN_API_BASE_URL=${base}
+SIGNER_API_KEY=${api_key}
+SIGNER_ID=${sid}
+TENANT_ID=tenant_default
+SIGNER_NAME=${name}
+SIGNER_FINGERPRINT=${fp}
+BTC_SIGNING_MODE=dev_env_key
+BTC_DEV_PRIVATE_KEY_WIF=${HOT_WALLET_WIF}
+BTC_DEV_ACCOUNT_XPRV=${ACCOUNT_XPRV}
+BTC_NETWORK=regtest
+POLL_INTERVAL_MS=3000
+TASK_BATCH_SIZE=5
+SUPPORTED_CHAINS=bitcoin
+SUPPORTED_ASSETS=bitcoin:BTC
+SUPPORTED_FORMATS=btc_psbt
+MAX_AUTO_SIGN_AMOUNT_SATS=100000000
+MAX_FEE_RATE_SAT_VB=50
+MAX_OUTPUTS_PER_BATCH=200
+SIGNER_PORT=${port}
+SIGNER_BIND_HOST=127.0.0.1
+EOF
+    curl -sf -X PUT "${base}/v1/external-signers/policies" \
+      -H "Authorization: Bearer $api_key" -H "Content-Type: application/json" \
+      -d "{\"policies\":[{\"signerId\":\"$sid\",\"autoSignLimitRaw\":\"100000000\",\"dailyAutoSignLimitRaw\":\"1000000000\",\"maxFeeRateSatVb\":50,\"maxOutputsPerBatch\":200}]}" > /dev/null || true
+    ok "Policy set"
+  }
+  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && _enroll "community"  "$SIGNER_OSS_FINGERPRINT" "Dev OSS Signer"        "$SIGNER_OSS_DIR" "3101"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && _enroll "enterprise" "$SIGNER_ENT_FINGERPRINT" "Dev Enterprise Signer" "$SIGNER_ENT_DIR" "3102"
+}
+
+step_start_signers_bg() {
+  header "Step 8 — Start signer(s) (background)"
+  _start_signer() {
+    local dir="$1" label="$2" color="$3" port="$4" pf="$5" dbg="$6"
+    local inspect_flag=""
+    [[ "$DEBUG_MODE" == "true" && -n "$dbg" ]] && inspect_flag="--inspect=127.0.0.1:${dbg}"
+    (cd "$dir" && { node $inspect_flag dist/main.js & printf '%s\n' "$!" > "$pf"; wait; }) \
+      2>&1 | awk -v l="$label" -v c="$color" '{printf "%s[%s]\033[0m %s\n",c,l,$0;fflush()}' &
+    sleep 0.3
+    local tries=0
+    until curl -sf "http://127.0.0.1:${port}/health" > /dev/null 2>&1; do
+      printf "."; sleep 2; tries=$((tries+1)); [ "$tries" -le 20 ] || { echo ""; warn "$label slow — continuing"; return; }
+    done; echo " OK"; ok "$label → http://127.0.0.1:${port}"
+  }
+  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && _start_signer "$SIGNER_OSS_DIR" "signer-oss" '\033[1;33m' 3101 "$SIGNER_OSS_PIDFILE" "$SIGNER_OSS_DEBUG_PORT"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && _start_signer "$SIGNER_ENT_DIR" "signer-ent" '\033[0;35m' 3102 "$SIGNER_ENT_PIDFILE" "$SIGNER_ENT_DEBUG_PORT"
+}
+
+step_engine_start_fg() {
+  header "Step 4 — Start engine (foreground)"
+  ENGINE_PORT=$(env_get "$ENGINE_ENV" "PORT"); ENGINE_PORT="${ENGINE_PORT:-3000}"
   echo -e "  ${C_CYAN}Bitcoin Core${C_RESET}  →  http://localhost:18443"
   echo -e "  ${C_CYAN}UI proxy${C_RESET}      →  http://localhost:3001"
   echo -e "  ${C_CYAN}chain-api${C_RESET}     →  http://localhost:${ENGINE_PORT}"
   echo ""
-
   if [[ "$DEBUG_MODE" == "true" ]]; then
-    echo -e "  ${C_YELLOW}Debug mode — engine started with Node.js inspector${C_RESET}"
-    echo -e "  ${C_CYAN}Inspector${C_RESET}     →  127.0.0.1:${ENGINE_DEBUG_PORT}"
-    echo -e "  ${C_CYAN}VSCode${C_RESET}        →  Run & Debug → \"Attach: Engine\""
+    echo -e "  ${C_YELLOW}Debug: inspector → 127.0.0.1:${ENGINE_DEBUG_PORT}${C_RESET}"
+    echo -e "  ${C_YELLOW}Ctrl+C stops engine — Bitcoin Core keeps running${C_RESET}"
     echo ""
-    echo -e "  ${C_YELLOW}Ctrl+C stops the engine — Bitcoin Core keeps running${C_RESET}"
-    echo ""
-
-    (
-      cd "$ENGINE_DIR"
-      node --inspect="127.0.0.1:${ENGINE_DEBUG_PORT}" dist/main.js &
-      printf '%s\n' "$!" > "$ENGINE_PIDFILE"
-      wait
-    ) 2>&1 | awk '{printf "\033[0;36m[engine]\033[0m %s\n", $0; fflush()}' &
-
-    trap cleanup EXIT INT TERM
+    (cd "$ENGINE_DIR" && { node --inspect="127.0.0.1:${ENGINE_DEBUG_PORT}" dist/main.js & printf '%s\n' "$!" > "$ENGINE_PIDFILE"; wait; }) \
+      2>&1 | awk '{printf "\033[0;36m[engine]\033[0m %s\n", $0; fflush()}' &
+    trap cleanup_local EXIT INT TERM
     wait
   else
-    echo -e "  ${C_YELLOW}Ctrl+C stops the engine — Bitcoin Core keeps running${C_RESET}"
+    echo -e "  ${C_YELLOW}Ctrl+C stops engine — Bitcoin Core keeps running${C_RESET}"
     echo ""
-    cd "$ENGINE_DIR"
-    exec npm start
+    cd "$ENGINE_DIR" && exec npm start
   fi
 }
 
-# ─── E2E test guide ───────────────────────────────────────────────────────────
-step_print_e2e_guide() {
-  local api_key
-  api_key=$(env_get "$ENGINE_ENV" "API_KEY")
-  local base="http://localhost:${ENGINE_PORT:-3000}"
-  local btcd="docker compose -f $SCRIPT_DIR/docker-compose.yml exec -T bitcoin-core bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
-
-  header "E2E Test Guide"
-
-  echo -e "  ${C_BOLD}Signer mode:${C_RESET} ${SIGNER_MODE}"
-  echo -e "  ${C_BOLD}API key:${C_RESET}     ${api_key}"
-  echo -e "  ${C_BOLD}Base URL:${C_RESET}    ${base}"
-  echo -e "  ${C_BOLD}UI:${C_RESET}          http://localhost:3001"
-
-  if [[ "$DEBUG_MODE" == "true" ]]; then
-    echo ""
-    echo -e "  ${C_BOLD}${C_YELLOW}Debug mode (VSCode attach):${C_RESET}"
-    echo -e "  ${C_CYAN}Engine inspector${C_RESET}      →  127.0.0.1:${ENGINE_DEBUG_PORT}  (\"Attach: Engine\")"
-    [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && echo -e "  ${C_CYAN}OSS Signer inspector${C_RESET}  →  127.0.0.1:${SIGNER_OSS_DEBUG_PORT}  (\"Attach: OSS Signer\")"
-    [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && echo -e "  ${C_CYAN}Ent Signer inspector${C_RESET}  →  127.0.0.1:${SIGNER_ENT_DEBUG_PORT}  (\"Attach: Enterprise Signer\")"
-    echo -e "  ${C_YELLOW}Open .vscode/launch.json → Run & Debug → wybierz konfigurację Attach${C_RESET}"
-  fi
-  echo ""
-
-  cat <<GUIDE
-
-  ${C_BOLD}── 1. Create a customer ─────────────────────────────────────────────${C_RESET}
-  curl -s -X POST ${base}/v1/customers \\
-    -H "Authorization: Bearer ${api_key}" \\
-    -H "Content-Type: application/json" \\
-    -d '{"externalId":"test-user-01","name":"Test User"}' | python3 -m json.tool
-
-  ${C_BOLD}── 2. Create deposit address ─────────────────────────────────────────${C_RESET}
-  # Replace <customerId> with the id from step 1
-  curl -s -X POST ${base}/v1/customers/<customerId>/deposit-address \\
-    -H "Authorization: Bearer ${api_key}" \\
-    -H "Content-Type: application/json" \\
-    -d '{"chain":"bitcoin"}' | python3 -m json.tool
-
-  ${C_BOLD}── 3. Fund deposit address ───────────────────────────────────────────${C_RESET}
-  # Replace <address> with the address from step 2
-  ${btcd} -rpcwallet=${MINING_WALLET} sendtoaddress <address> 0.001
-
-  ${C_BOLD}── 4. Mine a block (confirm deposit) ─────────────────────────────────${C_RESET}
-  MINER_ADDR=\$(${btcd} -rpcwallet=${MINING_WALLET} getnewaddress "mine" "bech32")
-  ${btcd} -rpcwallet=${MINING_WALLET} generatetoaddress 1 \$MINER_ADDR
-
-  ${C_BOLD}── 5. Wait for deposit monitor (~30s), then check ────────────────────${C_RESET}
-  curl -s ${base}/v1/deposits \\
-    -H "Authorization: Bearer ${api_key}" | python3 -m json.tool
-
-  ${C_BOLD}── 6a. WITHDRAWAL — create customer session + withdrawal ──────────────${C_RESET}
-  # Create session for customer
-  SESSION=\$(curl -s -X POST ${base}/v1/customers/<customerId>/sessions \\
-    -H "Authorization: Bearer ${api_key}" \\
-    -d '{}' | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
-
-  # Customer creates withdrawal (uses /v1/me/withdrawals)
-  curl -s -X POST ${base}/v1/me/withdrawals \\
-    -H "Authorization: Bearer \$SESSION" \\
-    -H "Content-Type: application/json" \\
-    -d '{"chain":"bitcoin","assetId":"bitcoin:BTC","amount":"90000","destinationAddress":"bcrt1qfake...replace_with_real_regtest_address","note":"Test withdrawal"}' \\
-    | python3 -m json.tool
-
-  ${C_BOLD}── 6b. Check withdrawal batch (batcher runs every 30s) ───────────────${C_RESET}
-  curl -s ${base}/v1/withdrawal-batches \\
-    -H "Authorization: Bearer ${api_key}" | python3 -m json.tool
-
-  # Once signer signs: status transitions pending_approval → pending_signature → broadcast
-
-  ${C_BOLD}── 7. SWEEP — consolidate hot wallet funds ────────────────────────────${C_RESET}
-  # List wallets to find hot wallet id
-  curl -s ${base}/v1/wallets \\
-    -H "Authorization: Bearer ${api_key}" | python3 -m json.tool
-
-  # Create sweep (replace <walletId> with tenant_hot wallet id)
-  curl -s -X POST ${base}/v1/sweeps \\
-    -H "Authorization: Bearer ${api_key}" \\
-    -H "Content-Type: application/json" \\
-    -d '{"sourceWalletId":"<walletId>","chain":"bitcoin","note":"Test sweep"}' \\
-    | python3 -m json.tool
-
-  # Check signing task created for sweep
-  curl -s ${base}/v1/signing-tasks \\
-    -H "Authorization: Bearer ${api_key}" | python3 -m json.tool
-
-  ${C_BOLD}── 8. Monitor signer activity ─────────────────────────────────────────${C_RESET}
-  # Check external signers status
-  curl -s ${base}/v1/external-signers \\
-    -H "Authorization: Bearer ${api_key}" | python3 -m json.tool
-
-  # Signer health
-GUIDE
-
-  if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
-    echo "  curl -s http://localhost:3101/health"
-  fi
-  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
-    echo "  curl -s http://localhost:3102/health"
-  fi
-
-  echo ""
-  echo -e "  ${C_YELLOW}Ctrl+C to stop engine and signer(s)${C_RESET}"
-  echo ""
-}
-
-# ─── wait for all background processes ───────────────────────────────────────
 step_wait_all() {
-  trap cleanup EXIT INT TERM
+  trap cleanup_local EXIT INT TERM
   wait
 }
 
-# ─── main ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+#  MAIN
+# ─────────────────────────────────────────────────────────────────────────────
 case "$CMD" in
+
   stop)
-    cmd_stop
+    if [[ "$V3_MODE" == "true" ]]; then
+      header "V3 Stop"
+      $V3_COMPOSE_CMD down
+      cleanup_local
+      ok "All v3 services stopped"
+    else
+      header "Stop"
+      cleanup_local
+      cd "$SCRIPT_DIR" && docker compose down
+      ok "Bitcoin Core stopped"
+    fi
     ;;
 
   reset)
-    cmd_reset
-    step_btc
-    step_engine_setup
-    step_build_engine
-    if [[ "$SIGNER_MODE" != "none" ]]; then
-      step_derive_wif
-      step_build_signers
-      step_start_engine_bg
-      step_enroll_and_configure_signers
-      step_start_signers_bg
-      step_print_e2e_guide
-      step_wait_all
+    if [[ "$V3_MODE" == "true" ]]; then
+      cmd_v3_reset
+      step_v3_build
+      step_v3_infra
+      step_v3_genesis
+      step_v3_engine_env
+      step_v3_seed
+      step_v3_engines
+      step_v3_register_nodes
+      step_v3_indexers
+      if [[ "$SIGNER_MODE" != "none" ]]; then
+        step_v3_derive_wif
+        step_v3_enroll_signers
+        step_v3_signers_docker
+      fi
+      step_v3_nginx_ui
+      step_v3_verify_cluster
+      step_v3_status
+      step_v3_tail
     else
-      step_engine_start_fg
+      # Legacy reset
+      header "Reset (default mode)"
+      read -r -p "  This will wipe blockchain + DB + keys. Continue? [y/N] " confirm
+      [[ "$confirm" =~ ^[Yy]$ ]] || exit 0
+      cleanup_local
+      cd "$SCRIPT_DIR" && docker compose down -v 2>/dev/null || true
+      rm -f "$ENGINE_DB" "${ENGINE_DB}-shm" "${ENGINE_DB}-wal"
+      [ -f "$ENGINE_ENV" ] && { env_set "$ENGINE_ENV" "API_KEY" ""; env_set "$ENGINE_ENV" "ADMIN_KEY" ""; }
+      [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && rm -f "$SIGNER_OSS_DIR/.env"
+      [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && rm -f "$SIGNER_ENT_DIR/.env"
+      ok "Reset complete"
+      # Fall through to start
+      step_btc; step_engine_setup; step_build_engine
+      if [[ "$SIGNER_MODE" != "none" ]]; then
+        step_derive_wif; step_build_signers; step_start_engine_bg
+        step_enroll_and_configure_signers; step_start_signers_bg; step_wait_all
+      else
+        step_engine_start_fg
+      fi
     fi
     ;;
 
   start|"")
-    step_btc
-    step_engine_setup
-    step_build_engine
-    if [[ "$SIGNER_MODE" != "none" ]]; then
-      step_derive_wif
-      step_build_signers
-      step_start_engine_bg
-      step_enroll_and_configure_signers
-      step_start_signers_bg
-      step_print_e2e_guide
-      step_wait_all
+    if [[ "$V3_MODE" == "true" ]]; then
+      # ── V3 START ──────────────────────────────────────────────────────────
+      step_v3_build
+      step_v3_infra
+      step_v3_genesis
+      step_v3_engine_env
+      step_v3_seed
+      step_v3_engines
+      step_v3_register_nodes
+      step_v3_indexers
+      if [[ "$SIGNER_MODE" != "none" ]]; then
+        step_v3_derive_wif
+        step_v3_enroll_signers
+        step_v3_signers_docker
+      fi
+      step_v3_nginx_ui
+      step_v3_verify_cluster
+      step_v3_status
+      step_v3_tail
     else
-      step_engine_start_fg
+      # ── DEFAULT START ─────────────────────────────────────────────────────
+      step_btc; step_engine_setup; step_build_engine
+      if [[ "$SIGNER_MODE" != "none" ]]; then
+        step_derive_wif; step_build_signers; step_start_engine_bg
+        step_enroll_and_configure_signers; step_start_signers_bg; step_wait_all
+      else
+        step_engine_start_fg
+      fi
     fi
     ;;
 
@@ -833,27 +1170,35 @@ case "$CMD" in
     echo "  Usage: $(basename "$0") [command] [options]"
     echo ""
     echo "  Commands:"
-    echo "    start   Start everything — idempotent, safe to run any time  (default)"
-    echo "    reset   Wipe blockchain + DB + keys, start completely fresh"
-    echo "    stop    Stop Bitcoin Core containers + kill running signers"
+    echo "    start   Start — idempotent, safe to run any time  (default)"
+    echo "    reset   Wipe data + restart fresh"
+    echo "    stop    Stop all services"
     echo ""
-    echo "  Options:"
-    echo "    --signer oss         Also start the OSS signer daemon"
-    echo "    --signer enterprise  Also start the Enterprise signer daemon"
-    echo "    --signer both        Start both signer daemons"
-    echo "    --debug              Start with Node.js --inspect (VSCode debugger attach)"
+    echo "  Mode options:"
+    echo "    (default)             SQLite, 1 BTC node, 1 engine"
+    echo "    --v3                  PostgreSQL, 2 BTC nodes, 2 engines, 2 btc-indexers"
     echo ""
-    echo "  Debug ports (used with --debug):"
-    echo "    Engine:             127.0.0.1:9229   → \"Attach: Engine\""
-    echo "    OSS Signer:         127.0.0.1:9230   → \"Attach: OSS Signer\""
-    echo "    Enterprise Signer:  127.0.0.1:9231   → \"Attach: Enterprise Signer\""
+    echo "  Other options:"
+    echo "    --signer oss          Add OSS signer daemon"
+    echo "    --signer enterprise   Add Enterprise signer daemon"
+    echo "    --signer both         Add both signer daemons"
+    echo "    --debug               Node.js inspector (engine port 9229)"
     echo ""
     echo "  Examples:"
-    echo "    ./start.sh                              # engine only"
-    echo "    ./start.sh --signer oss                 # engine + OSS signer"
-    echo "    ./start.sh --signer oss --debug         # engine + OSS, both debuggable"
-    echo "    ./start.sh --debug                      # engine only, debuggable"
-    echo "    ./start.sh reset --signer both --debug  # full reset + both + debug"
+    echo "    ./start.sh                         # default mode, engine only"
+    echo "    ./start.sh --v3                    # full v3 stack"
+    echo "    ./start.sh --v3 --signer oss       # v3 + OSS signer"
+    echo "    ./start.sh reset --v3              # full reset + v3 stack"
+    echo "    ./start.sh stop --v3               # stop v3 services"
+    echo "    ./start.sh --signer oss --debug    # default + OSS signer, debuggable"
+    echo ""
+    echo "  V3 endpoints (after ./start.sh --v3):"
+    echo "    Engine 1:      http://localhost:3000"
+    echo "    Engine 2:      http://localhost:3001"
+    echo "    BTC Node 1:    http://localhost:18443  (primary, mines)"
+    echo "    BTC Node 2:    http://localhost:18453  (standby, syncs)"
+    echo "    PostgreSQL:    localhost:5432  (chainapi/chainapi_dev)"
+    echo "    Test UI:       http://localhost:3002"
     echo ""
     ;;
 

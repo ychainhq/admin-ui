@@ -1,0 +1,346 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.v3.yml — Ychain / chain-api v3 development environment
+#
+# Architecture:
+#   2 × Bitcoin Core (regtest, peered)    — btc-node-1, btc-node-2 (BOTH EQUAL)
+#   1 × PostgreSQL                        — shared DB for all engine instances
+#   2 × chain-api engine (active-active)  — engine-1, engine-2 (SKIP LOCKED)
+#   2 × btc-indexer                       — one per BTC node, write to chain_events
+#   1 × nginx                             — load balancer (engine-1 + engine-2 upstream)
+#   1 × test-ui proxy                     — optional, for manual testing
+#
+# KEY v3 PRINCIPLE — Bitcoin Core nodes are STATELESS:
+#   Engine has no FWallet, no importaddress, no listunspent.
+#   ALL operations (PSBT build, broadcast, fee est, tx lookup) work on ANY node.
+#   Nodes differ only by: priority (routing preference) and role (full/broadcast_only).
+#   "primary"/"standby" labels do NOT apply — every full node is equivalent.
+#
+#   btc-node-1 vs btc-node-2 in regtest DEV only:
+#     btc-node-1 is the "miner" (genesis blocks, test confirmations)
+#     btc-node-2 syncs from btc-node-1 via P2P (-addnode)
+#     This is a dev convenience, NOT an architecture concept.
+#     In production: both nodes are peers of the Bitcoin mainnet/testnet network.
+#
+# Active-active engines:
+#   Both engines run with WORKERS_ENABLED=true.
+#   PostgreSQL SKIP LOCKED prevents duplicate processing of chain_events,
+#   webhook deliveries, and other queued work.
+#   CLUSTER_ENABLED=true — ClusterHeartbeatWorker tracks leader in engine_instances.
+#
+# Usage:
+#   docker compose -f docker-compose.v3.yml up -d
+#   docker compose -f docker-compose.v3.yml logs -f
+#   docker compose -f docker-compose.v3.yml down -v   # wipe all volumes
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-btc-node-common: &btc-node-common
+  image: lncm/bitcoind:v25.0
+  restart: unless-stopped
+  healthcheck:
+    test:
+      - CMD
+      - bitcoin-cli
+      - -regtest
+      - -rpcuser=bitcoin
+      - -rpcpassword=bitcoin
+      - getblockchaininfo
+    interval: 5s
+    timeout: 5s
+    retries: 30
+    start_period: 15s
+
+x-engine-common: &engine-common
+  build:
+    context: ../engine
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  environment: &engine-env-common
+    DB_TYPE: postgres
+    DATABASE_URL: postgres://chainapi:chainapi_dev@postgres:5432/chainapi
+    BITCOIN_RPC_URL: http://btc-node-1:18443
+    BITCOIN_RPC_USER: bitcoin
+    BITCOIN_RPC_PASSWORD: bitcoin
+    BITCOIN_NETWORK: regtest
+    BITCOIN_CORE_PROVISIONING_ENABLED: "false"
+    CLUSTER_ENABLED: "true"
+    WORKERS_ENABLED: "true"
+    DEPOSIT_MONITOR_INTERVAL_MS: "30000"
+    BTC_DEFAULT_CONFIRMATIONS: "1"
+    BTC_FINALITY_CONFIRMATIONS: "6"
+    LOG_LEVEL: info
+  depends_on:
+    postgres:
+      condition: service_healthy
+    btc-node-1:
+      condition: service_healthy
+
+x-indexer-common: &indexer-common
+  build:
+    context: ../packages/btc-indexer
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  environment: &indexer-env-common
+    INDEXER_CHAIN_ID: bitcoin
+    INDEXER_BTC_NODE_USER: bitcoin
+    INDEXER_BTC_NODE_PASSWORD: bitcoin
+    INDEXER_BTC_NETWORK: regtest
+    INDEXER_POLL_INTERVAL_MS: "5000"
+    INDEXER_LOG_LEVEL: info
+    DATABASE_URL: postgres://chainapi:chainapi_dev@postgres:5432/chainapi
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: chainapi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chainapi
+      POSTGRES_USER: chainapi
+      POSTGRES_PASSWORD: chainapi_dev
+    ports:
+      - "5432:5432"     # accessible from host for psql / pgAdmin
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chainapi -d chainapi"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  # ── Bitcoin Core — Node 1 ─────────────────────────────────────────────────
+  # Dev role: "miner" — mines genesis blocks and test confirmations via start.sh.
+  # Architecture role: EQUIVALENT to node-2. Engine uses both interchangeably.
+  # Indexer btc-indexer-1 watches this node.
+  btc-node-1:
+    <<: *btc-node-common
+    container_name: chainapi-btc-node-1
+    command:
+      - -regtest=1
+      - -printtoconsole
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -rpcuser=bitcoin
+      - -rpcpassword=bitcoin
+      - -fallbackfee=0.0001
+      - -txindex=1
+      - -server=1
+      - -rest=1
+      - -addnode=btc-node-2:18444    # P2P peer — both nodes see the same blocks
+    ports:
+      - "18443:18443"   # RPC port (accessible from host)
+      - "18444:18444"   # P2P regtest
+    volumes:
+      - btc_node_1:/data/.bitcoin
+
+  # ── Bitcoin Core — Node 2 ─────────────────────────────────────────────────
+  # Dev role: syncs blockchain from btc-node-1 via P2P.
+  # Architecture role: EQUIVALENT to node-1. Engine uses both interchangeably.
+  # Indexer btc-indexer-2 watches this node (dedup via ON CONFLICT DO NOTHING).
+  # Provides indexer redundancy: if btc-indexer-1 dies, deposits still detected.
+  btc-node-2:
+    <<: *btc-node-common
+    container_name: chainapi-btc-node-2
+    command:
+      - -regtest=1
+      - -printtoconsole
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -rpcuser=bitcoin
+      - -rpcpassword=bitcoin
+      - -fallbackfee=0.0001
+      - -txindex=1
+      - -server=1
+      - -rest=1
+      - -addnode=btc-node-1:18444    # P2P peer — syncs same blockchain
+    ports:
+      - "18453:18443"   # RPC port (separate host port to avoid conflict)
+      - "18454:18444"   # P2P regtest
+    volumes:
+      - btc_node_2:/data/.bitcoin
+    depends_on:
+      btc-node-1:
+        condition: service_healthy
+
+  # ── Engine — Instance 1 (cluster leader candidate) ─────────────────────────
+  engine-1:
+    <<: *engine-common
+    container_name: chainapi-engine-1
+    environment:
+      <<: *engine-env-common
+      PORT: "3000"
+      ENGINE_URL: http://engine-1:3000
+      CLUSTER_PEER_URLS: http://engine-2:3000
+      # API_KEY and ADMIN_KEY injected from host .env (see start.sh --v3)
+      API_KEY: ${API_KEY:-}
+      ADMIN_KEY: ${ADMIN_KEY:-}
+      CUSTOMER_SESSION_SECRET: ${CUSTOMER_SESSION_SECRET:-change-me-in-production-min-32-chars!!}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  # ── Engine — Instance 2 (active-active standby) ────────────────────────────
+  engine-2:
+    <<: *engine-common
+    container_name: chainapi-engine-2
+    environment:
+      <<: *engine-env-common
+      PORT: "3000"
+      ENGINE_URL: http://engine-2:3001
+      CLUSTER_PEER_URLS: http://engine-1:3000
+      API_KEY: ${API_KEY:-}
+      ADMIN_KEY: ${ADMIN_KEY:-}
+      CUSTOMER_SESSION_SECRET: ${CUSTOMER_SESSION_SECRET:-change-me-in-production-min-32-chars!!}
+    ports:
+      - "3001:3000"     # note: engine listens on 3000 internally, exposed as 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      btc-node-1:
+        condition: service_healthy
+      engine-1:
+        condition: service_healthy   # engine-2 starts after engine-1 to let migrations run first
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 25s
+
+  # ── btc-indexer — watches Node 1 ───────────────────────────────────────────
+  btc-indexer-1:
+    <<: *indexer-common
+    container_name: chainapi-btc-indexer-1
+    environment:
+      <<: *indexer-env-common
+      INDEXER_NODE_ID: btc-node-1
+      INDEXER_BTC_NODE_URL: http://btc-node-1:18443
+    depends_on:
+      engine-1:
+        condition: service_healthy   # wait for migrations to complete
+      btc-node-1:
+        condition: service_healthy
+
+  # ── btc-indexer — watches Node 2 ───────────────────────────────────────────
+  btc-indexer-2:
+    <<: *indexer-common
+    container_name: chainapi-btc-indexer-2
+    environment:
+      <<: *indexer-env-common
+      INDEXER_NODE_ID: btc-node-2
+      INDEXER_BTC_NODE_URL: http://btc-node-2:18443
+    depends_on:
+      engine-1:
+        condition: service_healthy
+      btc-node-2:
+        condition: service_healthy
+
+  # ── nginx load balancer (engine-1 + engine-2 upstream) ─────────────────────
+  # Exposes a single stable endpoint for signers, test clients, etc.
+  # Uses passive health checks: max_fails=3 fail_timeout=15s
+  # Signer CHAIN_API_BASE_URL should point here: http://localhost:3009
+  nginx:
+    image: nginx:alpine
+    container_name: chainapi-nginx
+    restart: unless-stopped
+    ports:
+      - "3009:3009"     # single stable engine endpoint
+    volumes:
+      - ./nginx/engine.conf:/etc/nginx/conf.d/engine.conf:ro
+    depends_on:
+      engine-1:
+        condition: service_healthy
+      engine-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3009/nginx-health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Test UI proxy ─────────────────────────────────────────────────────────
+  ui:
+    build: ./proxy
+    container_name: chainapi-ui
+    restart: unless-stopped
+    ports:
+      - "3002:3001"
+    environment:
+      # Node 1 — miner in regtest
+      BITCOIN_RPC_URL: http://btc-node-1:18443
+      BITCOIN_RPC_USER: bitcoin
+      BITCOIN_RPC_PASSWORD: bitcoin
+      BITCOIN_WALLET: btcminer
+      # Node 2 — v3: proxy exposes both nodes, UI can choose which to query
+      BITCOIN_RPC_URL_2: http://btc-node-2:18443
+      BITCOIN_RPC_USER_2: bitcoin
+      BITCOIN_RPC_PASSWORD_2: bitcoin
+      # Engine: via nginx LB (routes to engine-1 or engine-2 round-robin)
+      CHAIN_API_URL: http://nginx:3009
+      # v3: show both engine URLs in health panel
+      ENGINE_URL_2: http://engine-2:3000
+      CHAIN_API_KEY: ${API_KEY:-}
+      CHAIN_API_ADMIN_KEY: ${ADMIN_KEY:-}
+    depends_on:
+      nginx:
+        condition: service_healthy
+
+  # ── Signer: OSS (profile: signer-oss) ────────────────────────────────────
+  # Start with: docker compose -f docker-compose.v3.yml --profile signer-oss up -d
+  # Or via start.sh: ./start.sh --v3 --signer oss
+  signer-oss:
+    build:
+      context: ../signer-oss
+      dockerfile: Dockerfile
+    container_name: chainapi-signer-oss
+    profiles: [signer-oss, signer-all]
+    restart: unless-stopped
+    env_file: ../signer-oss/.env     # generated by start.sh --v3 --signer oss
+    environment:
+      # Override: point to nginx LB, not directly to engine-1
+      CHAIN_API_BASE_URL: http://nginx:3009
+      # No fallback needed — nginx handles engine failover internally
+      CHAIN_API_FALLBACK_URLS: ""
+      BTC_NETWORK: regtest
+      SIGNER_BIND_HOST: "0.0.0.0"
+    ports:
+      - "${SIGNER_OSS_PORT:-3101}:${SIGNER_OSS_PORT:-3101}"
+    volumes:
+      - signer_oss_data:/app/data
+    depends_on:
+      nginx:
+        condition: service_healthy
+
+  # ── Signer: Enterprise (profile: signer-enterprise) ───────────────────────
+  # Start with: docker compose -f docker-compose.v3.yml --profile signer-enterprise up -d
+  # Or via start.sh: ./start.sh --v3 --signer enterprise
+  signer-enterprise:
+    build:
+      context: ../signer
+      dockerfile: Dockerfile
+    container_name: chainapi-signer-enterprise
+    profiles: [signer-enterprise, signer-all]
+    restart: unless-stopped
+    env_file: ../signer/.env         # generated by start.sh --v3 --signer enterprise
+    environment:
+      CHAIN_API_BASE_URL: http://nginx:3009
+      CHAIN_API_FALLBACK_URLS: ""
+      BTC_NETWORK: regtest
+      SIGNER_BIND_HOST: "0.0.0.0"
+    ports:
+      - "${SIGNER_ENT_PORT:-3102}:${SIGNER_ENT_PORT:-3102}"
+    depends_on:
+      nginx:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  btc_node_1:
+  btc_node_2:
+  signer_oss_data:

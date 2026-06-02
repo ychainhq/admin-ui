@@ -75,12 +75,22 @@ export const api = {
     return data;
   },
 
+  // rpc: route to a specific BTC node (v3) or default node (v2).
+  // opts.nodeId: 'btc-node-1' | 'btc-node-2' (v3 only)
   rpc: (method, params = [], opts = {}) => {
     const body = { method, params: params ?? [] };
-    if (opts?.wallet) body.wallet = opts.wallet;
+    if (opts?.wallet)   body.wallet = opts.wallet;
     if (opts?.useWallet) body.useWallet = true;
+    if (opts?.nodeId)   body.nodeId = opts.nodeId;
     return request('/rpc', { method: 'POST', body: JSON.stringify(body) });
   },
+
+  // v3: mine blocks on the miner node (btc-node-1)
+  mineBlocks: (blocks = 1, address = null) =>
+    request('/mining/generate', {
+      method: 'POST',
+      body: JSON.stringify({ blocks, ...(address ? { address } : {}) }),
+    }),
 
   // --- Customer API (tenant-scoped, /api/* → /v1/*) ---
 
@@ -384,6 +394,45 @@ export const api = {
     if (to)          params.set('to', String(to));
     return tenantRequest(`/api/ticklers?${params}`);
   },
+
+  // ─── v3: Infrastructure API ──────────────────────────────────────────────────
+
+  // Chain nodes (platform admin) — GET /admin-api/chain-nodes
+  getChainNodes: ({ chainId, isEnabled } = {}) => {
+    const params = new URLSearchParams();
+    if (chainId !== undefined)   params.set('chainId', chainId);
+    if (isEnabled !== undefined) params.set('isEnabled', String(isEnabled));
+    const qs = params.toString();
+    return request(`/admin-api/chain-nodes${qs ? '?' + qs : ''}`);
+  },
+
+  getChainNode: (nodeId) =>
+    request(`/admin-api/chain-nodes/${encodeURIComponent(nodeId)}`),
+
+  createChainNode: (data) =>
+    request('/admin-api/chain-nodes', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateChainNode: (nodeId, data) =>
+    request(`/admin-api/chain-nodes/${encodeURIComponent(nodeId)}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+
+  testNodeConnection: (nodeId) =>
+    request(`/admin-api/chain-nodes/${encodeURIComponent(nodeId)}/test-connection`, {
+      method: 'POST', body: JSON.stringify({}),
+    }),
+
+  // Cluster status — GET /admin-api/cluster/status
+  getClusterStatus: () =>
+    request('/admin-api/cluster/status'),
+
+  // Engine health — GET /engine-health (proxy checks all configured engines)
+  getEngineHealth: () =>
+    request('/engine-health'),
+
+  // Proxy config — GET /config (returns btcNodes, engineUrls, isV3 flag)
+  getProxyConfig: () =>
+    request('/config'),
 
   // tenantRequest is exposed so future views can call /api/* with the active tenant key.
   tenantRequest,

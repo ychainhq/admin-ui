@@ -6,7 +6,7 @@ import { template as mobileDrawerTpl, createMobileDrawerController } from '../co
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { opCardHtml } from '../components/NodeOpCard.js';
-import { getNode } from '../nodes.js';
+// v3: node data loaded dynamically from API, not from static nodes.js
 
 const ROUTE = '/nodes';
 
@@ -211,27 +211,27 @@ const template = `
 `;
 
 export function createController({ nodeId, api, router }) {
-  const nodeConfig = getNode(nodeId);
-
+  // v3: node details loaded from API; nodeId may be a DB id (e.g. 'node_abc123')
+  // or legacy 'btc-regtest' — we route RPC calls with the nodeId for v3.
   const self = {
     nodeId,
     mobileDrawer: createMobileDrawerController(),
     activeTenant: createActiveTenantController(),
     topBar: createTopBarController({
-      title: nodeConfig?.label || nodeId,
-      breadcrumb: `Dev Nodes > ${nodeConfig?.label || nodeId}`,
+      title: 'Node Detail',
+      breadcrumb: 'Dev > Chain Nodes > Detail',
       onBack: () => router.navigate('#/nodes'),
       onMenuOpen: () => self.mobileDrawer.open(),
     }),
     sidebar: createSidebarController({ activeRoute: ROUTE, router }),
     bottomNav: createBottomNavController({ activeRoute: ROUTE, router }),
 
-    notFound: !nodeConfig,
-    nodeLabel: nodeConfig?.label || nodeId,
-    nodeNetwork: nodeConfig?.network || '',
+    notFound: false,
+    nodeLabel: nodeId,
+    nodeNetwork: '',
 
     nodeStatus: {
-      checking: !!nodeConfig,
+      checking: true,
       showOnline: false,
       showOffline: false,
       blocksText: '',
@@ -256,9 +256,9 @@ export function createController({ nodeId, api, router }) {
         self.generateAddr.error = null;
         self.generateAddr.result = null;
         try {
-          await api.rpc('createwallet', [wallet]).catch(() => {});
-          await api.rpc('loadwallet', [wallet]).catch(() => {});
-          const res = await api.rpc('getnewaddress', ['', self.generateAddr.addressType], { wallet });
+          await api.rpc('createwallet', [wallet], { nodeId }).catch(() => {});
+          await api.rpc('loadwallet', [wallet], { nodeId }).catch(() => {});
+          const res = await api.rpc('getnewaddress', ['', self.generateAddr.addressType], { nodeId, wallet });
           const addr = res?.result;
           if (!addr) throw new Error('No address returned by node');
           self.generateAddr.result = addr;
@@ -308,7 +308,8 @@ export function createController({ nodeId, api, router }) {
         self.sendTx.result = null;
         self.sendTx._txid = null;
         try {
-          const sendRes = await api.rpc('sendtoaddress', [address, amount], { wallet });
+          // Send tx via this node, mine confirmations via miner node (btc-node-1)
+          const sendRes = await api.rpc('sendtoaddress', [address, amount], { nodeId, wallet });
           if (sendRes?.error) throw new Error(sendRes.error.message || 'sendtoaddress failed');
           const txid = sendRes?.result;
           if (!txid) throw new Error('No txid returned by node');
@@ -316,11 +317,10 @@ export function createController({ nodeId, api, router }) {
 
           let minedCount = 0;
           if (blocks > 0) {
-            const addrRes = await api.rpc('getnewaddress', [''], { wallet: 'btcminer' });
-            const minerAddr = addrRes?.result;
-            if (!minerAddr) throw new Error('Could not get miner address for confirmation blocks');
-            const mineRes = await api.rpc('generatetoaddress', [blocks, minerAddr]);
-            minedCount = mineRes?.result?.length ?? 0;
+            // Mine confirmation blocks using the /mining/generate endpoint
+            // (always uses miner node = btc-node-1 in regtest)
+            const mineRes = await api.mineBlocks(blocks);
+            minedCount = Array.isArray(mineRes?.result) ? mineRes.result.length : 0;
           }
 
           const confirmLabel = minedCount > 0
@@ -359,7 +359,8 @@ export function createController({ nodeId, api, router }) {
         self.mineBlocks.error = null;
         self.mineBlocks.result = null;
         try {
-          const res = await api.rpc('generatetoaddress', [count, address], { useWallet: true });
+          // Mine via /mining/generate endpoint (always uses miner node)
+          const res = await api.mineBlocks(count, address);
           const hashes = res?.result;
           if (!Array.isArray(hashes)) throw new Error('Unexpected response from node');
           self.mineBlocks.result = `Mined ${hashes.length} block${hashes.length !== 1 ? 's' : ''} · ${hashes.length * 50} BTC → ${address}`;
@@ -377,11 +378,26 @@ export function createController({ nodeId, api, router }) {
     backToNodes() { router.navigate('#/nodes'); },
 
     async init() {
-      if (!nodeConfig) return;
-
-      // Node status
+      // v3: load node details from API (chain_nodes table)
       try {
-        const res = await api.rpc('getblockchaininfo', []);
+        const res = await api.getChainNode(nodeId);
+        const n   = res?.data ?? {};
+        self.nodeLabel   = n.label || nodeId;
+        self.nodeNetwork = n.network || '';
+        self.notFound    = false;
+      } catch {
+        // Legacy mode: node not in DB (v2 static node or btc-regtest fallback)
+        self.notFound = false;
+        self.nodeLabel   = nodeId;
+        self.nodeNetwork = 'regtest';
+      }
+
+      // v3: RPC calls pass nodeId so proxy routes to the right BTC node
+      const rpcOpts = { nodeId };
+
+      // Node status — use nodeId for routing
+      try {
+        const res = await api.rpc('getblockchaininfo', [], rpcOpts);
         const info = res?.result;
         self.nodeStatus = {
           checking: false,
@@ -393,13 +409,13 @@ export function createController({ nodeId, api, router }) {
         self.nodeStatus = { checking: false, showOnline: false, showOffline: true, blocksText: '' };
       }
 
-      // Populate wallet selector with balances
+      // Populate wallet selector with balances — route to this specific node
       try {
-        const walletsRes = await api.rpc('listwallets', []);
+        const walletsRes = await api.rpc('listwallets', [], rpcOpts);
         const names = walletsRes?.result || [];
         const items = await Promise.all(names.map(async (name) => {
           try {
-            const r = await api.rpc('getbalances', [], { wallet: name });
+            const r = await api.rpc('getbalances', [], { ...rpcOpts, wallet: name });
             const mine = r?.result?.mine || {};
             const spendable = mine.trusted || 0;
             const immature = mine.immature || 0;

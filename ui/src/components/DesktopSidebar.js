@@ -68,7 +68,7 @@ const NAV_ITEMS = [
   { separator: true,             label: 'Audit' },
   { label: 'Audit Logs',         icon: 'receipt_long',           route: '/audit-logs' },  
   { separator: true,             label: 'Dev Tools' },
-  { label: 'Dev Nodes',          icon: 'hub',                    route: '/nodes' },
+  { label: 'Chain Nodes',        icon: 'hub',                    route: '/nodes' },
   { separator: true,             label: 'Platform' },
   { label: 'Tenant List',        icon: 'corporate_fare',         route: '/tenants' },
   { label: 'Platform Dashboard', icon: 'dashboard',              route: '/dashboard' },

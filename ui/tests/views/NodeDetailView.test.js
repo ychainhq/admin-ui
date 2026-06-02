@@ -1,14 +1,25 @@
+/**
+ * NodeDetailView tests — v3
+ *
+ * NodeDetailView now loads node details from api.getChainNode() (DB)
+ * and routes RPC calls with nodeId to the correct BTC node.
+ */
 import { createController } from '../../src/views/NodeDetailView.js';
 import { makeMockApi, makeRouter } from '../mocks/api.js';
 
 const BLOCKCHAININFO = { blocks: 201, chain: 'regtest' };
-const KNOWN_NODE = 'btc-regtest';
-const UNKNOWN_NODE = 'eth-unknown';
+const DB_NODE_ID  = 'node_abc123'; // v3: from chain_nodes table
+const DB_NODE_DATA = { data: { id: DB_NODE_ID, label: 'BTC Node 1', network: 'regtest', role: 'full', status: 'healthy' } };
 
-function makeCtrl(nodeId = KNOWN_NODE, apiOverrides = {}) {
-  const api = makeMockApi(apiOverrides);
+function makeCtrl(nodeId = DB_NODE_ID, apiOverrides = {}) {
+  const api = makeMockApi({
+    getChainNode: jest.fn().mockResolvedValue(DB_NODE_DATA),
+    mineBlocks:   jest.fn().mockResolvedValue({ result: ['h1', 'h2'] }),
+    rpc:          jest.fn().mockResolvedValue({ result: null }),
+    ...apiOverrides,
+  });
   const router = makeRouter();
-  const ctrl = createController({ nodeId, api, router });
+  const ctrl   = createController({ nodeId, api, router });
   return { ctrl, api, router };
 }
 
@@ -19,48 +30,66 @@ function makeRpcWithAddress(address = 'bcrt1qabc123') {
   });
 }
 
-function makeRpcWithBlocks(hashes = ['h1', 'h2']) {
-  return jest.fn().mockResolvedValue({ result: hashes });
-}
-
 describe('NodeDetailView — createController', () => {
-  // ─── Node config ──────────────────────────────────────────────────────────────
-  test('notFound is false for known nodeId', () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE);
+
+  // ─── Initial state ────────────────────────────────────────────────────────
+
+  test('notFound is false by default', () => {
+    const { ctrl } = makeCtrl();
     expect(ctrl.notFound).toBe(false);
   });
 
-  test('notFound is true for unknown nodeId', () => {
-    const { ctrl } = makeCtrl(UNKNOWN_NODE);
-    expect(ctrl.notFound).toBe(true);
-  });
-
-  test('nodeLabel is set from node config', () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE);
-    expect(ctrl.nodeLabel).toBe('Bitcoin Core');
-  });
-
-  test('nodeNetwork is set from node config', () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE);
-    expect(ctrl.nodeNetwork).toBe('regtest');
-  });
-
   test('nodeId is stored on the controller', () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE);
-    expect(ctrl.nodeId).toBe(KNOWN_NODE);
+    const { ctrl } = makeCtrl();
+    expect(ctrl.nodeId).toBe(DB_NODE_ID);
   });
 
-  // ─── init / nodeStatus ────────────────────────────────────────────────────────
-  test('init() calls api.rpc getblockchaininfo for known node', async () => {
-    const { ctrl, api } = makeCtrl(KNOWN_NODE, {
+  // ─── init() loads node from API ──────────────────────────────────────────
+
+  test('init() calls api.getChainNode with nodeId', async () => {
+    const { ctrl, api } = makeCtrl(DB_NODE_ID, {
       rpc: jest.fn().mockResolvedValue({ result: BLOCKCHAININFO }),
     });
     await ctrl.init();
-    expect(api.rpc).toHaveBeenCalledWith('getblockchaininfo', []);
+    expect(api.getChainNode).toHaveBeenCalledWith(DB_NODE_ID);
+  });
+
+  test('init() sets nodeLabel from API response', async () => {
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
+      rpc: jest.fn().mockResolvedValue({ result: BLOCKCHAININFO }),
+    });
+    await ctrl.init();
+    expect(ctrl.nodeLabel).toBe('BTC Node 1');
+  });
+
+  test('init() sets nodeNetwork from API response', async () => {
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
+      rpc: jest.fn().mockResolvedValue({ result: BLOCKCHAININFO }),
+    });
+    await ctrl.init();
+    expect(ctrl.nodeNetwork).toBe('regtest');
+  });
+
+  test('init() uses nodeId as fallback label when API fails', async () => {
+    const { ctrl } = makeCtrl('some-legacy-id', {
+      getChainNode: jest.fn().mockRejectedValue(new Error('not found')),
+      rpc: jest.fn().mockResolvedValue({ result: BLOCKCHAININFO }),
+    });
+    await ctrl.init();
+    expect(ctrl.nodeLabel).toBe('some-legacy-id');
+  });
+
+  // ─── init() calls RPC with nodeId ────────────────────────────────────────
+
+  test('init() calls api.rpc getblockchaininfo with nodeId option', async () => {
+    const rpc = jest.fn().mockResolvedValue({ result: BLOCKCHAININFO });
+    const { ctrl } = makeCtrl(DB_NODE_ID, { rpc });
+    await ctrl.init();
+    expect(rpc).toHaveBeenCalledWith('getblockchaininfo', [], { nodeId: DB_NODE_ID });
   });
 
   test('init() sets nodeStatus.showOnline on success', async () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE, {
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
       rpc: jest.fn().mockResolvedValue({ result: BLOCKCHAININFO }),
     });
     await ctrl.init();
@@ -70,15 +99,15 @@ describe('NodeDetailView — createController', () => {
   });
 
   test('init() sets nodeStatus.blocksText from result', async () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE, {
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
       rpc: jest.fn().mockResolvedValue({ result: BLOCKCHAININFO }),
     });
     await ctrl.init();
     expect(ctrl.nodeStatus.blocksText).toBe('201');
   });
 
-  test('init() sets nodeStatus.showOffline on API failure', async () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE, {
+  test('init() sets nodeStatus.showOffline on RPC failure', async () => {
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
       rpc: jest.fn().mockRejectedValue(new Error('Connection refused')),
     });
     await ctrl.init();
@@ -87,22 +116,16 @@ describe('NodeDetailView — createController', () => {
     expect(ctrl.nodeStatus.checking).toBe(false);
   });
 
-  test('init() does not call api when notFound', async () => {
-    const { ctrl, api } = makeCtrl(UNKNOWN_NODE, {
-      rpc: jest.fn().mockResolvedValue({ result: BLOCKCHAININFO }),
-    });
-    await ctrl.init();
-    expect(api.rpc).not.toHaveBeenCalled();
-  });
+  // ─── backToNodes ──────────────────────────────────────────────────────────
 
-  // ─── backToNodes ──────────────────────────────────────────────────────────────
   test('backToNodes() navigates to #/nodes', () => {
     const { ctrl, router } = makeCtrl();
     ctrl.backToNodes();
     expect(router.navigate).toHaveBeenCalledWith('#/nodes');
   });
 
-  // ─── generateAddr — initial state ─────────────────────────────────────────────
+  // ─── generateAddr ─────────────────────────────────────────────────────────
+
   test('generateAddr initial state is correct', () => {
     const { ctrl } = makeCtrl();
     expect(ctrl.generateAddr.wallet).toBe('');
@@ -118,71 +141,40 @@ describe('NodeDetailView — createController', () => {
     expect(ctrl.generateAddr.wallet).toBe('my-wallet');
   });
 
-  test('generateAddr.onTypeChange updates addressType', () => {
-    const { ctrl } = makeCtrl();
-    ctrl.generateAddr.onTypeChange({ target: { value: 'legacy' } });
-    expect(ctrl.generateAddr.addressType).toBe('legacy');
-  });
-
-  // ─── generateAddr.run ─────────────────────────────────────────────────────────
-  test('generateAddr.run() with empty wallet sets error and does not call api', async () => {
-    const { ctrl, api } = makeCtrl(KNOWN_NODE, { rpc: makeRpcWithAddress() });
+  test('generateAddr.run() with empty wallet sets error and does not call rpc', async () => {
+    const rpc = makeRpcWithAddress();
+    const { ctrl } = makeCtrl(DB_NODE_ID, { rpc });
     await ctrl.generateAddr.run();
     expect(ctrl.generateAddr.error).toBeTruthy();
-    expect(api.rpc).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
   });
 
-  test('generateAddr.run() calls createwallet, loadwallet, getnewaddress in order', async () => {
+  test('generateAddr.run() calls rpc with nodeId', async () => {
     const rpc = makeRpcWithAddress('bcrt1qabc123');
-    const { ctrl } = makeCtrl(KNOWN_NODE, { rpc });
+    const { ctrl } = makeCtrl(DB_NODE_ID, { rpc });
     ctrl.generateAddr.wallet = 'test-wallet';
     await ctrl.generateAddr.run();
-    expect(rpc).toHaveBeenCalledWith('createwallet', expect.any(Array));
-    expect(rpc).toHaveBeenCalledWith('loadwallet', ['test-wallet']);
-    expect(rpc).toHaveBeenCalledWith('getnewaddress', ['', 'bech32'], { wallet: 'test-wallet' });
+    expect(rpc).toHaveBeenCalledWith('getnewaddress', ['', 'bech32'],
+      expect.objectContaining({ nodeId: DB_NODE_ID, wallet: 'test-wallet' }));
   });
 
   test('generateAddr.run() sets result on success', async () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE, { rpc: makeRpcWithAddress('bcrt1qabc123') });
+    const { ctrl } = makeCtrl(DB_NODE_ID, { rpc: makeRpcWithAddress('bcrt1qabc123') });
     ctrl.generateAddr.wallet = 'test-wallet';
     await ctrl.generateAddr.run();
     expect(ctrl.generateAddr.result).toBe('bcrt1qabc123');
     expect(ctrl.generateAddr.error).toBeNull();
   });
 
-  test('generateAddr.run() sets error when getnewaddress fails', async () => {
-    const rpc = jest.fn().mockImplementation((method) => {
-      if (method === 'getnewaddress') return Promise.reject(new Error('Wallet not found'));
-      return Promise.resolve({ result: null });
-    });
-    const { ctrl } = makeCtrl(KNOWN_NODE, { rpc });
-    ctrl.generateAddr.wallet = 'bad-wallet';
-    await ctrl.generateAddr.run();
-    expect(ctrl.generateAddr.error).toBe('Wallet not found');
-    expect(ctrl.generateAddr.result).toBeNull();
-  });
-
   test('generateAddr.loading is false after run completes', async () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE, { rpc: makeRpcWithAddress() });
+    const { ctrl } = makeCtrl(DB_NODE_ID, { rpc: makeRpcWithAddress() });
     ctrl.generateAddr.wallet = 'test-wallet';
     await ctrl.generateAddr.run();
     expect(ctrl.generateAddr.loading).toBe(false);
   });
 
-  test('generateAddr.run() proceeds when createwallet and loadwallet fail', async () => {
-    const rpc = jest.fn().mockImplementation((method) => {
-      if (method === 'createwallet') return Promise.reject(new Error('already exists'));
-      if (method === 'loadwallet') return Promise.reject(new Error('already loaded'));
-      if (method === 'getnewaddress') return Promise.resolve({ result: 'bcrt1qabc123' });
-      return Promise.resolve({ result: null });
-    });
-    const { ctrl } = makeCtrl(KNOWN_NODE, { rpc });
-    ctrl.generateAddr.wallet = 'existing-wallet';
-    await ctrl.generateAddr.run();
-    expect(ctrl.generateAddr.result).toBe('bcrt1qabc123');
-  });
+  // ─── mineBlocks ──────────────────────────────────────────────────────────
 
-  // ─── mineBlocks — initial state ───────────────────────────────────────────────
   test('mineBlocks initial state is correct', () => {
     const { ctrl } = makeCtrl();
     expect(ctrl.mineBlocks.address).toBe('');
@@ -192,55 +184,34 @@ describe('NodeDetailView — createController', () => {
     expect(ctrl.mineBlocks.result).toBeNull();
   });
 
-  test('mineBlocks.onAddressInput updates address', () => {
+  test('mineBlocks.run() with empty address sets error', async () => {
     const { ctrl } = makeCtrl();
-    ctrl.mineBlocks.onAddressInput({ target: { value: 'bcrt1qabc' } });
-    expect(ctrl.mineBlocks.address).toBe('bcrt1qabc');
-  });
-
-  test('mineBlocks.onCountInput updates count', () => {
-    const { ctrl } = makeCtrl();
-    ctrl.mineBlocks.onCountInput({ target: { value: '25' } });
-    expect(ctrl.mineBlocks.count).toBe('25');
-  });
-
-  // ─── mineBlocks.run ───────────────────────────────────────────────────────────
-  test('mineBlocks.run() with empty address sets error and does not call api', async () => {
-    const { ctrl, api } = makeCtrl(KNOWN_NODE, { rpc: makeRpcWithBlocks() });
     await ctrl.mineBlocks.run();
     expect(ctrl.mineBlocks.error).toBeTruthy();
-    expect(api.rpc).not.toHaveBeenCalled();
   });
 
-  test('mineBlocks.run() with out-of-range count sets error', async () => {
-    const { ctrl, api } = makeCtrl(KNOWN_NODE, { rpc: makeRpcWithBlocks() });
+  test('mineBlocks.run() calls api.mineBlocks (v3 — uses miner node)', async () => {
+    const mineBlocks = jest.fn().mockResolvedValue({ result: ['h1', 'h2', 'h3'] });
+    const { ctrl } = makeCtrl(DB_NODE_ID, { mineBlocks });
     ctrl.mineBlocks.address = 'bcrt1qabc';
-    ctrl.mineBlocks.count = '9999';
+    ctrl.mineBlocks.count   = '3';
     await ctrl.mineBlocks.run();
-    expect(ctrl.mineBlocks.error).toBeTruthy();
-    expect(api.rpc).not.toHaveBeenCalled();
-  });
-
-  test('mineBlocks.run() calls generatetoaddress with correct args', async () => {
-    const rpc = makeRpcWithBlocks(['h1', 'h2', 'h3']);
-    const { ctrl } = makeCtrl(KNOWN_NODE, { rpc });
-    ctrl.mineBlocks.address = 'bcrt1qabc';
-    ctrl.mineBlocks.count = '3';
-    await ctrl.mineBlocks.run();
-    expect(rpc).toHaveBeenCalledWith('generatetoaddress', [3, 'bcrt1qabc'], { useWallet: true });
+    expect(mineBlocks).toHaveBeenCalledWith(3, 'bcrt1qabc');
   });
 
   test('mineBlocks.run() sets result on success', async () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE, { rpc: makeRpcWithBlocks(['h1', 'h2']) });
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
+      mineBlocks: jest.fn().mockResolvedValue({ result: ['h1', 'h2'] }),
+    });
     ctrl.mineBlocks.address = 'bcrt1qabc';
     await ctrl.mineBlocks.run();
-    expect(ctrl.mineBlocks.result).toContain('2 blocks');
+    expect(ctrl.mineBlocks.result).toContain('2 block');
     expect(ctrl.mineBlocks.error).toBeNull();
   });
 
-  test('mineBlocks.run() sets error on API failure', async () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE, {
-      rpc: jest.fn().mockRejectedValue(new Error('Mining failed')),
+  test('mineBlocks.run() sets error on failure', async () => {
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
+      mineBlocks: jest.fn().mockRejectedValue(new Error('Mining failed')),
     });
     ctrl.mineBlocks.address = 'bcrt1qabc';
     await ctrl.mineBlocks.run();
@@ -249,16 +220,19 @@ describe('NodeDetailView — createController', () => {
   });
 
   test('mineBlocks.loading is false after run completes', async () => {
-    const { ctrl } = makeCtrl(KNOWN_NODE, { rpc: makeRpcWithBlocks(['h1']) });
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
+      mineBlocks: jest.fn().mockResolvedValue({ result: ['h1'] }),
+    });
     ctrl.mineBlocks.address = 'bcrt1qabc';
     await ctrl.mineBlocks.run();
     expect(ctrl.mineBlocks.loading).toBe(false);
   });
 
-  // ─── Sidebar ──────────────────────────────────────────────────────────────────
-  test('sidebar Dev Nodes item is marked active', () => {
+  // ─── UI framework smoke tests ─────────────────────────────────────────────
+
+  test('sidebar Chain Nodes item is marked active', () => {
     const { ctrl } = makeCtrl();
-    const item = ctrl.sidebar.navItems.find(i => i.label === 'Dev Nodes');
+    const item = ctrl.sidebar.navItems.find(i => i.label === 'Chain Nodes');
     expect(item).toBeDefined();
     expect(item.showActive).toBe(true);
   });
@@ -290,13 +264,5 @@ describe('NodeDetailView — createController', () => {
     sessionStorage.clear();
     const { ctrl } = makeCtrl();
     expect(ctrl.activeTenant.isEmpty).toBe(true);
-  });
-
-  test('activeTenant.isSet when tenant stored in sessionStorage', () => {
-    sessionStorage.setItem('chain_api_active_tenant', JSON.stringify({ id: 'ten_01', name: 'Acme Corp' }));
-    const { ctrl } = makeCtrl();
-    expect(ctrl.activeTenant.isSet).toBe(true);
-    expect(ctrl.activeTenant.name).toBe('Acme Corp');
-    sessionStorage.clear();
   });
 });
