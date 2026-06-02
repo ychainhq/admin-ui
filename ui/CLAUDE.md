@@ -170,6 +170,36 @@ Przed rozszerzeniem API — sprawdź kolekcję Postman i HLD sekcja 7 po aktualn
 - Struktura `tests/` odzwierciedla `src/` (`tests/components/`, `tests/views/`).
 - Mocki: `tests/mocks/api.js` (`makeMockApi`, `makeRouter`), `tests/mocks/rivets.js`.
 
+### Testy kontraktu auth dla widoków customer (OBOWIĄZKOWE)
+
+Każdy widok na ścieżce `/customers/:id/*` musi mieć **2 dodatkowe testy auth contract**:
+
+```javascript
+test('load() creates customer session before fetching [transactional data]', async () => {
+  await ctrl.load();
+  expect(api.createCustomerSession).toHaveBeenCalledWith(customerId);
+});
+
+test('load() passes session token (not customerId) to get[Transactional]', async () => {
+  const getX = jest.fn().mockResolvedValue(data);
+  const { ctrl } = setup({ getX });
+  await ctrl.load();
+  expect(getX.mock.calls[0][0]).toBe(SESSION_TOKEN);  // token
+  expect(getX.mock.calls[0][0]).not.toBe(customerId); // NOT id
+});
+```
+
+Dlaczego: testy renderowania weryfikują **efekt** (dane w scope), ale NIE weryfikują **który endpoint + jakie auth**. Bez tych testów można naruszyć regułę CLAUDE.md (używać Tenant API dla danych transakcyjnych) i żaden test nie złapie regresji.
+
+Wzorzec setup dla widoków customer — ZAWSZE zawiera `createCustomerSession`:
+```javascript
+const api = makeMockApi({
+  createCustomerSession: jest.fn().mockResolvedValue({ token: SESSION_TOKEN }),
+  getCustomerBalances:   jest.fn().mockResolvedValue(...),  // accepts token
+  ...
+});
+```
+
 ## Design system
 
 Źródło prawdy: `../design/precision_ledger_2/DESIGN.md` + `../design/*/screen.png`

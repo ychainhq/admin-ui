@@ -10,12 +10,16 @@ const BALANCES = {
   ],
 };
 
+const SESSION_TOKEN = 'eyJ.test.balances.token';
+
 function setup(overrides = {}) {
   sessionStorage.setItem('chain_api_tenant_key', 'test-key');
   const api = makeMockApi({
-    getCustomer:         jest.fn().mockResolvedValue(CUSTOMER),
-    getCustomerBalances: jest.fn().mockResolvedValue({ customerId: 'cust_x', balances: [] }),
-    disableCustomer:     jest.fn().mockResolvedValue({ ...CUSTOMER, status: 'disabled' }),
+    getCustomer:            jest.fn().mockResolvedValue(CUSTOMER),
+    // createCustomerSession required — controller must obtain token before balances
+    createCustomerSession:  jest.fn().mockResolvedValue({ token: SESSION_TOKEN }),
+    getCustomerBalances:    jest.fn().mockResolvedValue({ customerId: 'cust_x', balances: [] }),
+    disableCustomer:        jest.fn().mockResolvedValue({ ...CUSTOMER, status: 'disabled' }),
     ...overrides,
   });
   const router = makeRouter();
@@ -40,6 +44,21 @@ describe('CustomerBalancesView — createController', () => {
   test('balancesEmpty=true initially', () => {
     const { ctrl } = setup();
     expect(ctrl.balancesEmpty).toBe(true);
+  });
+
+  test('load() creates customer session before fetching balances', async () => {
+    const { ctrl, api } = setup();
+    await ctrl.load();
+    expect(api.createCustomerSession).toHaveBeenCalledWith('cust_x');
+  });
+
+  test('load() passes session token (not customerId) to getCustomerBalances', async () => {
+    const getCustomerBalances = jest.fn().mockResolvedValue(BALANCES);
+    const { ctrl } = setup({ getCustomerBalances });
+    await ctrl.load();
+    // Argument must be session token, NOT customerId
+    expect(getCustomerBalances.mock.calls[0][0]).toBe(SESSION_TOKEN);
+    expect(getCustomerBalances.mock.calls[0][0]).not.toBe('cust_x');
   });
 
   test('load() sets balances from API', async () => {

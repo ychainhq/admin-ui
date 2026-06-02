@@ -233,11 +233,15 @@ export function createController({ api, router, id }) {
       self.loading = true;
       self.error = null;
       try {
+        // Customer transactional data requires session token — CLAUDE.md rule
+        const session = await api.createCustomerSession(id);
+        const sessionToken = session.accessToken || session.token;
+
         const [customer, balancesData, profileData, contactData] = await Promise.all([
-          api.getCustomer(id),
-          api.getCustomerBalances(id),
-          safeLoad(() => api.getCustomerProfile(id)),
-          safeLoad(() => api.getCustomerContact(id)),
+          api.getCustomer(id),                        // tenant API — admin record (status, id)
+          api.getCustomerBalances(sessionToken),      // /customer/me/balances
+          safeLoad(() => api.getMyProfile(sessionToken)),  // /customer/me/profile
+          safeLoad(() => api.getMyContact(sessionToken)),  // /customer/me/contact
         ]);
 
         self.header.setCustomer(customer);

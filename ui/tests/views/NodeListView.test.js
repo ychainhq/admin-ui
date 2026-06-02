@@ -74,9 +74,9 @@ describe('NodeListView — createController', () => {
     expect(ctrl.engineInstances).toEqual([]);
   });
 
-  test('initial state: loading is true', () => {
+  test('initial state: loading is false (set to true during init)', () => {
     const { ctrl } = makeCtrl();
-    expect(ctrl.loading).toBe(true);
+    expect(ctrl.loading).toBe(false);
   });
 
   test('init() calls api.getChainNodes', async () => {

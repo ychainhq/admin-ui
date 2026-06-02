@@ -172,18 +172,18 @@ const template = `
         <div rv-show="loading" class="text-center py-xl text-on-surface-variant text-[14px]">Loading…</div>
         <div rv-show="error" rv-text="error" class="text-error text-[13px] mb-gutter"></div>
 
-        <div rv-show="!loading" class="space-y-xl">
+        <div rv-hide="loading" class="space-y-xl">
 
           ${miningPanelTpl}
 
           <div>
             <h3 class="font-label-md font-bold text-on-surface-variant uppercase tracking-wider text-[11px] mb-sm">
-              Bitcoin Core Nodes (<span rv-text="chainNodes.length"></span>)
+              Bitcoin Core Nodes (<span rv-text="chainNodesCount"></span>)
             </h3>
             <div class="space-y-sm">
               ${chainNodeCardTpl}
             </div>
-            <div rv-show="!chainNodes.length" class="glass-card rounded-xl p-md text-on-surface-variant text-[13px]">
+            <div rv-show="noChainNodes" class="glass-card rounded-xl p-md text-on-surface-variant text-[13px]">
               No chain nodes registered yet.
               Use <code class="font-mono text-secondary text-[12px]">POST /admin/v1/chain-nodes</code> to add one.
             </div>
@@ -191,7 +191,7 @@ const template = `
 
           <div>
             <h3 class="font-label-md font-bold text-on-surface-variant uppercase tracking-wider text-[11px] mb-sm">
-              Engine Instances (<span rv-text="engineInstances.length"></span>)
+              Engine Instances (<span rv-text="engineInstancesCount"></span>)
               <span class="text-[10px] font-normal normal-case tracking-normal ml-1 text-on-surface-variant">
                 active-active — work distributed via SKIP LOCKED
               </span>
@@ -199,7 +199,7 @@ const template = `
             <div class="space-y-sm">
               ${engineInstanceTpl}
             </div>
-            <div rv-show="!engineInstances.length" class="glass-card rounded-xl p-md text-on-surface-variant text-[13px]">
+            <div rv-show="noEngineInstances" class="glass-card rounded-xl p-md text-on-surface-variant text-[13px]">
               No engine instances. Start with <code class="font-mono text-secondary text-[12px]">CLUSTER_ENABLED=true ENGINE_URL=http://…</code>
             </div>
           </div>
@@ -228,10 +228,14 @@ export function createController({ api, router }) {
     sidebar: createSidebarController({ activeRoute: ROUTE, router }),
     bottomNav: createBottomNavController({ activeRoute: ROUTE, router }),
 
-    loading: true,
+    loading: false,  // starts false — set to true in init() so Rivets detects the change
     error: '',
     chainNodes: [],
     engineInstances: [],
+    chainNodesCount: 0,       // Rivets doesn't reliably observe array.length
+    engineInstancesCount: 0,  // use explicit counters instead
+    noChainNodes: false,      // rv-show helper (Rivets doesn't support !array.length)
+    noEngineInstances: false, // rv-show helper
     hasRegtest: false,
 
     mining: {
@@ -265,7 +269,7 @@ export function createController({ api, router }) {
       try {
         const res   = await api.getChainNodes();
         const nodes = res?.data ?? [];
-        self.chainNodes = nodes.map(n => ({
+        const mapped = nodes.map(n => ({
           ...n,
           chainIconName:    chainIcon(n.chainId ?? ''),
           statusClass:      statusColor(n.status),
@@ -284,8 +288,14 @@ export function createController({ api, router }) {
             }
           },
         }));
+        // Use splice() — Rivets reliably observes array mutations (push/splice/etc.)
+        // Full assignment (self.arr = newArr) can miss reactive updates in some Rivets builds.
+        self.chainNodes.splice(0, self.chainNodes.length, ...mapped);
+        self.chainNodesCount = self.chainNodes.length;
+        self.noChainNodes    = self.chainNodes.length === 0;
       } catch (err) {
         self.error = `Failed to load chain nodes: ${err.message}`;
+        self.noChainNodes = true;
       }
     },
 
@@ -294,7 +304,7 @@ export function createController({ api, router }) {
         const res  = await api.getClusterStatus();
         const d    = res?.data ?? {};
         const myId = d.instanceId ?? '';
-        self.engineInstances = (d.instances ?? []).map(inst => {
+        const mapped = (d.instances ?? []).map(inst => {
           const seenSecs = inst.lastSeenAt ?? 0;
           const diffSec  = Math.floor(Date.now() / 1000) - seenSecs;
           const alive    = diffSec < 60;
@@ -308,8 +318,12 @@ export function createController({ api, router }) {
             lastSeenText: seenSecs ? relativeTime(seenSecs) : '',
           };
         });
+        self.engineInstances.splice(0, self.engineInstances.length, ...mapped);
+        self.engineInstancesCount = self.engineInstances.length;
+        self.noEngineInstances    = self.engineInstances.length === 0;
       } catch {
-        self.engineInstances = [];
+        self.engineInstancesCount = 0;
+        self.noEngineInstances = true;
       }
     },
 
@@ -326,12 +340,17 @@ export function createController({ api, router }) {
     async init() {
       self.loading = true;
       self.error   = '';
-      await Promise.all([
-        self.loadProxyConfig(),
-        self.loadChainNodes(),
-        self.loadEngineInstances(),
-      ]);
-      self.loading = false;
+      try {
+        await Promise.all([
+          self.loadProxyConfig(),
+          self.loadChainNodes(),
+          self.loadEngineInstances(),
+        ]);
+      } catch (err) {
+        self.error = String(err);
+      } finally {
+        self.loading = false;  // always unblock UI even on uncaught error
+      }
     },
   };
 
@@ -343,7 +362,12 @@ export const NodeListView = {
     el.innerHTML = template;
     const scope   = createController({ api, router });
     const binding = rivets.bind(el, scope);
-    scope.init();
+    // .catch() ensures uncaught rejections don't silently leave loading=true
+    scope.init().catch(err => {
+      console.error('NodeListView init failed:', err);
+      scope.loading = false;
+      scope.error = String(err);
+    });
     return { unbind() { binding.unbind(); } };
   },
 };

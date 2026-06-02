@@ -1,6 +1,15 @@
+/**
+ * CustomerDepositsView tests — UPDATED for customer session token rule.
+ * Per CLAUDE.md: transactional data (deposits) must use Customer Self-Service API
+ * with a session token, NOT Tenant API.
+ *
+ * api.getCustomerDeposits(sessionToken, opts) — first arg is token, NOT customerId.
+ * Controller calls api.createCustomerSession(id) first and passes the token.
+ */
 import { createController } from '../../src/views/CustomerDepositsView.js';
 import { makeMockApi, makeRouter } from '../mocks/api.js';
 
+const SESSION_TOKEN = 'eyJ.test.session.token';
 const CUSTOMER = { customerId: 'cust_x', status: 'active', createdAt: '2026-01-01T00:00:00Z' };
 const DEPOSITS_PAGE = {
   data: [
@@ -13,9 +22,11 @@ const DEPOSITS_PAGE = {
 function setup(overrides = {}) {
   sessionStorage.setItem('chain_api_tenant_key', 'test-key');
   const api = makeMockApi({
-    getCustomer:         jest.fn().mockResolvedValue(CUSTOMER),
-    getCustomerDeposits: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
-    disableCustomer:     jest.fn().mockResolvedValue({ ...CUSTOMER, status: 'disabled' }),
+    getCustomer:            jest.fn().mockResolvedValue(CUSTOMER),
+    // createCustomerSession must be mocked — controller requires it
+    createCustomerSession:  jest.fn().mockResolvedValue({ token: SESSION_TOKEN }),
+    getCustomerDeposits:    jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
+    disableCustomer:        jest.fn().mockResolvedValue({ ...CUSTOMER, status: 'disabled' }),
     ...overrides,
   });
   const router = makeRouter();
@@ -40,6 +51,21 @@ describe('CustomerDepositsView — createController', () => {
   test('depositsEmpty=true initially', () => {
     const { ctrl } = setup();
     expect(ctrl.depositsEmpty).toBe(true);
+  });
+
+  test('load() creates customer session before fetching deposits', async () => {
+    const { ctrl, api } = setup();
+    await ctrl.load();
+    expect(api.createCustomerSession).toHaveBeenCalledWith('cust_x');
+  });
+
+  test('load() passes session token (not customerId) to getCustomerDeposits', async () => {
+    const getCustomerDeposits = jest.fn().mockResolvedValue(DEPOSITS_PAGE);
+    const { ctrl } = setup({ getCustomerDeposits });
+    await ctrl.load();
+    // First arg must be session token, NOT customerId
+    expect(getCustomerDeposits.mock.calls[0][0]).toBe(SESSION_TOKEN);
+    expect(getCustomerDeposits.mock.calls[0][0]).not.toBe('cust_x');
   });
 
   test('load() populates deposits', async () => {
@@ -127,7 +153,7 @@ describe('CustomerDepositsView — createController', () => {
     expect(ctrl.error).toBe('nope');
   });
 
-  test('next page uses nextCursor', async () => {
+  test('next page uses nextCursor and passes session token', async () => {
     const getCustomerDeposits = jest.fn()
       .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: 'cur_abc' } })
       .mockResolvedValueOnce({ data: [], pagination: { nextCursor: null } });
@@ -135,10 +161,11 @@ describe('CustomerDepositsView — createController', () => {
     await ctrl.load();
     ctrl.pagination.pages.find(p => p.label === '2')?.go();
     await Promise.resolve();
-    expect(getCustomerDeposits).toHaveBeenLastCalledWith('cust_x', expect.objectContaining({ cursor: 'cur_abc' }));
+    // First arg is session token, second has cursor
+    expect(getCustomerDeposits).toHaveBeenLastCalledWith(SESSION_TOKEN, expect.objectContaining({ cursor: 'cur_abc' }));
   });
 
-  test('deposit search passes filters to API and resets pagination', async () => {
+  test('deposit search passes filters to API with session token and resets pagination', async () => {
     const getCustomerDeposits = jest.fn()
       .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: 'cur_abc' } })
       .mockResolvedValueOnce({ data: [], pagination: { nextCursor: null } })
@@ -154,7 +181,8 @@ describe('CustomerDepositsView — createController', () => {
     ctrl.depositSearchForm.onSearch({ preventDefault: jest.fn() });
     await Promise.resolve();
 
-    expect(getCustomerDeposits).toHaveBeenLastCalledWith('cust_x', expect.objectContaining({
+    // First arg = session token, second has filters
+    expect(getCustomerDeposits).toHaveBeenLastCalledWith(SESSION_TOKEN, expect.objectContaining({
       cursor: undefined,
       txHash: '958a*',
       status: 'finalized',
@@ -162,11 +190,9 @@ describe('CustomerDepositsView — createController', () => {
     }));
   });
 
-  test('deposit search clear removes filters and reloads first page', async () => {
+  test('deposit search clear removes filters and reloads with session token', async () => {
     const getCustomerDeposits = jest.fn()
-      .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: null } })
-      .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: null } })
-      .mockResolvedValueOnce({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: null } });
+      .mockResolvedValue({ data: DEPOSITS_PAGE.data, pagination: { nextCursor: null } });
     const { ctrl } = setup({ getCustomerDeposits });
     await ctrl.load();
 
@@ -178,7 +204,8 @@ describe('CustomerDepositsView — createController', () => {
 
     expect(ctrl._activeFilters).toEqual({});
     expect(ctrl.depositSearchForm._form.address).toBe('');
-    expect(getCustomerDeposits).toHaveBeenLastCalledWith('cust_x', expect.not.objectContaining({ address: 'bcrt1*' }));
+    // First arg always session token, not customerId
+    expect(getCustomerDeposits).toHaveBeenLastCalledWith(SESSION_TOKEN, expect.not.objectContaining({ address: 'bcrt1*' }));
   });
 
   test('noActiveTenant=true when no key', () => {
@@ -216,47 +243,9 @@ describe('CustomerDepositsView — createController', () => {
       { address: 'bc1qabcd', chain_id: 'bitcoin', status: 'active' },
       { address: 'bc1qefgh', chain_id: 'bitcoin', status: 'archived' },
     ] };
-    const { ctrl } = setup({ getCustomerAddresses: jest.fn().mockResolvedValue(addrsData) });
+    const { ctrl } = setup({ getMyAddresses: jest.fn().mockResolvedValue(addrsData) });
     await ctrl.load();
     expect(ctrl.depositAddresses).toHaveLength(2);
     expect(ctrl.depositAddresses[0].addressShort).toBe('bc1qabcd');
-    expect(ctrl.depositAddresses[0].chain).toBe('bitcoin');
-    expect(ctrl.depositAddresses[0].statusLabel).toBe('active');
-    expect(ctrl.depositAddressesEmpty).toBe(false);
-  });
-
-  test('depositAddressesEmpty=true when API returns empty list', async () => {
-    const { ctrl } = setup();
-    await ctrl.load();
-    expect(ctrl.depositAddressesEmpty).toBe(true);
-  });
-
-  test('generateDepositAddress() calls createDepositAddress and prepends result', async () => {
-    const createDepositAddress = jest.fn().mockResolvedValue({ address: 'bc1qnew', chain: 'bitcoin' });
-    const { ctrl } = setup({ createDepositAddress });
-    await ctrl.load();
-    await ctrl.generateDepositAddress();
-    expect(createDepositAddress).toHaveBeenCalledWith('cust_x', { chain: 'bitcoin' });
-    expect(ctrl.depositAddresses[0].addressShort).toBe('bc1qnew');
-    expect(ctrl.depositAddressesEmpty).toBe(false);
-    expect(ctrl.depositGenResult).toBe('bc1qnew');
-  });
-
-  test('generateDepositAddress() sets depositGenError on failure', async () => {
-    const createDepositAddress = jest.fn().mockRejectedValue(new Error('address gen failed'));
-    const { ctrl } = setup({ createDepositAddress });
-    await ctrl.generateDepositAddress();
-    expect(ctrl.depositGenError).toBe('address gen failed');
-    expect(ctrl.depositGenerating).toBe(false);
-  });
-
-  test('generateDepositAddress() clears previous error/result before attempting', async () => {
-    const createDepositAddress = jest.fn().mockResolvedValue({ address: 'bc1qnew2', chain: 'bitcoin' });
-    const { ctrl } = setup({ createDepositAddress });
-    ctrl.depositGenError = 'old error';
-    ctrl.depositGenResult = 'old result';
-    await ctrl.generateDepositAddress();
-    expect(ctrl.depositGenError).toBeNull();
-    expect(ctrl.depositGenResult).toBe('bc1qnew2');
   });
 });

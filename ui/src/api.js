@@ -19,18 +19,35 @@ async function request(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
   if (!res.ok) {
+    // 401 on a tenant API call means the stored key is stale (e.g. after server reset).
+    // Clear it so the next tenantRequest() uses the proxy's default key instead,
+    // and surface a clear error message so the user knows to re-select their tenant.
+    if (res.status === 401 && path.startsWith('/api/')) {
+      const staleKey = sessionStorage.getItem(TENANT_KEY_SESSION);
+      if (staleKey) {
+        sessionStorage.removeItem(TENANT_KEY_SESSION);
+        console.warn('[api] Tenant key expired or revoked — cleared from sessionStorage. Re-select tenant.');
+      }
+    }
+
     let message = `HTTP ${res.status}`;
     try {
       const body = await res.clone().json();
       const detail = body?.error?.message || body?.message;
       if (detail) message = `${message}: ${detail}`;
     } catch { /* ignore parse errors */ }
+
+    // Provide actionable message only for tenant API auth failures
+    if (res.status === 401 && path.startsWith('/api/')) {
+      throw new Error('Session expired — please re-select your tenant from the Tenants list.');
+    }
     throw new Error(message);
   }
   return res.json();
 }
 
 // For /api/* calls — attaches the active tenant key stored in sessionStorage.
+// Falls back to the proxy's default key (CHAIN_API_KEY env var) when sessionStorage is empty.
 function tenantRequest(path, options = {}) {
   const key = getActiveTenantKey();
   return request(path, {
@@ -199,12 +216,39 @@ export const api = {
     return tenantRequest(`/api/customers/${encodeURIComponent(id)}/addresses?${params}`);
   },
 
-  getCustomerBalances: async (id) => {
-    const res = await tenantRequest(`/api/customers/${encodeURIComponent(id)}/balances`);
+  // Customer Self-Service API — requires session token from createCustomerSession().
+  // Signature: (sessionToken, opts) — NOT (customerId, opts).
+  // Tenant API must NOT be used for customer data when a /me/* endpoint exists.
+  getMyProfile: async (sessionToken) => {
+    const res = await request('/customer/me/profile', {
+      headers: { 'X-Session-Token': sessionToken },
+    });
     return res.data ?? res;
   },
 
-  getCustomerDeposits: (id, {
+  getMyContact: async (sessionToken) => {
+    const res = await request('/customer/me/contact', {
+      headers: { 'X-Session-Token': sessionToken },
+    });
+    return res.data ?? res;
+  },
+
+  getMyAddresses: (sessionToken, { limit = 50, cursor } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return request(`/customer/me/addresses?${params}`, {
+      headers: { 'X-Session-Token': sessionToken },
+    });
+  },
+
+  getCustomerBalances: async (sessionToken) => {
+    const res = await request('/customer/me/balances', {
+      headers: { 'X-Session-Token': sessionToken },
+    });
+    return res.data ?? res;
+  },
+
+  getCustomerDeposits: (sessionToken, {
     limit = 20,
     cursor,
     depositId,
@@ -224,7 +268,9 @@ export const api = {
     if (status) params.set('status', status);
     if (minConfirmations !== undefined) params.set('minConfirmations', String(minConfirmations));
     if (maxConfirmations !== undefined) params.set('maxConfirmations', String(maxConfirmations));
-    return tenantRequest(`/api/customers/${encodeURIComponent(id)}/deposits?${params}`);
+    return request(`/customer/me/deposits?${params}`, {
+      headers: { 'X-Session-Token': sessionToken },
+    });
   },
 
   createDepositAddress: async (customerId, { chain }) => {

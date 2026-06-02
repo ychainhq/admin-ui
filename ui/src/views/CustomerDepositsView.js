@@ -372,6 +372,7 @@ export function createController({ api, router, id }) {
     _cursor: undefined,
     _prevCursors: [],
     _nextCursor: undefined,
+    _sessionToken: null,  // customer session token — set in load(), reused in loadDeposits()
     _activeFilters: {},
 
     goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
@@ -474,7 +475,8 @@ export function createController({ api, router, id }) {
     },
 
     async loadDeposits() {
-      const data = await api.getCustomerDeposits(id, {
+      // sessionToken set by load() — customer session required per CLAUDE.md rules
+      const data = await api.getCustomerDeposits(self._sessionToken, {
         limit: PER_PAGE,
         cursor: self._cursor,
         ...self._activeFilters,
@@ -506,12 +508,16 @@ export function createController({ api, router, id }) {
       self.loading = true;
       self.error = null;
       try {
+        // Create customer session first — required for transactional data per CLAUDE.md
+        const session = await api.createCustomerSession(id);
+        self._sessionToken = session.accessToken || session.token;
+
         const [customer, , profileData, contactData, depositAddrsData] = await Promise.all([
-          api.getCustomer(id),
-          self.loadDeposits(),
-          safeLoad(() => api.getCustomerProfile(id)),
-          safeLoad(() => api.getCustomerContact(id)),
-          safeLoad(() => api.getCustomerAddresses(id)),
+          api.getCustomer(id),                                            // tenant API — admin record
+          self.loadDeposits(),                                            // /customer/me/deposits
+          safeLoad(() => api.getMyProfile(self._sessionToken)),           // /customer/me/profile
+          safeLoad(() => api.getMyContact(self._sessionToken)),           // /customer/me/contact
+          safeLoad(() => api.getMyAddresses(self._sessionToken)),         // /customer/me/addresses
         ]);
         self.header.setCustomer(customer);
         self.header.setProfile(profileData);

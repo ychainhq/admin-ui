@@ -1,0 +1,32 @@
+# docker-compose.v3.debug.yml — debug overlay for ./start.sh --v3 --debug
+#
+# Applied automatically on top of docker-compose.v3.yml when --debug is passed.
+# Do NOT use directly — start.sh handles compose file merging.
+#
+# What this adds:
+#   engine-1: NODE_OPTIONS=--inspect=0.0.0.0:9229 + port 9229:9229
+#   engine-2: NODE_OPTIONS=--inspect=0.0.0.0:9232 + port 9232:9232
+#
+# Port assignments (v3 debug mode):
+#   9229 — engine-1 inspector  → "Attach: Engine-1 (v3 Docker)"
+#   9232 — engine-2 inspector  → "Attach: Engine-2 (v3 Docker)"
+#   9230 — signer-oss (local)  → "Attach: OSS Signer"
+#   9231 — signer-ent (local)  → "Attach: Enterprise Signer"
+#
+# Note: engine-2 uses port 9232 (not 9230) to avoid conflict with signer-oss
+# which also runs locally on 9230.
+
+services:
+  engine-1:
+    environment:
+      # Node.js inspector: binds on all interfaces so Docker port mapping works.
+      # --inspect-brk would pause until debugger attaches; --inspect does not.
+      NODE_OPTIONS: "--inspect=0.0.0.0:9229"
+    ports:
+      - "9229:9229"     # host:container — attach from localhost:9229 in VSCode
+
+  engine-2:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9232"
+    ports:
+      - "9232:9232"     # host:container — attach from localhost:9232 in VSCode

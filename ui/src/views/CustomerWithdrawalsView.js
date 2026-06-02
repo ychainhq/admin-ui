@@ -612,10 +612,12 @@ export function createController({ api, router, id }) {
       self.loading = true;
       self.error = null;
       try {
+        const session = await api.createCustomerSession(id);
+        const sessionToken = session.accessToken || session.token;
         const [customer, profileData, contactData] = await Promise.all([
-          api.getCustomer(id),
-          safeLoad(() => api.getCustomerProfile(id)),
-          safeLoad(() => api.getCustomerContact(id)),
+          api.getCustomer(id),                                  // tenant API — admin record
+          safeLoad(() => api.getMyProfile(sessionToken)),       // /customer/me/profile
+          safeLoad(() => api.getMyContact(sessionToken)),       // /customer/me/contact
         ]);
         self.header.setCustomer(customer);
         self.header.setProfile(profileData);

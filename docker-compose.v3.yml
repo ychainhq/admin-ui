@@ -68,6 +68,11 @@ x-engine-common: &engine-common
     BTC_DEFAULT_CONFIRMATIONS: "1"
     BTC_FINALITY_CONFIRMATIONS: "6"
     LOG_LEVEL: info
+    # Chain node RPC passwords — referenced by chain_nodes table via env:VAR_NAME
+    BTC_NODE_1_RPC_PASSWORD: bitcoin
+    BTC_NODE_2_RPC_PASSWORD: bitcoin
+    # v3: disable legacy FWallet deposit monitor — deposits handled by btc-indexer → chain_events
+    LEGACY_DEPOSIT_MONITOR_ENABLED: "false"
   depends_on:
     postgres:
       condition: service_healthy
@@ -100,7 +105,7 @@ services:
       POSTGRES_USER: chainapi
       POSTGRES_PASSWORD: chainapi_dev
     ports:
-      - "5432:5432"     # accessible from host for psql / pgAdmin
+      - "5433:5432"     # 5433 on host → avoids conflict with local Homebrew PostgreSQL on 5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -259,10 +264,14 @@ services:
       engine-2:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3009/nginx-health"]
+      # Use 127.0.0.1 (explicit IPv4) — 'localhost' resolves to [::1] in Alpine
+      # but nginx only listens on IPv4 unless explicitly configured with [::]:port.
+      # Both nginx.conf and this healthcheck use explicit IPv4/IPv6 to be safe.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3009/nginx-health"]
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 5s
 
   # ── Test UI proxy ─────────────────────────────────────────────────────────
   ui:
@@ -287,6 +296,8 @@ services:
       ENGINE_URL_2: http://engine-2:3000
       CHAIN_API_KEY: ${API_KEY:-}
       CHAIN_API_ADMIN_KEY: ${ADMIN_KEY:-}
+    volumes:
+      - ./ui:/app/ui:ro   # static frontend files (Rivets.js SPA)
     depends_on:
       nginx:
         condition: service_healthy
@@ -296,8 +307,8 @@ services:
   # Or via start.sh: ./start.sh --v3 --signer oss
   signer-oss:
     build:
-      context: ../signer-oss
-      dockerfile: Dockerfile
+      context: ..                      # repo root — needed to access packages/
+      dockerfile: signer-oss/Dockerfile
     container_name: chainapi-signer-oss
     profiles: [signer-oss, signer-all]
     restart: unless-stopped
@@ -322,8 +333,8 @@ services:
   # Or via start.sh: ./start.sh --v3 --signer enterprise
   signer-enterprise:
     build:
-      context: ../signer
-      dockerfile: Dockerfile
+      context: ..                      # repo root — needed to access packages/
+      dockerfile: signer/Dockerfile
     container_name: chainapi-signer-enterprise
     profiles: [signer-enterprise, signer-all]
     restart: unless-stopped
