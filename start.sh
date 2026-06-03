@@ -568,6 +568,24 @@ step_v3_register_nodes() {
   _register_node() {
     local label="$1" role="$2" priority="$3" rpc_url="$4" pwd_ref="$5"
 
+    # Idempotency: skip if a node with this rpcUrl already exists
+    local existing_id
+    existing_id=$(curl -sf "${base}/admin/v1/chain-nodes?chainId=bitcoin" \
+      -H "X-Admin-Key: $admin_key" 2>/dev/null \
+      | python3 -c "
+import sys, json
+data = json.load(sys.stdin).get('data', [])
+for n in data:
+    if n.get('rpcUrl') == '$rpc_url':
+        print(n['id'])
+        break
+" 2>/dev/null || true)
+
+    if [ -n "$existing_id" ]; then
+      ok "Chain node already exists: $label → $existing_id (skipping)"
+      return
+    fi
+
     info "Registering chain node: $label ($role, priority=$priority)..."
     local body result
     body=$(printf '{"chainId":"bitcoin","label":"%s","rpcUrl":"%s","rpcUser":"bitcoin","rpcPasswordRef":"%s","network":"regtest","role":"%s","priority":%d}' \
@@ -576,7 +594,7 @@ step_v3_register_nodes() {
     result=$(curl -sf -X POST "${base}/admin/v1/chain-nodes" \
       -H "X-Admin-Key: $admin_key" \
       -H "Content-Type: application/json" \
-      -d "$body" 2>/dev/null) || { warn "Failed to register $label — may already exist"; return; }
+      -d "$body" 2>/dev/null) || { warn "Failed to register $label"; return; }
 
     local node_id
     node_id=$(echo "$result" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['id'])" 2>/dev/null || true)
