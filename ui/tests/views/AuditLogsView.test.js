@@ -111,6 +111,47 @@ describe('normalizeTickler — category / subcategory / entityId', () => {
   });
 });
 
+describe('normalizeTickler — occurredAt formatting', () => {
+  // occurred_at from SQLite is a JavaScript number (Unix ms).
+  // occurred_at from PostgreSQL BIGINT via pg lib is a JavaScript string of digits.
+  // Both must produce a human-readable date in the occurred column.
+
+  test('formats Unix ms number correctly', () => {
+    // 1748598000000 = 2025-05-30T10:00:00.000Z
+    const entry = normalizeTickler({ occurred_at: 1748598000000 });
+    expect(entry.occurredAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(entry.occurredAt).toContain('2025-05-30');
+  });
+
+  test('formats numeric string from PostgreSQL BIGINT correctly', () => {
+    // pg lib returns BIGINT as string — must not show "—"
+    const entry = normalizeTickler({ occurred_at: '1748598000000' });
+    expect(entry.occurredAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(entry.occurredAt).toContain('2025-05-30');
+    expect(entry.occurredAt).not.toBe('—');
+  });
+
+  test('formats ISO string correctly', () => {
+    const entry = normalizeTickler({ occurred_at: '2025-05-30T10:00:00.000Z' });
+    expect(entry.occurredAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(entry.occurredAt).toContain('2025-05-30');
+  });
+
+  test('returns — when occurred_at is missing', () => {
+    expect(normalizeTickler({}).occurredAt).toBe('—');
+  });
+
+  test('returns — when occurred_at is null', () => {
+    expect(normalizeTickler({ occurred_at: null }).occurredAt).toBe('—');
+  });
+
+  test('number and equivalent string produce the same formatted date', () => {
+    const fromNumber = normalizeTickler({ occurred_at: 1748598000000 }).occurredAt;
+    const fromString = normalizeTickler({ occurred_at: '1748598000000' }).occurredAt;
+    expect(fromNumber).toBe(fromString);
+  });
+});
+
 describe('normalizeTickler — toggleExpand', () => {
   test('expanded starts false', () => {
     expect(normalizeTickler({}).expanded).toBe(false);
@@ -162,6 +203,10 @@ describe('AuditLogsView — createController initial state', () => {
 });
 
 describe('AuditLogsView — load()', () => {
+  // occurred_at from SQLite: number (Unix ms), from PostgreSQL BIGINT via pg lib: string.
+  // Both formats must render correctly in the occurred column.
+  const OCCURRED_AT_MS = 1748598000000; // 2025-05-30T10:00:00.000Z in Unix ms
+
   const SAMPLE_TICKLER = {
     id: 'tck_001',
     category: 'deposit',
@@ -173,7 +218,7 @@ describe('AuditLogsView — load()', () => {
     field3: 'cust_recipient',
     field4: 'wd_sender_id',
     field5: 'extra_info',
-    occurred_at: '2026-05-30T10:00:00.000Z',
+    occurred_at: OCCURRED_AT_MS,
   };
 
   test('maps API response to normalized entries', async () => {

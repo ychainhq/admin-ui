@@ -14,7 +14,10 @@ const LIMIT = 50;
 
 function fmtDate(v) {
   if (!v) return '—';
-  try { return new Date(v).toISOString().slice(0, 19).replace('T', ' '); } catch { return '—'; }
+  // pg library returns BIGINT columns as strings — convert numeric strings to numbers
+  // so that new Date() treats them as Unix ms timestamps, not invalid date strings.
+  const ts = typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : v;
+  try { return new Date(ts).toISOString().slice(0, 19).replace('T', ' '); } catch { return '—'; }
 }
 
 function shortId(v) {
