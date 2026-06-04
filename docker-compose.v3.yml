@@ -92,6 +92,7 @@ x-indexer-common: &indexer-common
     INDEXER_POLL_INTERVAL_MS: "5000"
     INDEXER_LOG_LEVEL: info
     DATABASE_URL: postgres://chainapi:chainapi_dev@postgres:5432/chainapi
+    INDEXER_FINALITY_CONFIRMATIONS: 10
 
 services:
 
