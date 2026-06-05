@@ -47,20 +47,30 @@ function normalizeWithdrawal(w) {
   const status = w.status || '';
   const txHash = w.tx_hash || w.txHash || '';
   const isInternal = (w.withdrawal_type || 'external') === 'internal';
-  return {
+  const isFailed = status === 'failed';
+  const errorCode = (isFailed && w.error) ? w.error : '';
+  const toAddress = w.to_address || w.toAddress || '—';
+  const wd = {
     id:           w.id || '—',
     statusLabel:  status.toUpperCase().replace(/_/g, ' '),
     statusBadgeClass: WD_STATUS_BADGE[status] || WD_STATUS_BADGE.queued,
+    isFailed,
+    errorCode,
     isInternal,
     typeBadgeClass: WD_TYPE_BADGE_CLASS,
-    toAddress:    w.to_address || w.toAddress || '—',
-    toAddressShort: (w.to_address || w.toAddress || '').slice(0, 12) + (((w.to_address || w.toAddress) || '').length > 12 ? '…' : '') || '—',
+    toAddress,
+    toAddressShort: toAddress.slice(0, 12) + (toAddress.length > 12 ? '…' : ''),
+    showFullAddress: false,
+    // eslint-disable-next-line no-use-before-define
+    toggleAddress: null,
     amountRaw:    w.amount_raw || w.amountRaw || '—',
     feeRaw:       w.fee_raw ?? w.feeRaw ?? '—',
     txHash,
     txHashShort:  txHash.length > 16 ? txHash.slice(0, 8) + '…' + txHash.slice(-6) : (txHash || '—'),
     createdAt:    fmtDate(w.created_at || w.createdAt),
   };
+  wd.toggleAddress = (e) => { e?.preventDefault(); wd.showFullAddress = !wd.showFullAddress; };
+  return wd;
 }
 
 const FEE_COVERAGE_LABELS = {
@@ -267,6 +277,10 @@ const template = `
                   <tr rv-each-wd="withdrawals" class="hover:bg-white/[0.02]">
                     <td class="px-md py-3">
                       <span rv-text="wd.statusLabel" rv-attr-class="wd.statusBadgeClass"></span>
+                      <div rv-show="wd.isFailed" class="mt-[3px] flex items-center gap-[3px] text-error/70 text-[10px] font-mono-data">
+                        <span class="material-symbols-outlined text-[11px]">report</span>
+                        <span rv-text="wd.errorCode"></span>
+                      </div>
                     </td>
                     <td class="px-md py-3">
                       <span rv-show="wd.isInternal" rv-attr-class="wd.typeBadgeClass">
@@ -276,7 +290,10 @@ const template = `
                       <span rv-hide="wd.isInternal" class="text-on-surface-variant text-[11px] font-mono-data">On-chain</span>
                     </td>
                     <td class="px-md py-3">
-                      <span rv-text="wd.toAddressShort" rv-attr-title="wd.toAddress" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
+                      <button rv-on-click="wd.toggleAddress" class="text-left">
+                        <span rv-hide="wd.showFullAddress" class="font-mono-data text-on-surface-variant text-[12px] underline decoration-dashed decoration-white/30 hover:text-on-surface transition-colors" rv-text="wd.toAddressShort"></span>
+                        <span rv-show="wd.showFullAddress" class="font-mono-data text-on-surface text-[11px] break-all block max-w-[220px]" rv-text="wd.toAddress"></span>
+                      </button>
                     </td>
                     <td rv-text="wd.amountRaw" class="px-md py-3 font-mono-data text-on-surface text-right text-[12px]"></td>
                     <td rv-text="wd.feeRaw"    class="px-md py-3 font-mono-data text-on-surface-variant text-right text-[12px]"></td>
@@ -293,8 +310,17 @@ const template = `
             <div rv-hide="withdrawalsEmpty" class="lg:hidden divide-y divide-white/5">
               <div rv-each-wd="withdrawals" class="px-md py-3">
                 <div class="flex items-start justify-between mb-xs">
-                  <span rv-text="wd.toAddressShort" class="font-mono-data text-on-surface text-[12px]"></span>
-                  <span rv-text="wd.statusLabel" rv-attr-class="wd.statusBadgeClass"></span>
+                  <button rv-on-click="wd.toggleAddress" class="text-left mr-sm">
+                    <span rv-hide="wd.showFullAddress" class="font-mono-data text-on-surface text-[12px] underline decoration-dashed decoration-white/30" rv-text="wd.toAddressShort"></span>
+                    <span rv-show="wd.showFullAddress" class="font-mono-data text-on-surface text-[11px] break-all block" rv-text="wd.toAddress"></span>
+                  </button>
+                  <div class="flex flex-col items-end gap-[2px]">
+                    <span rv-text="wd.statusLabel" rv-attr-class="wd.statusBadgeClass"></span>
+                    <div rv-show="wd.isFailed" class="flex items-center gap-[3px] text-error/70 text-[10px] font-mono-data">
+                      <span class="material-symbols-outlined text-[11px]">report</span>
+                      <span rv-text="wd.errorCode"></span>
+                    </div>
+                  </div>
                 </div>
                 <div class="flex gap-md mt-xs text-[11px]">
                   <span class="text-on-surface-variant">Amount: <span rv-text="wd.amountRaw" class="font-mono-data text-on-surface"></span> sats</span>
