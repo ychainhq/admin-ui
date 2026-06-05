@@ -1,12 +1,12 @@
-const SESSION_KEY = 'chain_api_active_tenant';
+const STORAGE_KEY = 'chain_api_active_tenant';
 
 export function setActiveTenant(id, name) {
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ id, name }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ id, name }));
 }
 
 export function getActiveTenant() {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -14,5 +14,5 @@ export function getActiveTenant() {
 }
 
 export function clearActiveTenant() {
-  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(STORAGE_KEY);
 }

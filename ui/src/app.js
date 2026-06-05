@@ -1,5 +1,6 @@
 import { createRouter } from './router.js';
 import { api } from './api.js';
+import { getActiveTenant, clearActiveTenant } from './activeTenant.js';
 import { TenantListView } from './views/TenantListView.js';
 import { TenantConfigView } from './views/TenantConfigView.js';
 import { TenantCreateView } from './views/TenantCreateView.js';
@@ -55,4 +56,14 @@ router
   .on('/nodes/:nodeId', (params) => NodeDetailView.mount(appEl(), params, deps))
   .on('/audit-logs', (params) => AuditLogsView.mount(appEl(), params, deps));
 
-router.start();
+(async () => {
+  const tenant = getActiveTenant();
+  if (tenant) {
+    try {
+      await api.switchTenant(tenant.id);
+    } catch {
+      clearActiveTenant();
+    }
+  }
+  router.start();
+})();
