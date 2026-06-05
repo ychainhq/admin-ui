@@ -65,8 +65,8 @@ x-engine-common: &engine-common
     CLUSTER_ENABLED: "true"
     WORKERS_ENABLED: "true"
     DEPOSIT_MONITOR_INTERVAL_MS: "30000"
-    BTC_DEFAULT_CONFIRMATIONS: "1"
-    BTC_FINALITY_CONFIRMATIONS: "6"
+    BTC_DEFAULT_CONFIRMATIONS: "5"
+    BTC_FINALITY_CONFIRMATIONS: "8"
     LOG_LEVEL: info
     # Chain node RPC passwords — referenced by chain_nodes table via env:VAR_NAME
     BTC_NODE_1_RPC_PASSWORD: bitcoin

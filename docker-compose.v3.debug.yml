@@ -1,20 +1,17 @@
-# docker-compose.v3.debug.yml — debug overlay for ./start.sh --v3 --debug
+# docker-compose.v3.debug.yml — debug overlay for ./start.sh --debug
 #
 # Applied automatically on top of docker-compose.v3.yml when --debug is passed.
 # Do NOT use directly — start.sh handles compose file merging.
 #
-# What this adds:
-#   engine-1: NODE_OPTIONS=--inspect=0.0.0.0:9229 + port 9229:9229
-#   engine-2: NODE_OPTIONS=--inspect=0.0.0.0:9232 + port 9232:9232
+# What this adds (NODE_OPTIONS=--inspect + port exposure):
+#   engine-1:          port 9229 → "Attach: Engine-1 (Docker)"
+#   engine-2:          port 9232 → "Attach: Engine-2 (Docker)"
+#   signer-oss:        port 9230 → "Attach: OSS Signer (Docker)"     (only with --signer oss|both)
+#   signer-enterprise: port 9231 → "Attach: Enterprise Signer (Docker)" (only with --signer enterprise|both)
+#   btc-indexer-1:     port 9233 → "Attach: btc-indexer-1 (Docker)"
+#   btc-indexer-2:     port 9234 → "Attach: btc-indexer-2 (Docker)"
 #
-# Port assignments (v3 debug mode):
-#   9229 — engine-1 inspector  → "Attach: Engine-1 (v3 Docker)"
-#   9232 — engine-2 inspector  → "Attach: Engine-2 (v3 Docker)"
-#   9230 — signer-oss (local)  → "Attach: OSS Signer"
-#   9231 — signer-ent (local)  → "Attach: Enterprise Signer"
-#
-# Note: engine-2 uses port 9232 (not 9230) to avoid conflict with signer-oss
-# which also runs locally on 9230.
+# Note: engine-2 uses 9232 to avoid conflict with signer-oss on 9230.
 
 services:
   engine-1:
@@ -30,3 +27,27 @@ services:
       NODE_OPTIONS: "--inspect=0.0.0.0:9232"
     ports:
       - "9232:9232"     # host:container — attach from localhost:9232 in VSCode
+
+  signer-oss:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9230"
+    ports:
+      - "9230:9230"
+
+  signer-enterprise:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9231"
+    ports:
+      - "9231:9231"
+
+  btc-indexer-1:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9233"
+    ports:
+      - "9233:9233"
+
+  btc-indexer-2:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9234"
+    ports:
+      - "9234:9234"
