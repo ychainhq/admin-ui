@@ -33,6 +33,7 @@
 #   engine-1:       http://localhost:3000
 #   engine-2:       http://localhost:3001
 #   nginx LB:       http://localhost:3009  (stable endpoint for clients/signers)
+#   Vault dev:      http://localhost:8200  (enterprise signer only; token: dev-root-token)
 #   btc-node-1 RPC: http://localhost:18443
 #   btc-node-2 RPC: http://localhost:18453
 #   PostgreSQL:     localhost:5433  (user: chainapi, db: chainapi)
@@ -59,9 +60,22 @@ UI_ENV="$SCRIPT_DIR/.env"
 ENGINE_ENV="$ENGINE_DIR/.env"
 MINING_WALLET="btcminer"
 
-# Stable fingerprints for signer enrollment
+# Stable/dev fingerprints for signer enrollment. Enterprise is replaced at runtime
+# with the fingerprint derived from Vault Transit public key.
 SIGNER_OSS_FINGERPRINT="btc:regtest:dev_oss"
 SIGNER_ENT_FINGERPRINT="btc:regtest:dev_enterprise"
+SIGNER_ENT_HD_FINGERPRINT="btc_hd:regtest:dev_enterprise_hd"
+SIGNER_ENT_RESPONSE_KEY_HEX=""
+
+# Enterprise Vault dev constants
+VAULT_DEV_ROOT_TOKEN="dev-root-token"
+VAULT_DEV_SIGNER_TOKEN="dev-signer-token"
+VAULT_TRANSIT_BTC_KEY="btc-hot-wallet"
+VAULT_TRANSIT_EVM_KEY="evm-wallet"
+VAULT_KV_SIGNER_PATH="chain-api/signer/dev-enterprise"
+VAULT_SECRET_PATH="secret/data/${VAULT_KV_SIGNER_PATH}"
+VAULT_KV_SWEEP_XPRV_PATH="btc-sweep-xprv"
+VAULT_KV_POLICY_PATH="policy"
 
 # Debug ports (Docker containers for engines, local for signers)
 ENGINE1_DOCKER_DEBUG_PORT=9229
@@ -125,6 +139,13 @@ BTC1() {
 BTC2() {
   $V3_COMPOSE_CMD exec -T btc-node-2 \
     bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin "$@"
+}
+
+VAULT() {
+  $V3_COMPOSE_CMD exec -T \
+    -e VAULT_ADDR=http://127.0.0.1:8200 \
+    -e VAULT_TOKEN="$VAULT_DEV_ROOT_TOKEN" \
+    vault vault "$@"
 }
 
 # ─── .env helpers ─────────────────────────────────────────────────────────────
@@ -588,6 +609,166 @@ step_derive_wif() {
     " 2>/dev/null
   ) || die "WIF derivation failed"
   ok "Hot-wallet WIF derived"
+
+  SIGNER_ENT_HD_FINGERPRINT=$(
+    cd "$ENGINE_DIR" && BTC_DEV_XPRV="$xprv" node --no-warnings -e "
+      const { BIP32Factory } = require('bip32');
+      const ecc = require('tiny-secp256k1');
+      const bitcoin = require('bitcoinjs-lib');
+      const bip32 = BIP32Factory(ecc);
+      const node = bip32.fromBase58(process.env.BTC_DEV_XPRV, bitcoin.networks.regtest);
+      process.stdout.write('btc_hd:regtest:' + Buffer.from(node.fingerprint).toString('hex') + '\n');
+    " 2>/dev/null
+  ) || die "HD fingerprint derivation failed"
+}
+
+derive_vault_btc_fingerprint() {
+  node --no-warnings -e "
+    const crypto = require('crypto');
+    const chunks = [];
+    process.stdin.on('data', c => chunks.push(c));
+    process.stdin.on('end', () => {
+      const doc = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      const keys = doc.data && doc.data.keys ? doc.data.keys : {};
+      const latest = Object.keys(keys).map(Number).sort((a, b) => b - a)[0];
+      const publicKey = latest ? keys[String(latest)].public_key : '';
+      if (!publicKey) throw new Error('Vault Transit key has no public key');
+      let keyObject;
+      if (publicKey.includes('BEGIN PUBLIC KEY')) {
+        keyObject = crypto.createPublicKey(publicKey);
+      } else {
+        keyObject = crypto.createPublicKey({ key: Buffer.from(publicKey, 'base64'), format: 'der', type: 'spki' });
+      }
+      const jwk = keyObject.export({ format: 'jwk' });
+      const x = Buffer.from(jwk.x, 'base64url');
+      const y = Buffer.from(jwk.y, 'base64url');
+      const prefix = (y[y.length - 1] & 1) ? 0x03 : 0x02;
+      const compressed = Buffer.concat([Buffer.from([prefix]), x]);
+      const sha = crypto.createHash('sha256').update(compressed).digest();
+      const h160 = crypto.createHash('ripemd160').update(sha).digest();
+      process.stdout.write('btc:regtest:' + h160.subarray(0, 4).toString('hex') + '\n');
+    });
+  "
+}
+
+derive_vault_btc_address() {
+  node --no-warnings -e "
+    const crypto = require('crypto');
+    const bitcoin = require('bitcoinjs-lib');
+    const chunks = [];
+    process.stdin.on('data', c => chunks.push(c));
+    process.stdin.on('end', () => {
+      const doc = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      const keys = doc.data && doc.data.keys ? doc.data.keys : {};
+      const latest = Object.keys(keys).map(Number).sort((a, b) => b - a)[0];
+      const publicKey = latest ? keys[String(latest)].public_key : '';
+      if (!publicKey) throw new Error('Vault Transit key has no public key');
+      let keyObject;
+      if (publicKey.includes('BEGIN PUBLIC KEY')) {
+        keyObject = crypto.createPublicKey(publicKey);
+      } else {
+        keyObject = crypto.createPublicKey({ key: Buffer.from(publicKey, 'base64'), format: 'der', type: 'spki' });
+      }
+      const jwk = keyObject.export({ format: 'jwk' });
+      const x = Buffer.from(jwk.x, 'base64url');
+      const y = Buffer.from(jwk.y, 'base64url');
+      const prefix = (y[y.length - 1] & 1) ? 0x03 : 0x02;
+      const compressed = Buffer.concat([Buffer.from([prefix]), x]);
+      process.stdout.write(bitcoin.payments.p2wpkh({ pubkey: compressed, network: bitcoin.networks.regtest }).address + '\n');
+    });
+  "
+}
+
+step_enterprise_vault() {
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] || return
+
+  header "Step — Initialize Vault for Enterprise signer"
+  [ -n "${ACCOUNT_XPRV:-}" ] || die "ACCOUNT_XPRV missing — step_derive_wif must run first"
+
+  if [ ! -f "$SIGNER_ENT_DIR/.env" ]; then
+    cat > "$SIGNER_ENT_DIR/.env" <<'EOF'
+# Placeholder created by btc-test-ui/start.sh so Docker Compose can start Vault
+# before the enterprise signer .env is generated from enrollment.
+SIGNER_PORT=3102
+SIGNER_BIND_HOST=0.0.0.0
+EOF
+  fi
+
+  info "Starting Vault dev server..."
+  $V3_COMPOSE_CMD --profile signer-enterprise up -d vault
+
+  info "Waiting for Vault..."
+  local tries=0
+  until curl -sf "http://localhost:8200/v1/sys/health" > /dev/null 2>&1; do
+    printf "."
+    sleep 2
+    tries=$((tries+1))
+    [ "$tries" -le 30 ] || die "Vault did not become ready after 60s"
+  done
+  echo " OK"
+  ok "Vault ready → http://localhost:8200 (token: $VAULT_DEV_ROOT_TOKEN)"
+
+  info "Enabling Transit + KV v2..."
+  VAULT secrets enable transit >/dev/null 2>&1 || true
+  VAULT secrets enable -path=secret kv-v2 >/dev/null 2>&1 || true
+
+  info "Ensuring Transit keys..."
+  VAULT read "transit/keys/${VAULT_TRANSIT_BTC_KEY}" >/dev/null 2>&1 || \
+    VAULT write "transit/keys/${VAULT_TRANSIT_BTC_KEY}" type=secp256k1 >/dev/null
+  VAULT read "transit/keys/${VAULT_TRANSIT_EVM_KEY}" >/dev/null 2>&1 || \
+    VAULT write "transit/keys/${VAULT_TRANSIT_EVM_KEY}" type=ecdsa-p256 >/dev/null
+
+  info "Writing sweep xprv to Vault KV v2 without exposing it as a process argument..."
+  printf '%s' "$ACCOUNT_XPRV" | $V3_COMPOSE_CMD exec -T vault sh -c \
+    'cat > /tmp/chainapi-btc-sweep-xprv && chmod 600 /tmp/chainapi-btc-sweep-xprv'
+  VAULT kv put "secret/${VAULT_KV_SIGNER_PATH}/${VAULT_KV_SWEEP_XPRV_PATH}" \
+    "xprv=@/tmp/chainapi-btc-sweep-xprv" >/dev/null
+  $V3_COMPOSE_CMD exec -T vault rm -f /tmp/chainapi-btc-sweep-xprv >/dev/null 2>&1 || true
+
+  info "Writing open dev signing policy to Vault KV v2..."
+  VAULT kv put "secret/${VAULT_KV_SIGNER_PATH}/${VAULT_KV_POLICY_PATH}" \
+    allowlistMode=open \
+    maxDailyAmountRaw=100000000000 \
+    maxSignaturesPerDay=10000 \
+    policyVersion=btc-test-ui-dev >/dev/null
+
+  info "Writing signer Vault policy + token..."
+  VAULT policy write chain-api-signer-dev - >/dev/null <<EOF
+path "transit/sign/${VAULT_TRANSIT_BTC_KEY}" { capabilities = ["update"] }
+path "transit/sign/${VAULT_TRANSIT_EVM_KEY}" { capabilities = ["update"] }
+path "transit/keys/${VAULT_TRANSIT_BTC_KEY}" { capabilities = ["read"] }
+path "transit/keys/${VAULT_TRANSIT_EVM_KEY}" { capabilities = ["read"] }
+path "secret/data/${VAULT_KV_SIGNER_PATH}/*" { capabilities = ["read"] }
+EOF
+  VAULT token lookup "$VAULT_DEV_SIGNER_TOKEN" >/dev/null 2>&1 || \
+    VAULT token create -policy=chain-api-signer-dev -id="$VAULT_DEV_SIGNER_TOKEN" -period=768h >/dev/null
+
+  local transit_json vault_addr
+  transit_json=$(VAULT read -format=json "transit/keys/${VAULT_TRANSIT_BTC_KEY}") || die "Cannot read Vault Transit BTC key"
+  SIGNER_ENT_FINGERPRINT=$(printf '%s' "$transit_json" | derive_vault_btc_fingerprint) || die "Cannot derive Vault Transit fingerprint"
+  vault_addr=$(cd "$ENGINE_DIR" && printf '%s' "$transit_json" | derive_vault_btc_address) || die "Cannot derive Vault Transit address"
+
+  SIGNER_ENT_RESPONSE_KEY_HEX=$(env_get "$SIGNER_ENT_DIR/.env" "SIGNER_RESPONSE_SIGNING_KEY_HEX")
+  if [ -z "$SIGNER_ENT_RESPONSE_KEY_HEX" ]; then
+    SIGNER_ENT_RESPONSE_KEY_HEX=$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")
+  fi
+
+  local admin_key
+  admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+  if [ -n "$admin_key" ]; then
+    info "Pointing tenant_default hot wallet at Vault Transit address..."
+    curl -sf -X PATCH "http://localhost:3009/admin/v1/tenants/tenant_default/config" \
+      -H "X-Admin-Key: $admin_key" \
+      -H "Content-Type: application/json" \
+      -d "{\"btcHotAddress\":\"${vault_addr}\"}" >/dev/null \
+      && ok "tenant_default hot wallet updated for Vault Transit" \
+      || warn "Could not update tenant hot wallet; withdrawal PSBTs may still target the seed-derived dev key"
+  fi
+
+  ok "Vault Transit BTC key ready"
+  detail "SIGNER_FINGERPRINT=${SIGNER_ENT_FINGERPRINT}"
+  detail "Vault hot wallet address=${vault_addr}"
+  detail "KV path=${VAULT_SECRET_PATH}"
 }
 
 # ─── Enroll signers ────────────────────────────────────────────────────────────
@@ -605,8 +786,11 @@ step_enroll_signers() {
     [ -d "$signer_dir" ] || die "$name directory not found: $signer_dir"
     info "Enrolling '$name' via nginx → shared DB..."
     local body result signer_id
-    body=$(printf '{"name":"%s","signerFingerprint":"%s","publicKey":"ed25519:devpubkey:%s","capabilities":{"chains":["bitcoin"],"assets":["bitcoin:BTC"],"formats":["btc_psbt"]},"edition":"%s","connectivityMode":"polling","keyProvider":"env"}' \
-      "$name" "$fingerprint" "$edition" "$edition")
+    local key_provider
+    key_provider="env"
+    [ "$edition" = "enterprise" ] && key_provider="vault"
+    body=$(printf '{"name":"%s","signerFingerprint":"%s","publicKey":"ed25519:devpubkey:%s","capabilities":{"chains":["bitcoin"],"assets":["bitcoin:BTC"],"formats":["btc_psbt"]},"edition":"%s","connectivityMode":"polling","keyProvider":"%s"}' \
+      "$name" "$fingerprint" "$edition" "$edition" "$key_provider")
     result=$(curl -sf -X POST "${base}/v1/external-signers/enroll" \
       -H "Authorization: Bearer $api_key" \
       -H "Content-Type: application/json" \
@@ -650,6 +834,8 @@ EOF
     else
       cat > "$signer_dir/.env" <<EOF
 # chain-api Enterprise Signer — auto-generated by start.sh (regtest dev)
+# BTC withdrawal signing: Vault Transit (${VAULT_TRANSIT_BTC_KEY})
+# BTC sweep signing: Vault KV v2 (${VAULT_SECRET_PATH}/${VAULT_KV_SWEEP_XPRV_PATH})
 CHAIN_API_BASE_URL=http://localhost:3009
 CHAIN_API_FALLBACK_URLS=
 SIGNER_API_KEY=${api_key}
@@ -657,19 +843,34 @@ SIGNER_ID=${signer_id}
 TENANT_ID=tenant_default
 SIGNER_NAME=${name}
 SIGNER_FINGERPRINT=${fingerprint}
+SIGNER_FINGERPRINT_HD=${SIGNER_ENT_HD_FINGERPRINT}
 SIGNER_PUBLIC_KEY=ed25519:devpubkey:enterprise:regtest
-KEY_PROVIDER=env
-BTC_DEV_PRIVATE_KEY_WIF=${HOT_WALLET_WIF}
-BTC_DEV_ACCOUNT_XPRV=${ACCOUNT_XPRV}
+KEY_PROVIDER=hashicorp_vault_transit
+VAULT_ADDR=http://vault:8200
+VAULT_AUTH_METHOD=token
+VAULT_TOKEN=${VAULT_DEV_SIGNER_TOKEN}
+VAULT_TRANSIT_BTC_KEY=${VAULT_TRANSIT_BTC_KEY}
+VAULT_TRANSIT_EVM_KEY=${VAULT_TRANSIT_EVM_KEY}
+VAULT_SECRET_PATH=${VAULT_SECRET_PATH}
+VAULT_KV_SWEEP_XPRV_PATH=${VAULT_KV_SWEEP_XPRV_PATH}
+VAULT_KV_POLICY_PATH=${VAULT_KV_POLICY_PATH}
+VAULT_SECRET_CACHE_TTL_MS=60000
 BTC_NETWORK=regtest
 POLL_INTERVAL_MS=1000
 TASK_BATCH_SIZE=20
 SIGNER_CONCURRENCY=4
-CONFIG_PROVIDER=env
+CONFIG_PROVIDER=vault
 TRANSPORT_SECURITY=https
 SIGNER_PORT=${port}
 SIGNER_BIND_HOST=0.0.0.0
 AUDIT_SINK=stdout
+SIEM_PROVIDER=none
+AUDIT_CHAIN_ENABLED=true
+AUDIT_CHAIN_FILE=./data/audit-chain.jsonl
+SIGNER_RESPONSE_SIGNING_KEY_HEX=${SIGNER_ENT_RESPONSE_KEY_HEX}
+SUPPORTED_CHAINS=bitcoin
+SUPPORTED_ASSETS=bitcoin:BTC
+SUPPORTED_FORMATS=btc_psbt
 EOF
     fi
     ok ".env written → $signer_dir/.env  (CHAIN_API_BASE_URL=http://localhost:3009)"
@@ -712,6 +913,8 @@ step_signers_docker() {
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
     ok "signer-enterprise container started → localhost:3102"
+    detail "Vault: http://vault:8200 (container) = http://localhost:8200 (host)"
+    detail "Key provider: hashicorp_vault_transit"
   fi
   detail "Signer .env → CHAIN_API_BASE_URL=http://localhost:3009 (overridden to nginx in container)"
 }
@@ -792,6 +995,8 @@ step_status() {
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
     echo -e "  ${C_GREEN}signer-ent${C_RESET}        →  http://localhost:3102  (Docker, polls nginx:3009)"
+    detail "Enterprise signer uses Vault Transit/KV → http://localhost:8200 (token: dev-root-token)"
+    detail "SIGNER_FINGERPRINT=${SIGNER_ENT_FINGERPRINT}"
   fi
   echo ""
   echo -e "  ${C_BOLD}── Useful commands ─────────────────────────────────────${C_RESET}"
@@ -820,7 +1025,7 @@ step_status() {
   echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f engine-1 engine-2 nginx"
   echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f btc-indexer-1 btc-indexer-2"
   [[ "$SIGNER_MODE" != "none" ]] && \
-    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise"
+    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise vault"
   echo ""
   echo -e "  ${C_YELLOW}Stop:  ./start.sh stop${C_RESET}"
   echo -e "  ${C_YELLOW}Reset: ./start.sh reset${C_RESET}"
@@ -832,7 +1037,7 @@ step_tail() {
   trap "cmd_stop; exit 0" INT TERM
   local services="engine-1 engine-2 btc-indexer-1 btc-indexer-2 nginx"
   [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && services="$services signer-oss"
-  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && services="$services signer-enterprise"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && services="$services vault signer-enterprise"
   info "Tailing logs: $services (Ctrl+C to stop all)..."
   $V3_COMPOSE_CMD logs -f $services &
   wait
@@ -861,6 +1066,7 @@ case "$CMD" in
     step_nginx_ui
     if [[ "$SIGNER_MODE" != "none" ]]; then
       step_derive_wif
+      step_enterprise_vault
       step_enroll_signers
       step_signers_docker
     fi
@@ -882,6 +1088,7 @@ case "$CMD" in
     step_nginx_ui
     if [[ "$SIGNER_MODE" != "none" ]]; then
       step_derive_wif
+      step_enterprise_vault
       step_enroll_signers
       step_signers_docker
     fi

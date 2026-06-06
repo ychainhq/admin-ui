@@ -303,6 +303,28 @@ services:
       nginx:
         condition: service_healthy
 
+  # ── Vault dev server for Enterprise signer (profile: signer-enterprise) ───
+  # Dev-only: root token is fixed and security is intentionally relaxed.
+  vault:
+    image: hashicorp/vault:1.16
+    container_name: chainapi-vault
+    profiles: [signer-enterprise, signer-all]
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    command: server -dev -dev-root-token-id=dev-root-token
+    environment:
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: http://127.0.0.1:8200
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
   # ── Signer: OSS (profile: signer-oss) ────────────────────────────────────
   # Start with: docker compose -f docker-compose.v3.yml --profile signer-oss up -d
   # Or via start.sh: ./start.sh --v3 --signer oss
@@ -347,8 +369,12 @@ services:
       SIGNER_BIND_HOST: "0.0.0.0"
     ports:
       - "${SIGNER_ENT_PORT:-3102}:${SIGNER_ENT_PORT:-3102}"
+    volumes:
+      - signer_enterprise_data:/app/data
     depends_on:
       nginx:
+        condition: service_healthy
+      vault:
         condition: service_healthy
 
 volumes:
@@ -356,3 +382,4 @@ volumes:
   btc_node_1:
   btc_node_2:
   signer_oss_data:
+  signer_enterprise_data:
