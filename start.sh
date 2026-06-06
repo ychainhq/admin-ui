@@ -34,6 +34,8 @@
 #   engine-2:       http://localhost:3001
 #   nginx LB:       http://localhost:3009  (stable endpoint for clients/signers)
 #   Vault dev:      http://localhost:8200  (enterprise signer only; token: dev-root-token)
+#   Elastic SIEM:   http://localhost:9200  (enterprise signer audit indices)
+#   Kibana:         http://localhost:5601  (browse signer audit events)
 #   btc-node-1 RPC: http://localhost:18443
 #   btc-node-2 RPC: http://localhost:18453
 #   PostgreSQL:     localhost:5433  (user: chainapi, db: chainapi)
@@ -76,6 +78,13 @@ VAULT_KV_SIGNER_PATH="chain-api/signer/dev-enterprise"
 VAULT_SECRET_PATH="secret/data/${VAULT_KV_SIGNER_PATH}"
 VAULT_KV_SWEEP_XPRV_PATH="btc-sweep-xprv"
 VAULT_KV_POLICY_PATH="policy"
+
+# Enterprise SIEM dev constants. Elastic is the implemented SIEM sink.
+SIEM_PROVIDER="elastic"
+ELASTIC_URL_INTERNAL="http://elasticsearch:9200"
+ELASTIC_URL_HOST="http://localhost:9200"
+KIBANA_URL_HOST="http://localhost:5601"
+ELASTIC_INDEX_PREFIX="chain-api-signer"
 
 # Debug ports (Docker containers for engines, local for signers)
 ENGINE1_DOCKER_DEBUG_PORT=9229
@@ -771,6 +780,50 @@ EOF
   detail "KV path=${VAULT_SECRET_PATH}"
 }
 
+step_enterprise_siem() {
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] || return
+
+  header "Step — Start Enterprise SIEM (Elastic)"
+
+  info "Starting Elasticsearch + Kibana..."
+  $V3_COMPOSE_CMD --profile signer-enterprise up -d elasticsearch kibana
+
+  info "Waiting for Elasticsearch..."
+  local tries=0
+  until curl -sf "${ELASTIC_URL_HOST}/_cluster/health" > /dev/null 2>&1; do
+    printf "."
+    sleep 2
+    tries=$((tries+1))
+    [ "$tries" -le 45 ] || die "Elasticsearch did not become ready after 90s"
+  done
+  echo " OK"
+  ok "Elasticsearch ready → ${ELASTIC_URL_HOST}"
+
+  info "Waiting for Kibana (optional data-view setup)..."
+  tries=0
+  until curl -sf "${KIBANA_URL_HOST}/api/status" > /dev/null 2>&1; do
+    printf "."
+    sleep 2
+    tries=$((tries+1))
+    if [ "$tries" -ge 45 ]; then
+      echo ""
+      warn "Kibana did not become ready after 90s; SIEM data still goes to Elasticsearch"
+      return
+    fi
+  done
+  echo " OK"
+  ok "Kibana ready → ${KIBANA_URL_HOST}"
+
+  info "Ensuring Kibana data view for ${ELASTIC_INDEX_PREFIX}-*..."
+  curl -sf -X POST "${KIBANA_URL_HOST}/api/data_views/data_view" \
+    -H "kbn-xsrf: true" \
+    -H "Content-Type: application/json" \
+    -d "{\"data_view\":{\"title\":\"${ELASTIC_INDEX_PREFIX}-*\",\"name\":\"chain-api signer audit\",\"timeFieldName\":\"@timestamp\"}}" \
+    > /dev/null 2>&1 \
+    && ok "Kibana data view ready: ${ELASTIC_INDEX_PREFIX}-*" \
+    || warn "Kibana data view setup skipped/already exists; create ${ELASTIC_INDEX_PREFIX}-* manually if needed"
+}
+
 # ─── Enroll signers ────────────────────────────────────────────────────────────
 # Enrollment hits nginx (localhost:3009) → stored in shared PostgreSQL → visible
 # to both engine-1 and engine-2. Signer .env points to nginx, not a single engine.
@@ -863,8 +916,13 @@ CONFIG_PROVIDER=vault
 TRANSPORT_SECURITY=https
 SIGNER_PORT=${port}
 SIGNER_BIND_HOST=0.0.0.0
-AUDIT_SINK=stdout
-SIEM_PROVIDER=none
+AUDIT_SINK=siem
+SIEM_PROVIDER=${SIEM_PROVIDER}
+ELASTIC_URL=${ELASTIC_URL_INTERNAL}
+ELASTIC_INDEX_PREFIX=${ELASTIC_INDEX_PREFIX}
+ELASTIC_BATCH_SIZE=1
+ELASTIC_FLUSH_INTERVAL_MS=1000
+AUDIT_FALLBACK_FILE=./data/audit-fallback.jsonl
 AUDIT_CHAIN_ENABLED=true
 AUDIT_CHAIN_FILE=./data/audit-chain.jsonl
 SIGNER_RESPONSE_SIGNING_KEY_HEX=${SIGNER_ENT_RESPONSE_KEY_HEX}
@@ -915,6 +973,7 @@ step_signers_docker() {
     ok "signer-enterprise container started → localhost:3102"
     detail "Vault: http://vault:8200 (container) = http://localhost:8200 (host)"
     detail "Key provider: hashicorp_vault_transit"
+    detail "SIEM: ${SIEM_PROVIDER} → ${ELASTIC_URL_INTERNAL} (container) = ${ELASTIC_URL_HOST} (host)"
   fi
   detail "Signer .env → CHAIN_API_BASE_URL=http://localhost:3009 (overridden to nginx in container)"
 }
@@ -996,7 +1055,17 @@ step_status() {
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
     echo -e "  ${C_GREEN}signer-ent${C_RESET}        →  http://localhost:3102  (Docker, polls nginx:3009)"
     detail "Enterprise signer uses Vault Transit/KV → http://localhost:8200 (token: dev-root-token)"
+    detail "Enterprise signer audit sink: Elastic SIEM → http://localhost:9200"
+    detail "Browse audit events in Kibana → http://localhost:5601/app/discover"
+    detail "Data view/index pattern: ${ELASTIC_INDEX_PREFIX}-*"
     detail "SIGNER_FINGERPRINT=${SIGNER_ENT_FINGERPRINT}"
+  fi
+  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
+    echo ""
+    echo -e "  ${C_BOLD}── Enterprise SIEM ─────────────────────────────────────${C_RESET}"
+    echo -e "  ${C_GREEN}elasticsearch${C_RESET}    →  ${ELASTIC_URL_HOST}  (indices: ${ELASTIC_INDEX_PREFIX}-*)"
+    echo -e "  ${C_GREEN}kibana${C_RESET}           →  ${KIBANA_URL_HOST}/app/discover"
+    detail "Events appear after signer processes/rejects/signs tasks."
   fi
   echo ""
   echo -e "  ${C_BOLD}── Useful commands ─────────────────────────────────────${C_RESET}"
@@ -1021,11 +1090,18 @@ step_status() {
   echo -e "  ${C_CYAN}Signers (if enrolled):${C_RESET}"
   echo "    curl -s -H 'Authorization: Bearer $api_key' http://localhost:3009/v1/external-signers | python3 -m json.tool"
   echo ""
+  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
+    echo -e "  ${C_CYAN}Enterprise SIEM audit events:${C_RESET}"
+    echo "    open ${KIBANA_URL_HOST}/app/discover"
+    echo "    curl -s '${ELASTIC_URL_HOST}/${ELASTIC_INDEX_PREFIX}-*/_search?size=10&sort=@timestamp:desc' | python3 -m json.tool"
+    echo "    curl -s '${ELASTIC_URL_HOST}/_cat/indices/${ELASTIC_INDEX_PREFIX}-*?v'"
+    echo ""
+  fi
   echo -e "  ${C_CYAN}Logs:${C_RESET}"
   echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f engine-1 engine-2 nginx"
   echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f btc-indexer-1 btc-indexer-2"
   [[ "$SIGNER_MODE" != "none" ]] && \
-    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise vault"
+    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise vault elasticsearch kibana"
   echo ""
   echo -e "  ${C_YELLOW}Stop:  ./start.sh stop${C_RESET}"
   echo -e "  ${C_YELLOW}Reset: ./start.sh reset${C_RESET}"
@@ -1037,7 +1113,7 @@ step_tail() {
   trap "cmd_stop; exit 0" INT TERM
   local services="engine-1 engine-2 btc-indexer-1 btc-indexer-2 nginx"
   [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && services="$services signer-oss"
-  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && services="$services vault signer-enterprise"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && services="$services vault elasticsearch kibana signer-enterprise"
   info "Tailing logs: $services (Ctrl+C to stop all)..."
   $V3_COMPOSE_CMD logs -f $services &
   wait
@@ -1067,6 +1143,7 @@ case "$CMD" in
     if [[ "$SIGNER_MODE" != "none" ]]; then
       step_derive_wif
       step_enterprise_vault
+      step_enterprise_siem
       step_enroll_signers
       step_signers_docker
     fi
@@ -1089,6 +1166,7 @@ case "$CMD" in
     if [[ "$SIGNER_MODE" != "none" ]]; then
       step_derive_wif
       step_enterprise_vault
+      step_enterprise_siem
       step_enroll_signers
       step_signers_docker
     fi
@@ -1126,6 +1204,9 @@ case "$CMD" in
     echo "    Engine 1:      http://localhost:3000"
     echo "    Engine 2:      http://localhost:3001"
     echo "    nginx LB:      http://localhost:3009  (stable endpoint)"
+    echo "    Vault dev:     http://localhost:8200  (enterprise signer only)"
+    echo "    Elastic SIEM:  http://localhost:9200  (enterprise signer only)"
+    echo "    Kibana:        http://localhost:5601  (enterprise signer only)"
     echo "    BTC Node 1:    http://localhost:18443  (primary, mines)"
     echo "    BTC Node 2:    http://localhost:18453  (standby, syncs)"
     echo "    PostgreSQL:    localhost:5433  (chainapi/chainapi_dev)"
