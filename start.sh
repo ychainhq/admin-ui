@@ -76,8 +76,10 @@ VAULT_TRANSIT_BTC_KEY="btc-hot-wallet"
 VAULT_TRANSIT_EVM_KEY="evm-wallet"
 VAULT_KV_SIGNER_PATH="chain-api/signer/dev-enterprise"
 VAULT_SECRET_PATH="secret/data/${VAULT_KV_SIGNER_PATH}"
+VAULT_KV_HOT_WIF_PATH="btc-hot-wallet-wif"
 VAULT_KV_SWEEP_XPRV_PATH="btc-sweep-xprv"
 VAULT_KV_POLICY_PATH="policy"
+BTC_SIGNING_BACKEND="transit"
 
 # Enterprise SIEM dev constants. Elastic is the implemented SIEM sink.
 SIEM_PROVIDER="elastic"
@@ -160,6 +162,23 @@ VAULT() {
 # ─── .env helpers ─────────────────────────────────────────────────────────────
 env_get() {
   grep -E "^${2}=" "${1}" 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' \t' || true
+}
+
+env_get_dev_secret() {
+  local file="$1" key="$2" value
+  value=$(env_get "$file" "$key")
+  if [ -n "$value" ]; then
+    printf '%s' "$value"
+    return
+  fi
+
+  # Some checked-in/dev .env templates keep BTC_DEV_XPRV commented out.
+  # For the local btc-test-ui launcher this is still usable dev material, and
+  # normalizing it avoids forcing a full DB reset just to start the signer.
+  grep -E "^#[[:space:]]*${key}=" "$file" 2>/dev/null \
+    | head -1 \
+    | sed -E "s/^#[[:space:]]*${key}=//" \
+    | tr -d ' \t' || true
 }
 
 env_set() {
@@ -603,8 +622,14 @@ step_nginx_ui() {
 step_derive_wif() {
   header "Step — Derive signing key"
   local xprv
-  xprv=$(env_get "$ENGINE_ENV" "BTC_DEV_XPRV")
-  [ -n "$xprv" ] || die "BTC_DEV_XPRV not in engine/.env — try: ./start.sh reset --signer $SIGNER_MODE"
+  xprv=$(env_get_dev_secret "$ENGINE_ENV" "BTC_DEV_XPRV")
+  if [ -z "$xprv" ]; then
+    die "BTC_DEV_XPRV not in engine/.env. Run './start.sh reset --signer $SIGNER_MODE' or provide an uncommented BTC_DEV_XPRV dev seed."
+  fi
+  if ! grep -qE "^BTC_DEV_XPRV=" "$ENGINE_ENV" 2>/dev/null; then
+    env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$xprv"
+    ok "Recovered BTC_DEV_XPRV from commented dev entry in engine/.env"
+  fi
   ACCOUNT_XPRV="$xprv"
   info "Deriving hot-wallet WIF (account m/1/0)..."
   HOT_WALLET_WIF=$(
@@ -688,6 +713,32 @@ derive_vault_btc_address() {
   "
 }
 
+derive_wif_fingerprint() {
+  node --no-warnings -e "
+    const crypto = require('crypto');
+    const bitcoin = require('bitcoinjs-lib');
+    const ECPairFactory = require('ecpair').default || require('ecpair');
+    const ecc = require('tiny-secp256k1');
+    const ECPair = ECPairFactory(ecc);
+    const keyPair = ECPair.fromWIF(process.env.HOT_WALLET_WIF, bitcoin.networks.regtest);
+    const pubkey = Buffer.from(keyPair.publicKey);
+    const sha = crypto.createHash('sha256').update(pubkey).digest();
+    const h160 = crypto.createHash('ripemd160').update(sha).digest();
+    process.stdout.write('btc:regtest:' + h160.subarray(0, 4).toString('hex') + '\n');
+  "
+}
+
+derive_wif_address() {
+  node --no-warnings -e "
+    const bitcoin = require('bitcoinjs-lib');
+    const ECPairFactory = require('ecpair').default || require('ecpair');
+    const ecc = require('tiny-secp256k1');
+    const ECPair = ECPairFactory(ecc);
+    const keyPair = ECPair.fromWIF(process.env.HOT_WALLET_WIF, bitcoin.networks.regtest);
+    process.stdout.write(bitcoin.payments.p2wpkh({ pubkey: Buffer.from(keyPair.publicKey), network: bitcoin.networks.regtest }).address + '\n');
+  "
+}
+
 step_enterprise_vault() {
   [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] || return
 
@@ -719,23 +770,48 @@ EOF
 
   info "Enabling Transit + KV v2..."
   VAULT secrets enable transit >/dev/null 2>&1 || true
-  VAULT secrets enable -path=secret kv-v2 >/dev/null 2>&1 || true
+  local secret_kv_version
+  secret_kv_version=$(VAULT secrets list -format=json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('secret/', {}).get('options', {}).get('version', ''))" 2>/dev/null || true)
+  if [ "$secret_kv_version" != "2" ]; then
+    warn "Vault mount secret/ is not KV v2; recreating it for btc-test-ui dev secrets"
+    VAULT secrets disable secret >/dev/null 2>&1 || true
+    VAULT secrets enable -path=secret -version=2 kv >/dev/null
+  fi
 
   info "Ensuring Transit keys..."
-  VAULT read "transit/keys/${VAULT_TRANSIT_BTC_KEY}" >/dev/null 2>&1 || \
-    VAULT write "transit/keys/${VAULT_TRANSIT_BTC_KEY}" type=secp256k1 >/dev/null
+  if VAULT read "transit/keys/${VAULT_TRANSIT_BTC_KEY}" >/dev/null 2>&1; then
+    BTC_SIGNING_BACKEND="transit"
+  else
+    local transit_create_out
+    if transit_create_out=$(VAULT write "transit/keys/${VAULT_TRANSIT_BTC_KEY}" type=secp256k1 2>&1); then
+      BTC_SIGNING_BACKEND="transit"
+    else
+      BTC_SIGNING_BACKEND="kv_wif"
+      warn "Vault Transit secp256k1 unavailable; using Vault KV WIF fallback for BTC withdrawal signing"
+      detail "$(echo "$transit_create_out" | tail -1)"
+    fi
+  fi
   VAULT read "transit/keys/${VAULT_TRANSIT_EVM_KEY}" >/dev/null 2>&1 || \
     VAULT write "transit/keys/${VAULT_TRANSIT_EVM_KEY}" type=ecdsa-p256 >/dev/null
+
+  if [ "$BTC_SIGNING_BACKEND" = "kv_wif" ]; then
+    info "Writing hot-wallet WIF to Vault KV v2 fallback path..."
+    printf '%s' "$HOT_WALLET_WIF" | $V3_COMPOSE_CMD exec -T vault sh -c \
+      'cat > /tmp/chainapi-btc-hot-wallet-wif && chmod 600 /tmp/chainapi-btc-hot-wallet-wif'
+    VAULT kv put -mount=secret "${VAULT_KV_SIGNER_PATH}/${VAULT_KV_HOT_WIF_PATH}" \
+      "value=@/tmp/chainapi-btc-hot-wallet-wif" >/dev/null
+    $V3_COMPOSE_CMD exec -T vault rm -f /tmp/chainapi-btc-hot-wallet-wif >/dev/null 2>&1 || true
+  fi
 
   info "Writing sweep xprv to Vault KV v2 without exposing it as a process argument..."
   printf '%s' "$ACCOUNT_XPRV" | $V3_COMPOSE_CMD exec -T vault sh -c \
     'cat > /tmp/chainapi-btc-sweep-xprv && chmod 600 /tmp/chainapi-btc-sweep-xprv'
-  VAULT kv put "secret/${VAULT_KV_SIGNER_PATH}/${VAULT_KV_SWEEP_XPRV_PATH}" \
+  VAULT kv put -mount=secret "${VAULT_KV_SIGNER_PATH}/${VAULT_KV_SWEEP_XPRV_PATH}" \
     "xprv=@/tmp/chainapi-btc-sweep-xprv" >/dev/null
   $V3_COMPOSE_CMD exec -T vault rm -f /tmp/chainapi-btc-sweep-xprv >/dev/null 2>&1 || true
 
   info "Writing open dev signing policy to Vault KV v2..."
-  VAULT kv put "secret/${VAULT_KV_SIGNER_PATH}/${VAULT_KV_POLICY_PATH}" \
+  VAULT kv put -mount=secret "${VAULT_KV_SIGNER_PATH}/${VAULT_KV_POLICY_PATH}" \
     allowlistMode=open \
     maxDailyAmountRaw=100000000000 \
     maxSignaturesPerDay=10000 \
@@ -752,10 +828,15 @@ EOF
   VAULT token lookup "$VAULT_DEV_SIGNER_TOKEN" >/dev/null 2>&1 || \
     VAULT token create -policy=chain-api-signer-dev -id="$VAULT_DEV_SIGNER_TOKEN" -period=768h >/dev/null
 
-  local transit_json vault_addr
-  transit_json=$(VAULT read -format=json "transit/keys/${VAULT_TRANSIT_BTC_KEY}") || die "Cannot read Vault Transit BTC key"
-  SIGNER_ENT_FINGERPRINT=$(printf '%s' "$transit_json" | derive_vault_btc_fingerprint) || die "Cannot derive Vault Transit fingerprint"
-  vault_addr=$(cd "$ENGINE_DIR" && printf '%s' "$transit_json" | derive_vault_btc_address) || die "Cannot derive Vault Transit address"
+  local vault_addr transit_json
+  if [ "$BTC_SIGNING_BACKEND" = "transit" ]; then
+    transit_json=$(VAULT read -format=json "transit/keys/${VAULT_TRANSIT_BTC_KEY}") || die "Cannot read Vault Transit BTC key"
+    SIGNER_ENT_FINGERPRINT=$(printf '%s' "$transit_json" | derive_vault_btc_fingerprint) || die "Cannot derive Vault Transit fingerprint"
+    vault_addr=$(cd "$ENGINE_DIR" && printf '%s' "$transit_json" | derive_vault_btc_address) || die "Cannot derive Vault Transit address"
+  else
+    SIGNER_ENT_FINGERPRINT=$(cd "$SIGNER_ENT_DIR" && HOT_WALLET_WIF="$HOT_WALLET_WIF" derive_wif_fingerprint) || die "Cannot derive Vault KV WIF fingerprint"
+    vault_addr=$(cd "$SIGNER_ENT_DIR" && HOT_WALLET_WIF="$HOT_WALLET_WIF" derive_wif_address) || die "Cannot derive Vault KV WIF address"
+  fi
 
   SIGNER_ENT_RESPONSE_KEY_HEX=$(env_get "$SIGNER_ENT_DIR/.env" "SIGNER_RESPONSE_SIGNING_KEY_HEX")
   if [ -z "$SIGNER_ENT_RESPONSE_KEY_HEX" ]; then
@@ -775,9 +856,34 @@ EOF
   fi
 
   ok "Vault Transit BTC key ready"
+  detail "BTC signing backend=${BTC_SIGNING_BACKEND}"
   detail "SIGNER_FINGERPRINT=${SIGNER_ENT_FINGERPRINT}"
   detail "Vault hot wallet address=${vault_addr}"
   detail "KV path=${VAULT_SECRET_PATH}"
+}
+
+configure_elasticsearch_dev_settings() {
+  # Dev-only: Docker Desktop can sit above Elasticsearch's default 90% high
+  # watermark even when there is enough room for this test stack. If allocation
+  # is blocked, Kibana system indices stay unassigned and Kibana never becomes
+  # ready.
+  info "Applying Elasticsearch dev disk-allocation settings..."
+  if curl -sf -X PUT "${ELASTIC_URL_HOST}/_cluster/settings" \
+    -H "Content-Type: application/json" \
+    -d '{"persistent":{"cluster.routing.allocation.disk.threshold_enabled":false}}' \
+    > /dev/null; then
+    ok "Elasticsearch disk watermark checks disabled for this dev cluster"
+  else
+    warn "Could not update Elasticsearch disk settings; Kibana may wait on unassigned shards"
+    return
+  fi
+
+  curl -sf -X PUT "${ELASTIC_URL_HOST}/_all/_settings?expand_wildcards=all&allow_no_indices=true" \
+    -H "Content-Type: application/json" \
+    -d '{"index.blocks.read_only_allow_delete":null}' \
+    > /dev/null 2>&1 || true
+  curl -sf -X POST "${ELASTIC_URL_HOST}/_cluster/reroute?retry_failed=true" \
+    > /dev/null 2>&1 || true
 }
 
 step_enterprise_siem() {
@@ -785,8 +891,8 @@ step_enterprise_siem() {
 
   header "Step — Start Enterprise SIEM (Elastic)"
 
-  info "Starting Elasticsearch + Kibana..."
-  $V3_COMPOSE_CMD --profile signer-enterprise up -d elasticsearch kibana
+  info "Starting Elasticsearch..."
+  $V3_COMPOSE_CMD --profile signer-enterprise up -d elasticsearch
 
   info "Waiting for Elasticsearch..."
   local tries=0
@@ -799,15 +905,24 @@ step_enterprise_siem() {
   echo " OK"
   ok "Elasticsearch ready → ${ELASTIC_URL_HOST}"
 
+  configure_elasticsearch_dev_settings
+
+  info "Starting Kibana..."
+  $V3_COMPOSE_CMD --profile signer-enterprise up -d --force-recreate kibana
+
   info "Waiting for Kibana (optional data-view setup)..."
   tries=0
-  until curl -sf "${KIBANA_URL_HOST}/api/status" > /dev/null 2>&1; do
+  local kibana_status
+  while true; do
+    kibana_status=$(curl -sS -o /dev/null -w "%{http_code}" "${KIBANA_URL_HOST}/api/status" 2>/dev/null || true)
+    [ "$kibana_status" = "200" ] && break
     printf "."
     sleep 2
     tries=$((tries+1))
-    if [ "$tries" -ge 45 ]; then
+    if [ "$tries" -ge 90 ]; then
       echo ""
-      warn "Kibana did not become ready after 90s; SIEM data still goes to Elasticsearch"
+      warn "Kibana did not become ready after 180s; SIEM data still goes to Elasticsearch"
+      warn "Check: docker logs --tail 120 chainapi-kibana"
       return
     fi
   done
@@ -887,7 +1002,9 @@ EOF
     else
       cat > "$signer_dir/.env" <<EOF
 # chain-api Enterprise Signer — auto-generated by start.sh (regtest dev)
-# BTC withdrawal signing: Vault Transit (${VAULT_TRANSIT_BTC_KEY})
+# BTC withdrawal signing backend: ${BTC_SIGNING_BACKEND}
+#   transit = Vault Transit (${VAULT_TRANSIT_BTC_KEY})
+#   kv_wif  = Vault KV fallback (${VAULT_SECRET_PATH}/${VAULT_KV_HOT_WIF_PATH})
 # BTC sweep signing: Vault KV v2 (${VAULT_SECRET_PATH}/${VAULT_KV_SWEEP_XPRV_PATH})
 CHAIN_API_BASE_URL=http://localhost:3009
 CHAIN_API_FALLBACK_URLS=
@@ -905,6 +1022,7 @@ VAULT_TOKEN=${VAULT_DEV_SIGNER_TOKEN}
 VAULT_TRANSIT_BTC_KEY=${VAULT_TRANSIT_BTC_KEY}
 VAULT_TRANSIT_EVM_KEY=${VAULT_TRANSIT_EVM_KEY}
 VAULT_SECRET_PATH=${VAULT_SECRET_PATH}
+VAULT_KV_HOT_WIF_PATH=${VAULT_KV_HOT_WIF_PATH}
 VAULT_KV_SWEEP_XPRV_PATH=${VAULT_KV_SWEEP_XPRV_PATH}
 VAULT_KV_POLICY_PATH=${VAULT_KV_POLICY_PATH}
 VAULT_SECRET_CACHE_TTL_MS=60000
@@ -1101,7 +1219,9 @@ step_status() {
   echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f engine-1 engine-2 nginx"
   echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f btc-indexer-1 btc-indexer-2"
   [[ "$SIGNER_MODE" != "none" ]] && \
-    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise vault elasticsearch kibana"
+    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise vault"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
+    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f elasticsearch kibana   # SIEM debug only"
   echo ""
   echo -e "  ${C_YELLOW}Stop:  ./start.sh stop${C_RESET}"
   echo -e "  ${C_YELLOW}Reset: ./start.sh reset${C_RESET}"
@@ -1113,7 +1233,7 @@ step_tail() {
   trap "cmd_stop; exit 0" INT TERM
   local services="engine-1 engine-2 btc-indexer-1 btc-indexer-2 nginx"
   [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && services="$services signer-oss"
-  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && services="$services vault elasticsearch kibana signer-enterprise"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && services="$services vault signer-enterprise"
   info "Tailing logs: $services (Ctrl+C to stop all)..."
   $V3_COMPOSE_CMD logs -f $services &
   wait
