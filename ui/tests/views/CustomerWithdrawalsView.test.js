@@ -89,6 +89,38 @@ describe('CustomerWithdrawalsView — load', () => {
     expect(typeof firstArg).toBe('string');
   });
 
+  test('load() fetches confirmed BTC balance with customer session token', async () => {
+    const getCustomerBalances = jest.fn().mockResolvedValue({
+      balances: [{ asset_id: 'bitcoin:BTC', settled: '123456', pending: '999999' }],
+    });
+    const { ctrl } = makeCtrl({ getCustomerBalances });
+    await ctrl.load();
+    expect(getCustomerBalances).toHaveBeenCalledWith('tok_test');
+    expect(getCustomerBalances.mock.calls[0][0]).not.toBe(CUSTOMER_ID);
+  });
+
+  test('load() shows settled balance as confirmed sats and ignores pending', async () => {
+    const { ctrl } = makeCtrl({
+      getCustomerBalances: jest.fn().mockResolvedValue({
+        balances: [{ asset_id: 'bitcoin:BTC', settled: '123456', pending: '999999' }],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl.balance.confirmedSats).toBe('123456');
+    expect(ctrl.balance.confirmedSatsLabel).toBe('123456 sats');
+    expect(ctrl.balance.confirmedBtcLabel).toBe('0.00123456 BTC');
+  });
+
+  test('load() treats balance fetch failure as local balance error', async () => {
+    const { ctrl } = makeCtrl({
+      getCustomerBalances: jest.fn().mockRejectedValue(new Error('balance down')),
+    });
+    await ctrl.load();
+    expect(ctrl.error).toBeNull();
+    expect(ctrl.balance.error).toBe('Balance unavailable');
+    expect(ctrl.balance.confirmedSatsLabel).toBe('Unavailable');
+  });
+
   test('load() applies fee coverage from batch config', async () => {
     const { ctrl } = makeCtrl({
       getWithdrawalBatchConfig: jest.fn().mockResolvedValue({ withdrawal_fee_coverage: 'sender_pays' }),
@@ -318,6 +350,18 @@ describe('CustomerWithdrawalsView — form submit', () => {
     expect(ctrl.form.address).toBe('');
     expect(ctrl.form.amount).toBe('');
     expect(ctrl.form.note).toBe('');
+  });
+
+  test('submit refreshes confirmed balance after success', async () => {
+    const getCustomerBalances = jest.fn().mockResolvedValue({
+      balances: [{ asset_id: 'bitcoin:BTC', settled: '7000', pending: '100' }],
+    });
+    const { ctrl } = makeCtrl({ getCustomerBalances });
+    ctrl.form.address = 'bcrt1qtest';
+    ctrl.form.amount = '5000';
+    await ctrl.form.submit();
+    expect(getCustomerBalances).toHaveBeenCalledWith('tok_test');
+    expect(ctrl.balance.confirmedSatsLabel).toBe('7000 sats');
   });
 
   test('submit sets form.error on API failure', async () => {

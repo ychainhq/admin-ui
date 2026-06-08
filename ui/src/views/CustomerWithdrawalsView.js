@@ -9,6 +9,7 @@ import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { template as headerTpl, createCustomerDetailHeaderController } from '../components/CustomerDetailHeader.js';
 import { getActiveTenantKey } from '../api.js';
+import { getConfirmedBitcoinBalance } from '../balanceHelpers.js';
 
 const ROUTE = '/customers';
 const ACTIVE_TAB = 'withdrawals';
@@ -184,12 +185,22 @@ const template = `
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-sm">
                 <div>
                   <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Amount (satoshi)</label>
                   <input rv-on-input="form.onAmountInput"
                     class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
                     type="text" placeholder="90000" autocomplete="off" />
+                </div>
+                <div>
+                  <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Balance</label>
+                  <div class="w-full min-h-[38px] bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] flex items-center justify-between gap-xs">
+                    <span rv-show="balance.loading" class="text-on-surface-variant">Loading...</span>
+                    <span rv-hide="balance.loading" rv-text="balance.confirmedSatsLabel"></span>
+                    <span class="material-symbols-outlined text-on-surface-variant text-[15px] shrink-0">verified</span>
+                  </div>
+                  <p rv-hide="balance.loading" rv-text="balance.confirmedBtcLabel" class="font-mono-data text-[10px] text-on-surface-variant mt-xs"></p>
+                  <p rv-show="balance.error" rv-text="balance.error" class="font-body-sm text-[10px] text-error mt-xs"></p>
                 </div>
                 <div>
                   <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Note (optional)</label>
@@ -405,6 +416,14 @@ export function createController({ api, router, id }) {
       recipientAmount: '—',
     },
 
+    balance: {
+      loading: false,
+      error: null,
+      confirmedSats: null,
+      confirmedSatsLabel: 'Unavailable',
+      confirmedBtcLabel: '—',
+    },
+
     // Withdrawals list
     withdrawals:     [],
     withdrawalsEmpty: true,
@@ -537,8 +556,9 @@ export function createController({ api, router, id }) {
           self.form.isInternalAddress = false;
           self.form.preferExternal = false;
           self.feeEstimate.visible = false;
-          // Reload withdrawal list
+          // Reload withdrawal list and confirmed balance.
           self.loadWithdrawals();
+          await self.loadBalance(token);
         } catch (e) {
           self.form.error = e.message;
         } finally {
@@ -582,6 +602,35 @@ export function createController({ api, router, id }) {
     goToCustomers(e) { e?.preventDefault(); router.navigate('#/customers'); },
     goToCustomer(e) { e?.preventDefault(); router.navigate(`#/customers/${encodeURIComponent(id)}/profile`); },
     goToBatches(e) { e?.preventDefault(); router.navigate('#/withdrawal-batches'); },
+
+    _applyBalanceData(balancesData) {
+      const confirmed = getConfirmedBitcoinBalance(balancesData);
+      self.balance.confirmedSats = confirmed.confirmedSats;
+      self.balance.confirmedSatsLabel = confirmed.confirmedSatsLabel;
+      self.balance.confirmedBtcLabel = confirmed.confirmedBtcLabel;
+    },
+
+    async loadBalance(sessionToken) {
+      self.balance.loading = true;
+      self.balance.error = null;
+      try {
+        let token = sessionToken;
+        if (!token) {
+          const session = await api.createCustomerSession(id);
+          token = session.accessToken || session.token || session.sessionToken;
+        }
+        if (!token) throw new Error('No customer session token');
+        const balancesData = await api.getCustomerBalances(token);
+        self._applyBalanceData(balancesData);
+      } catch {
+        self.balance.confirmedSats = null;
+        self.balance.confirmedSatsLabel = 'Unavailable';
+        self.balance.confirmedBtcLabel = '—';
+        self.balance.error = 'Balance unavailable';
+      } finally {
+        self.balance.loading = false;
+      }
+    },
 
     async disableCustomer() {
       self.header.disableLoading = true;
@@ -636,22 +685,34 @@ export function createController({ api, router, id }) {
 
     async load() {
       self.loading = true;
+      self.balance.loading = true;
+      self.balance.error = null;
       self.error = null;
       try {
         const session = await api.createCustomerSession(id);
-        const sessionToken = session.accessToken || session.token;
-        const [customer, profileData, contactData] = await Promise.all([
+        const sessionToken = session.accessToken || session.token || session.sessionToken;
+        const [customer, balancesData, profileData, contactData] = await Promise.all([
           api.getCustomer(id),                                  // tenant API — admin record
+          api.getCustomerBalances(sessionToken).catch(() => null), // /customer/me/balances
           safeLoad(() => api.getMyProfile(sessionToken)),       // /customer/me/profile
           safeLoad(() => api.getMyContact(sessionToken)),       // /customer/me/contact
         ]);
         self.header.setCustomer(customer);
         self.header.setProfile(profileData);
         self.header.setContact(contactData);
+        if (balancesData) {
+          self._applyBalanceData(balancesData);
+        } else {
+          self.balance.confirmedSats = null;
+          self.balance.confirmedSatsLabel = 'Unavailable';
+          self.balance.confirmedBtcLabel = '—';
+          self.balance.error = 'Balance unavailable';
+        }
       } catch (e) {
         self.error = e.message;
       } finally {
         self.loading = false;
+        self.balance.loading = false;
       }
 
       // Load fee config and fees in parallel, non-blocking

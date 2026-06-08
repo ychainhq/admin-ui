@@ -7,37 +7,10 @@ import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { template as headerTpl, createCustomerDetailHeaderController } from '../components/CustomerDetailHeader.js';
 import { getActiveTenantKey } from '../api.js';
+import { extractBalanceList, normalizeBalance } from '../balanceHelpers.js';
 
 const ROUTE = '/customers';
 const ACTIVE_TAB = 'balances';
-
-function formatRawAmount(raw, assetId) {
-  if (raw === null || raw === undefined || raw === '') return '0';
-  const value = String(raw);
-  if (assetId === 'bitcoin:BTC') {
-    const sats = BigInt(value);
-    const sign = sats < 0n ? '-' : '';
-    const abs = sats < 0n ? -sats : sats;
-    const whole = abs / 100000000n;
-    const fraction = String(abs % 100000000n).padStart(8, '0');
-    return `${sign}${whole}.${fraction}`;
-  }
-  return value;
-}
-
-function normalizeBalance(raw) {
-  const assetId = raw.asset_id || raw.assetId || '';
-  const [chainFromAsset, assetFromAsset] = assetId.includes(':') ? assetId.split(':') : ['', ''];
-
-  return {
-    asset: raw.asset || assetFromAsset || '—',
-    chain: raw.chain || chainFromAsset || '—',
-    available: raw.available ?? formatRawAmount(raw.settled, assetId),
-    pending: raw.pending_display || raw.pendingDisplay || formatRawAmount(raw.pending, assetId),
-    hold: raw.hold ?? formatRawAmount(raw.hold_raw || raw.holdRaw || '0', assetId),
-    total: raw.total_display || raw.totalDisplay || formatRawAmount(raw.total, assetId),
-  };
-}
 
 async function safeLoad(fn) {
   try { return await fn(); }
@@ -248,7 +221,7 @@ export function createController({ api, router, id }) {
         self.header.setProfile(profileData);
         self.header.setContact(contactData);
 
-        const list = Array.isArray(balancesData) ? balancesData : (balancesData?.balances || []);
+        const list = extractBalanceList(balancesData);
         self.balances = list.map(normalizeBalance);
         self.balancesEmpty = self.balances.length === 0;
 
