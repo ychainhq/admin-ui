@@ -117,6 +117,7 @@ detail() { echo -e "     ${C_BLUE}$*${C_RESET}"; }
 CMD="start"
 SIGNER_MODE="none"
 DEBUG_MODE=false
+START_SCRIPT_NAME="${CHAINAPI_START_SCRIPT_NAME:-$(basename "$0")}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -140,11 +141,19 @@ done
 [[ "$ENTERPRISE_PROVIDER" =~ ^(vault|aws|azure|gcp)$ ]] || \
   die "Invalid --enterprise-provider value: '$ENTERPRISE_PROVIDER'. Use: vault, aws, azure, gcp"
 
-# Finalize V3_COMPOSE_CMD — add debug overlay when --debug
+# Finalize V3_COMPOSE_CMD — optional image overlay + debug overlay.
+V3_COMPOSE_CMD="docker compose -f $V3_COMPOSE"
+if [ -n "${CHAINAPI_COMPOSE_OVERLAY:-}" ]; then
+  [ -f "$CHAINAPI_COMPOSE_OVERLAY" ] || die "Compose overlay not found: $CHAINAPI_COMPOSE_OVERLAY"
+  V3_COMPOSE_CMD="$V3_COMPOSE_CMD -f $CHAINAPI_COMPOSE_OVERLAY"
+fi
 if [[ "$DEBUG_MODE" == "true" ]]; then
-  V3_COMPOSE_CMD="docker compose -f $V3_COMPOSE -f $V3_COMPOSE_DEBUG"
-else
-  V3_COMPOSE_CMD="docker compose -f $V3_COMPOSE"
+  V3_COMPOSE_CMD="$V3_COMPOSE_CMD -f $V3_COMPOSE_DEBUG"
+fi
+
+COMPOSE_UP_FLAGS="${CHAINAPI_COMPOSE_UP_FLAGS:-}"
+if [[ "${CHAINAPI_SKIP_LOCAL_BUILD:-false}" == "true" && -z "$COMPOSE_UP_FLAGS" ]]; then
+  COMPOSE_UP_FLAGS="--no-build --pull always"
 fi
 
 # ─── Bitcoin CLI wrappers ─────────────────────────────────────────────────────
@@ -210,7 +219,11 @@ cmd_reset() {
   echo -e "  ${C_YELLOW}This will destroy:${C_RESET}"
   echo    "    • PostgreSQL data volume"
   echo    "    • Both Bitcoin Core blockchain volumes (btc_node_1, btc_node_2)"
-  echo    "    • All Docker images (rebuild required)"
+  if [[ "${CHAINAPI_SKIP_LOCAL_BUILD:-false}" == "true" ]]; then
+    echo    "    • Local containers using Docker Hub images (images will be pulled again if missing)"
+  else
+    echo    "    • Local Docker build cache (images may be rebuilt)"
+  fi
   echo    "    • All unused Docker images, containers, networks, build cache"
   [[ "$SIGNER_MODE" != "none" ]] && \
     echo "    • Signer .env file(s)"
@@ -243,6 +256,14 @@ cmd_reset() {
 
 # ─── Step 1: Build Docker images ──────────────────────────────────────────────
 step_build() {
+  if [[ "${CHAINAPI_SKIP_LOCAL_BUILD:-false}" == "true" ]]; then
+    header "Step 1 — Pull Docker Hub images"
+    info "Pulling engine, btc-indexer, and ui images..."
+    $V3_COMPOSE_CMD pull engine-1 engine-2 btc-indexer-1 btc-indexer-2 ui
+    ok "Docker Hub images pulled"
+    return
+  fi
+
   header "Step 1 — Build Docker images"
   info "Building engine, btc-indexer, and ui images..."
   # reset uses --no-cache (guarantees fresh build after code changes, e.g. migrate.ts).
@@ -258,7 +279,7 @@ step_infra() {
   header "Step 2 — Start PostgreSQL + Bitcoin Core nodes"
 
   info "Starting postgres + btc-node-1 + btc-node-2..."
-  if ! $V3_COMPOSE_CMD up -d postgres btc-node-1 btc-node-2; then
+  if ! $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d postgres btc-node-1 btc-node-2; then
     echo ""
     err "Failed to start infrastructure containers."
     echo ""
@@ -460,7 +481,7 @@ step_engines() {
   info "Starting engine-1 (cluster leader candidate)..."
   # --force-recreate ensures the container is created from the freshly built image,
   # not restarted from a stale running container that predates our build.
-  $V3_COMPOSE_CMD up -d --force-recreate engine-1
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d --force-recreate engine-1
 
   info "Waiting for engine-1 /health..."
   local tries=0
@@ -486,7 +507,7 @@ step_engines() {
   fi
 
   info "Starting engine-2 (active-active standby)..."
-  $V3_COMPOSE_CMD up -d --force-recreate engine-2
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d --force-recreate engine-2
 
   info "Waiting for engine-2 /health..."
   tries=0
@@ -571,10 +592,10 @@ step_indexers() {
   header "Step 8 — Start btc-indexers"
 
   info "Starting btc-indexer-1 (watches btc-node-1)..."
-  $V3_COMPOSE_CMD up -d btc-indexer-1
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d btc-indexer-1
 
   info "Starting btc-indexer-2 (watches btc-node-2)..."
-  $V3_COMPOSE_CMD up -d btc-indexer-2
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d btc-indexer-2
 
   sleep 3
 
@@ -605,7 +626,7 @@ step_nginx_ui() {
   fi
 
   info "Starting nginx (engine-1 + engine-2 upstream → localhost:3009)..."
-  $V3_COMPOSE_CMD up -d nginx
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d nginx
   local tries=0
   until curl -sf "http://127.0.0.1:3009/nginx-health" > /dev/null 2>&1; do
     printf "."; sleep 2; tries=$((tries+1))
@@ -620,7 +641,7 @@ step_nginx_ui() {
   ok "nginx ready → http://localhost:3009  (routes to engine-1 + engine-2)"
 
   info "Starting test UI proxy..."
-  $V3_COMPOSE_CMD up -d ui
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d ui
   ok "UI proxy started → http://localhost:3002"
 }
 
@@ -630,7 +651,7 @@ step_derive_wif() {
   local xprv
   xprv=$(env_get_dev_secret "$ENGINE_ENV" "BTC_DEV_XPRV")
   if [ -z "$xprv" ]; then
-    die "BTC_DEV_XPRV not in engine/.env. Run './start.sh reset --signer $SIGNER_MODE' or provide an uncommented BTC_DEV_XPRV dev seed."
+    die "BTC_DEV_XPRV not in engine/.env. Run './${START_SCRIPT_NAME} reset --signer $SIGNER_MODE' or provide an uncommented BTC_DEV_XPRV dev seed."
   fi
   if ! grep -qE "^BTC_DEV_XPRV=" "$ENGINE_ENV" 2>/dev/null; then
     env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$xprv"
@@ -770,7 +791,7 @@ EOF
   fi
 
   info "Starting Vault dev server..."
-  $V3_COMPOSE_CMD --profile signer-enterprise up -d vault
+  $V3_COMPOSE_CMD --profile signer-enterprise up $COMPOSE_UP_FLAGS -d vault
 
   info "Waiting for Vault..."
   local tries=0
@@ -907,7 +928,7 @@ step_enterprise_siem() {
   header "Step — Start Enterprise SIEM (Elastic)"
 
   info "Starting Elasticsearch..."
-  $V3_COMPOSE_CMD --profile signer-enterprise up -d elasticsearch
+  $V3_COMPOSE_CMD --profile signer-enterprise up $COMPOSE_UP_FLAGS -d elasticsearch
 
   info "Waiting for Elasticsearch..."
   local tries=0
@@ -923,7 +944,7 @@ step_enterprise_siem() {
   configure_elasticsearch_dev_settings
 
   info "Starting Kibana..."
-  $V3_COMPOSE_CMD --profile signer-enterprise up -d --force-recreate kibana
+  $V3_COMPOSE_CMD --profile signer-enterprise up $COMPOSE_UP_FLAGS -d --force-recreate kibana
 
   info "Waiting for Kibana (optional data-view setup)..."
   tries=0
@@ -1150,12 +1171,21 @@ step_signers_docker() {
 
   [ -z "$profile" ] && return
 
-  info "Building and starting signer(s) (profile: $profile)..."
-  $V3_COMPOSE_CMD --profile "$profile" build
-  if [[ "$SIGNER_MODE" == "enterprise" && "$ENTERPRISE_PROVIDER" != "vault" ]]; then
-    $V3_COMPOSE_CMD --profile "$profile" up -d --no-deps signer-enterprise
+  if [[ "${CHAINAPI_SKIP_LOCAL_BUILD:-false}" == "true" ]]; then
+    info "Pulling and starting signer(s) from Docker Hub (profile: $profile)..."
+    case "$SIGNER_MODE" in
+      oss) $V3_COMPOSE_CMD --profile "$profile" pull signer-oss ;;
+      enterprise) $V3_COMPOSE_CMD --profile "$profile" pull signer-enterprise ;;
+      both) $V3_COMPOSE_CMD --profile "$profile" pull signer-oss signer-enterprise ;;
+    esac
   else
-    $V3_COMPOSE_CMD --profile "$profile" up -d
+    info "Building and starting signer(s) (profile: $profile)..."
+    $V3_COMPOSE_CMD --profile "$profile" build
+  fi
+  if [[ "$SIGNER_MODE" == "enterprise" && "$ENTERPRISE_PROVIDER" != "vault" ]]; then
+    $V3_COMPOSE_CMD --profile "$profile" up $COMPOSE_UP_FLAGS -d --no-deps signer-enterprise
+  else
+    $V3_COMPOSE_CMD --profile "$profile" up $COMPOSE_UP_FLAGS -d
   fi
 
   sleep 3
@@ -1271,7 +1301,7 @@ step_status() {
   echo ""
   echo -e "  ${C_BOLD}── Useful commands ─────────────────────────────────────${C_RESET}"
   echo ""
-  local btcli="docker compose -f $SCRIPT_DIR/docker-compose.v3.yml exec -T btc-node-1 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -rpcwallet=$MINING_WALLET"
+  local btcli="$V3_COMPOSE_CMD exec -T btc-node-1 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -rpcwallet=$MINING_WALLET"
   echo -e "  ${C_CYAN}Mine a block (confirms deposits):${C_RESET}"
   echo "    ADDR=\$($btcli getnewaddress mine bech32) && $btcli generatetoaddress 1 \$ADDR"
   echo ""
@@ -1282,7 +1312,7 @@ step_status() {
   echo "    curl -s -H 'Authorization: Bearer $api_key' http://localhost:3009/v1/deposits | python3 -m json.tool"
   echo ""
   echo -e "  ${C_CYAN}Check chain_events (deposits detected by indexers):${C_RESET}"
-  echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml exec -T postgres \\"
+  echo "    $V3_COMPOSE_CMD exec -T postgres \\"
   echo "      psql -U chainapi -d chainapi -c 'SELECT event_type,address,amount_raw,confirmations,node_id FROM chain_events ORDER BY created_at DESC LIMIT 10;'"
   echo ""
   echo -e "  ${C_CYAN}Cluster status:${C_RESET}"
@@ -1299,17 +1329,17 @@ step_status() {
     echo ""
   fi
   echo -e "  ${C_CYAN}Logs:${C_RESET}"
-  echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f engine-1 engine-2 nginx"
-  echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f btc-indexer-1 btc-indexer-2"
+  echo "    $V3_COMPOSE_CMD logs -f engine-1 engine-2 nginx"
+  echo "    $V3_COMPOSE_CMD logs -f btc-indexer-1 btc-indexer-2"
   [[ "$SIGNER_MODE" != "none" && "$ENTERPRISE_PROVIDER" = "vault" ]] && \
-    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise vault"
+    echo "    $V3_COMPOSE_CMD logs -f signer-oss signer-enterprise vault"
   [[ "$SIGNER_MODE" != "none" && "$ENTERPRISE_PROVIDER" != "vault" ]] && \
-    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f signer-oss signer-enterprise"
+    echo "    $V3_COMPOSE_CMD logs -f signer-oss signer-enterprise"
   [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
-    echo "    docker compose -f $SCRIPT_DIR/docker-compose.v3.yml logs -f elasticsearch kibana   # SIEM debug only"
+    echo "    $V3_COMPOSE_CMD logs -f elasticsearch kibana   # SIEM debug only"
   echo ""
-  echo -e "  ${C_YELLOW}Stop:  ./start.sh stop${C_RESET}"
-  echo -e "  ${C_YELLOW}Reset: ./start.sh reset${C_RESET}"
+  echo -e "  ${C_YELLOW}Stop:  ./${START_SCRIPT_NAME} stop${C_RESET}"
+  echo -e "  ${C_YELLOW}Reset: ./${START_SCRIPT_NAME} reset${C_RESET}"
   echo ""
 }
 
@@ -1383,7 +1413,7 @@ case "$CMD" in
 
   -h|--help|help)
     echo ""
-    echo "  Usage: $(basename "$0") [command] [options]"
+    echo "  Usage: ${START_SCRIPT_NAME} [command] [options]"
     echo ""
     echo "  Commands:"
     echo "    start   Start — idempotent, safe to run any time  (default)"
@@ -1400,14 +1430,14 @@ case "$CMD" in
     echo "                          engine-1 → 9229, engine-2 → 9232"
     echo ""
     echo "  Examples:"
-    echo "    ./start.sh                         # full stack"
-    echo "    ./start.sh --signer oss            # + OSS signer"
-    echo "    ./start.sh --signer both           # + both signers"
-    echo "    ./start.sh --signer enterprise --enterprise-provider aws"
-    echo "    ./start.sh reset                   # full reset + restart"
-    echo "    ./start.sh reset --signer oss      # full reset + OSS signer"
-    echo "    ./start.sh stop                    # stop all services"
-    echo "    ./start.sh --debug                 # with Node.js inspector"
+    echo "    ./${START_SCRIPT_NAME}                         # full stack"
+    echo "    ./${START_SCRIPT_NAME} --signer oss            # + OSS signer"
+    echo "    ./${START_SCRIPT_NAME} --signer both           # + both signers"
+    echo "    ./${START_SCRIPT_NAME} --signer enterprise --enterprise-provider aws"
+    echo "    ./${START_SCRIPT_NAME} reset                   # full reset + restart"
+    echo "    ./${START_SCRIPT_NAME} reset --signer oss      # full reset + OSS signer"
+    echo "    ./${START_SCRIPT_NAME} stop                    # stop all services"
+    echo "    ./${START_SCRIPT_NAME} --debug                 # with Node.js inspector"
     echo ""
     echo "  Endpoints:"
     echo "    Engine 1:      http://localhost:3000"

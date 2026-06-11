@@ -1,0 +1,33 @@
+# docker-compose.v3.hub.yml - Docker Hub image overlay for start-hub.sh
+#
+# This file is intentionally only an overlay. docker-compose.v3.yml remains the
+# source of service topology, env vars, ports, volumes, profiles, and healthchecks.
+
+services:
+  engine-1:
+    image: ${CHAINAPI_ENGINE_IMAGE}
+    pull_policy: always
+
+  engine-2:
+    image: ${CHAINAPI_ENGINE_IMAGE}
+    pull_policy: always
+
+  btc-indexer-1:
+    image: ${CHAINAPI_BTC_INDEXER_IMAGE}
+    pull_policy: always
+
+  btc-indexer-2:
+    image: ${CHAINAPI_BTC_INDEXER_IMAGE}
+    pull_policy: always
+
+  ui:
+    image: ${CHAINAPI_UI_IMAGE}
+    pull_policy: always
+
+  signer-oss:
+    image: ${CHAINAPI_SIGNER_OSS_IMAGE}
+    pull_policy: always
+
+  signer-enterprise:
+    image: ${CHAINAPI_SIGNER_ENTERPRISE_IMAGE}
+    pull_policy: always
