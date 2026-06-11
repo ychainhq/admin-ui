@@ -178,7 +178,7 @@ const template = `
 
           <div>
             <h3 class="font-label-md font-bold text-on-surface-variant uppercase tracking-wider text-[11px] mb-sm">
-              Bitcoin Core Nodes (<span rv-text="chainNodesCount"></span>)
+              Chain Nodes (<span rv-text="chainNodesCount"></span>)
             </h3>
             <div class="space-y-sm">
               ${chainNodeCardTpl}
