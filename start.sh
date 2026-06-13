@@ -18,8 +18,10 @@
 #   ui            — test proxy (http://localhost:3002)
 #
 #   Signers (optional, via --signer):
-#   signer-oss        — OSS signer daemon (Docker, polls nginx:3009)
-#   signer-enterprise — Enterprise signer daemon (Docker, polls nginx:3009)
+#   signer-oss            — OSS signer (BTC, Docker, polls nginx:3009)
+#   signer-oss-tron       — OSS signer (TRON, Docker, polls nginx:3009)
+#   signer-enterprise     — Enterprise signer (BTC, Docker, polls nginx:3009)
+#   signer-enterprise-tron — Enterprise signer (TRON, Docker, polls nginx:3009)
 #
 # USAGE
 # ──────
@@ -46,6 +48,13 @@
 #   tron-node-1 Solid:http://localhost:8091  (SolidityNode API)
 #   PostgreSQL:       localhost:5433  (user: chainapi, db: chainapi)
 #   Test UI:          http://localhost:3002
+#
+# SIGNER PORTS
+# ────────────
+#   signer-oss:            3101  (BTC)
+#   signer-enterprise:     3102  (BTC)
+#   signer-oss-tron:       3103  (TRON)
+#   signer-enterprise-tron: 3104 (TRON)
 #
 # DEBUG PORTS (used with --debug)
 # ──────────────────────────────
@@ -85,18 +94,23 @@ TRON_USDT_CONTRACT_ADDRESS=""  # set after TRC-20 deployment; persisted in engin
 TRON_ACCOUNT_XPUB=""           # read from engine/.env after db:seed
 SIGNER_OSS_TRON_FINGERPRINT="tron:private:dev_oss"
 SIGNER_ENT_TRON_FINGERPRINT="tron:private:dev_enterprise"
+SIGNER_OSS_TRON_HD_FINGERPRINT="tron_hd:private:dev_oss_hd"
+SIGNER_ENT_TRON_HD_FINGERPRINT="tron_hd:private:dev_enterprise_hd"
 
 # Enterprise Vault dev constants
 VAULT_DEV_ROOT_TOKEN="dev-root-token"
 VAULT_DEV_SIGNER_TOKEN="dev-signer-token"
 VAULT_TRANSIT_BTC_KEY="btc-hot-wallet"
 VAULT_TRANSIT_EVM_KEY="evm-wallet"
+VAULT_TRANSIT_TRON_KEY="tron-hot-wallet"
 VAULT_KV_SIGNER_PATH="chain-api/signer/dev-enterprise"
 VAULT_SECRET_PATH="secret/data/${VAULT_KV_SIGNER_PATH}"
 VAULT_KV_HOT_WIF_PATH="btc-hot-wallet-wif"
 VAULT_KV_SWEEP_XPRV_PATH="btc-sweep-xprv"
+VAULT_KV_TRON_SWEEP_XPRV_PATH="tron-sweep-xprv"
 VAULT_KV_POLICY_PATH="policy"
 BTC_SIGNING_BACKEND="transit"
+TRON_SIGNING_BACKEND="transit"
 
 # Enterprise SIEM dev constants. Elastic is the implemented SIEM sink.
 ENTERPRISE_PROVIDER="vault"
@@ -245,7 +259,7 @@ cmd_reset() {
   fi
   echo    "    • All unused Docker images, containers, networks, build cache"
   [[ "$SIGNER_MODE" != "none" ]] && \
-    echo "    • Signer .env file(s)"
+    echo "    • Signer .env and .env.tron file(s)"
   echo ""
   read -r -p "  Continue? [y/N] " confirm
   [[ "$confirm" =~ ^[Yy]$ ]] || { echo "  Aborted."; exit 0; }
@@ -270,13 +284,13 @@ cmd_reset() {
 
   docker system df 2>/dev/null | grep -v "^TYPE" | sed 's/^/     /' || true
 
-  if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && [ -f "$SIGNER_OSS_DIR/.env" ]; then
-    rm -f "$SIGNER_OSS_DIR/.env"
-    ok "signer-oss/.env removed"
+  if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
+    [ -f "$SIGNER_OSS_DIR/.env"      ] && { rm -f "$SIGNER_OSS_DIR/.env";      ok "signer-oss/.env removed"; }
+    [ -f "$SIGNER_OSS_DIR/.env.tron" ] && { rm -f "$SIGNER_OSS_DIR/.env.tron"; ok "signer-oss/.env.tron removed"; }
   fi
-  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && [ -f "$SIGNER_ENT_DIR/.env" ]; then
-    rm -f "$SIGNER_ENT_DIR/.env"
-    ok "signer/.env removed"
+  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
+    [ -f "$SIGNER_ENT_DIR/.env"      ] && { rm -f "$SIGNER_ENT_DIR/.env";      ok "signer/.env removed"; }
+    [ -f "$SIGNER_ENT_DIR/.env.tron" ] && { rm -f "$SIGNER_ENT_DIR/.env.tron"; ok "signer/.env.tron removed"; }
   fi
 }
 
@@ -943,6 +957,35 @@ derive_wif_address() {
   "
 }
 
+# TRON fingerprint = first 4 bytes of compressed pubkey X coordinate (after 0x02/0x03 prefix).
+# Format: tron:private:<8-char hex> — matches VaultTransitTronSigner.init() derivation.
+derive_vault_tron_fingerprint() {
+  node --no-warnings -e "
+    const crypto = require('crypto');
+    const chunks = [];
+    process.stdin.on('data', c => chunks.push(c));
+    process.stdin.on('end', () => {
+      const doc = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      const keys = doc.data && doc.data.keys ? doc.data.keys : {};
+      const latest = Object.keys(keys).map(Number).sort((a, b) => b - a)[0];
+      const publicKey = latest ? keys[String(latest)].public_key : '';
+      if (!publicKey) throw new Error('Vault Transit TRON key has no public key');
+      let keyObject;
+      if (publicKey.includes('BEGIN PUBLIC KEY')) {
+        keyObject = crypto.createPublicKey(publicKey);
+      } else {
+        keyObject = crypto.createPublicKey({ key: Buffer.from(publicKey, 'base64'), format: 'der', type: 'spki' });
+      }
+      const jwk = keyObject.export({ format: 'jwk' });
+      const x = Buffer.from(jwk.x, 'base64url');
+      const y = Buffer.from(jwk.y, 'base64url');
+      const prefix = (y[y.length - 1] & 1) ? 0x03 : 0x02;
+      const compressed = Buffer.concat([Buffer.from([prefix]), x]);
+      process.stdout.write('tron:private:' + compressed.slice(1, 5).toString('hex') + '\n');
+    });
+  "
+}
+
 step_enterprise_vault() {
   [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] || return
 
@@ -1007,6 +1050,20 @@ EOF
   VAULT read "transit/keys/${VAULT_TRANSIT_EVM_KEY}" >/dev/null 2>&1 || \
     VAULT write "transit/keys/${VAULT_TRANSIT_EVM_KEY}" type=ecdsa-p256 >/dev/null
 
+  TRON_SIGNING_BACKEND="transit"
+  if VAULT read "transit/keys/${VAULT_TRANSIT_TRON_KEY}" >/dev/null 2>&1; then
+    TRON_SIGNING_BACKEND="transit"
+  else
+    local tron_transit_create_out
+    if tron_transit_create_out=$(VAULT write "transit/keys/${VAULT_TRANSIT_TRON_KEY}" type=secp256k1 2>&1); then
+      TRON_SIGNING_BACKEND="transit"
+    else
+      TRON_SIGNING_BACKEND="dev_env_key"
+      warn "Vault Transit secp256k1 unavailable for TRON; using dev env key fallback"
+      detail "$(echo "$tron_transit_create_out" | tail -1)"
+    fi
+  fi
+
   if [ "$BTC_SIGNING_BACKEND" = "kv_wif" ]; then
     info "Writing hot-wallet WIF to Vault KV v2 fallback path..."
     printf '%s' "$HOT_WALLET_WIF" | $V3_COMPOSE_CMD exec -T vault sh -c \
@@ -1016,12 +1073,25 @@ EOF
     $V3_COMPOSE_CMD exec -T vault rm -f /tmp/chainapi-btc-hot-wallet-wif >/dev/null 2>&1 || true
   fi
 
-  info "Writing sweep xprv to Vault KV v2 without exposing it as a process argument..."
+  info "Writing BTC sweep xprv to Vault KV v2 without exposing it as a process argument..."
   printf '%s' "$ACCOUNT_XPRV" | $V3_COMPOSE_CMD exec -T vault sh -c \
     'cat > /tmp/chainapi-btc-sweep-xprv && chmod 600 /tmp/chainapi-btc-sweep-xprv'
   VAULT kv put -mount=secret "${VAULT_KV_SIGNER_PATH}/${VAULT_KV_SWEEP_XPRV_PATH}" \
     "xprv=@/tmp/chainapi-btc-sweep-xprv" >/dev/null
   $V3_COMPOSE_CMD exec -T vault rm -f /tmp/chainapi-btc-sweep-xprv >/dev/null 2>&1 || true
+
+  local tron_dev_xprv
+  tron_dev_xprv=$(env_get_dev_secret "$ENGINE_ENV" "TRON_DEV_XPRV")
+  if [ -n "$tron_dev_xprv" ]; then
+    info "Writing TRON sweep xprv to Vault KV v2..."
+    printf '%s' "$tron_dev_xprv" | $V3_COMPOSE_CMD exec -T vault sh -c \
+      'cat > /tmp/chainapi-tron-sweep-xprv && chmod 600 /tmp/chainapi-tron-sweep-xprv'
+    VAULT kv put -mount=secret "${VAULT_KV_SIGNER_PATH}/${VAULT_KV_TRON_SWEEP_XPRV_PATH}" \
+      "xprv=@/tmp/chainapi-tron-sweep-xprv" >/dev/null
+    $V3_COMPOSE_CMD exec -T vault rm -f /tmp/chainapi-tron-sweep-xprv >/dev/null 2>&1 || true
+  else
+    warn "TRON_DEV_XPRV not found in engine/.env — TRON sweep xprv not stored in Vault"
+  fi
 
   info "Writing open dev signing policy to Vault KV v2..."
   VAULT kv put -mount=secret "${VAULT_KV_SIGNER_PATH}/${VAULT_KV_POLICY_PATH}" \
@@ -1032,10 +1102,12 @@ EOF
 
   info "Writing signer Vault policy + token..."
   VAULT policy write chain-api-signer-dev - >/dev/null <<EOF
-path "transit/sign/${VAULT_TRANSIT_BTC_KEY}" { capabilities = ["update"] }
-path "transit/sign/${VAULT_TRANSIT_EVM_KEY}" { capabilities = ["update"] }
-path "transit/keys/${VAULT_TRANSIT_BTC_KEY}" { capabilities = ["read"] }
-path "transit/keys/${VAULT_TRANSIT_EVM_KEY}" { capabilities = ["read"] }
+path "transit/sign/${VAULT_TRANSIT_BTC_KEY}"  { capabilities = ["update"] }
+path "transit/sign/${VAULT_TRANSIT_EVM_KEY}"  { capabilities = ["update"] }
+path "transit/sign/${VAULT_TRANSIT_TRON_KEY}" { capabilities = ["update"] }
+path "transit/keys/${VAULT_TRANSIT_BTC_KEY}"  { capabilities = ["read"] }
+path "transit/keys/${VAULT_TRANSIT_EVM_KEY}"  { capabilities = ["read"] }
+path "transit/keys/${VAULT_TRANSIT_TRON_KEY}" { capabilities = ["read"] }
 path "secret/data/${VAULT_KV_SIGNER_PATH}/*" { capabilities = ["read"] }
 EOF
   VAULT token lookup "$VAULT_DEV_SIGNER_TOKEN" >/dev/null 2>&1 || \
@@ -1049,6 +1121,12 @@ EOF
   else
     SIGNER_ENT_FINGERPRINT=$(cd "$SIGNER_ENT_DIR" && HOT_WALLET_WIF="$HOT_WALLET_WIF" derive_wif_fingerprint) || die "Cannot derive Vault KV WIF fingerprint"
     vault_addr=$(cd "$SIGNER_ENT_DIR" && HOT_WALLET_WIF="$HOT_WALLET_WIF" derive_wif_address) || die "Cannot derive Vault KV WIF address"
+  fi
+
+  if [ "$TRON_SIGNING_BACKEND" = "transit" ]; then
+    local tron_transit_json
+    tron_transit_json=$(VAULT read -format=json "transit/keys/${VAULT_TRANSIT_TRON_KEY}") || die "Cannot read Vault Transit TRON key"
+    SIGNER_ENT_TRON_FINGERPRINT=$(printf '%s' "$tron_transit_json" | derive_vault_tron_fingerprint) || die "Cannot derive Vault Transit TRON fingerprint"
   fi
 
   SIGNER_ENT_RESPONSE_KEY_HEX=$(env_get "$SIGNER_ENT_DIR/.env" "SIGNER_RESPONSE_SIGNING_KEY_HEX")
@@ -1068,11 +1146,10 @@ EOF
       || warn "Could not update tenant hot wallet; withdrawal PSBTs may still target the seed-derived dev key"
   fi
 
-  ok "Vault Transit BTC key ready"
-  detail "BTC signing backend=${BTC_SIGNING_BACKEND}"
-  detail "SIGNER_FINGERPRINT=${SIGNER_ENT_FINGERPRINT}"
-  detail "Vault hot wallet address=${vault_addr}"
-  detail "KV path=${VAULT_SECRET_PATH}"
+  ok "Vault Transit BTC+TRON keys ready"
+  detail "BTC signing backend=${BTC_SIGNING_BACKEND}  SIGNER_FINGERPRINT=${SIGNER_ENT_FINGERPRINT}"
+  detail "TRON signing backend=${TRON_SIGNING_BACKEND}  TRON_SIGNER_FINGERPRINT=${SIGNER_ENT_TRON_FINGERPRINT}"
+  detail "Vault hot wallet address=${vault_addr}  KV path=${VAULT_SECRET_PATH}"
 }
 
 configure_elasticsearch_dev_settings() {
@@ -1162,7 +1239,9 @@ step_enroll_signers() {
   base="http://localhost:3009"
 
   _enroll_signer() {
-    local edition="$1" fingerprint="$2" name="$3" signer_dir="$4" port="$5" capabilities_json="$6"
+    local edition="$1" chain="$2" fingerprint="$3" name="$4" signer_dir="$5" port="$6" capabilities_json="$7"
+    local env_file
+    [ "$chain" = "tron" ] && env_file="${signer_dir}/.env.tron" || env_file="${signer_dir}/.env"
 
     [ -d "$signer_dir" ] || die "$name directory not found: $signer_dir"
     info "Enrolling '$name' via nginx → shared DB..."
@@ -1170,8 +1249,8 @@ step_enroll_signers() {
     local key_provider
     key_provider="env"
     [ "$edition" = "enterprise" ] && key_provider="$ENTERPRISE_PROVIDER"
-    body=$(printf '{"name":"%s","signerFingerprint":"%s","publicKey":"ed25519:devpubkey:%s","capabilities":%s,"edition":"%s","connectivityMode":"polling","keyProvider":"%s"}' \
-      "$name" "$fingerprint" "$edition" "$capabilities_json" "$edition" "$key_provider")
+    body=$(printf '{"name":"%s","signerFingerprint":"%s","publicKey":"ed25519:devpubkey:%s:%s","capabilities":%s,"edition":"%s","connectivityMode":"polling","keyProvider":"%s"}' \
+      "$name" "$fingerprint" "$edition" "$chain" "$capabilities_json" "$edition" "$key_provider")
     result=$(curl -sf -X POST "${base}/v1/external-signers/enroll" \
       -H "Authorization: Bearer $api_key" \
       -H "Content-Type: application/json" \
@@ -1181,16 +1260,14 @@ step_enroll_signers() {
       || die "Parse error: $result"
     ok "Enrolled → $signer_id (stored in shared DB, visible to both engines)"
 
-    local oss_tron_xprv
+    local oss_tron_xprv oss_tron_contract
     oss_tron_xprv=$(env_get_dev_secret "$ENGINE_ENV" "TRON_DEV_XPRV")
-    local oss_tron_contract
     oss_tron_contract=$(env_get "$ENGINE_ENV" "TRON_USDT_CONTRACT_ADDRESS")
 
-    if [ "$edition" = "community" ]; then
-      cat > "$signer_dir/.env" <<EOF
-# chain-api OSS Signer — auto-generated by start.sh (regtest dev)
-# CHAIN_API_BASE_URL points to nginx LB (http://localhost:3009).
-# nginx routes to engine-1:3000 and engine-2:3000 round-robin with passive health checks.
+    # ── OSS BTC signer ────────────────────────────────────────────────────────
+    if [ "$edition" = "community" ] && [ "$chain" = "btc" ]; then
+      cat > "$env_file" <<EOF
+# chain-api OSS Signer (BTC) — auto-generated by start.sh (regtest dev)
 CHAIN_API_BASE_URL=http://localhost:3009
 CHAIN_API_FALLBACK_URLS=
 SIGNER_API_KEY=${api_key}
@@ -1198,22 +1275,17 @@ SIGNER_ID=${signer_id}
 TENANT_ID=tenant_default
 SIGNER_NAME=${name}
 SIGNER_FINGERPRINT=${fingerprint}
-SIGNER_PUBLIC_KEY=ed25519:devpubkey:community:regtest
+SIGNER_PUBLIC_KEY=ed25519:devpubkey:community:btc:regtest
 BTC_SIGNING_MODE=dev_env_key
 BTC_DEV_PRIVATE_KEY_WIF=${HOT_WALLET_WIF}
 BTC_DEV_ACCOUNT_XPRV=${ACCOUNT_XPRV}
 BTC_NETWORK=regtest
-TRON_NETWORK=private
-TRON_SIGNER_FINGERPRINT=${SIGNER_OSS_TRON_FINGERPRINT}
-TRON_DEV_ACCOUNT_XPRV=${oss_tron_xprv}
-TRON_USDT_CONTRACT_ADDRESS=${oss_tron_contract}
 POLL_INTERVAL_MS=3000
 TASK_BATCH_SIZE=5
-SUPPORTED_CHAINS=bitcoin,tron
-SUPPORTED_ASSETS=bitcoin:BTC,tron:USDT,tron:TRX
-SUPPORTED_FORMATS=btc_psbt,tron_raw_tx
+SUPPORTED_CHAINS=bitcoin
+SUPPORTED_ASSETS=bitcoin:BTC
+SUPPORTED_FORMATS=btc_psbt
 MAX_AUTO_SIGN_AMOUNT_SATS=100000000
-MAX_AUTO_SIGN_AMOUNT_SUN=1000000000000
 MAX_FEE_RATE_SAT_VB=50
 MAX_OUTPUTS_PER_BATCH=200
 SIGNER_PORT=${port}
@@ -1222,7 +1294,42 @@ SIGNER_AUTO_ENROLL=true
 AUDIT_STDOUT=true
 AUDIT_LOG_FILE=./data/audit.log
 EOF
-    else
+
+    # ── OSS TRON signer ───────────────────────────────────────────────────────
+    elif [ "$edition" = "community" ] && [ "$chain" = "tron" ]; then
+      cat > "$env_file" <<EOF
+# chain-api OSS Signer (TRON) — auto-generated by start.sh (private-net dev)
+CHAIN_API_BASE_URL=http://localhost:3009
+CHAIN_API_FALLBACK_URLS=
+SIGNER_API_KEY=${api_key}
+SIGNER_ID=${signer_id}
+TENANT_ID=tenant_default
+SIGNER_NAME=${name}
+SIGNER_FINGERPRINT=${fingerprint}
+SIGNER_FINGERPRINT_HD=${SIGNER_OSS_TRON_HD_FINGERPRINT}
+SIGNER_PUBLIC_KEY=ed25519:devpubkey:community:tron:private
+TRON_NETWORK=private
+TRON_SIGNER_FINGERPRINT=${fingerprint}
+TRON_SIGNER_FINGERPRINT_HD=${SIGNER_OSS_TRON_HD_FINGERPRINT}
+TRON_DEV_ACCOUNT_XPRV=${oss_tron_xprv}
+TRON_USDT_CONTRACT_ADDRESS=${oss_tron_contract}
+POLL_INTERVAL_MS=3000
+TASK_BATCH_SIZE=5
+SUPPORTED_CHAINS=tron
+SUPPORTED_ASSETS=tron:USDT,tron:TRX
+SUPPORTED_FORMATS=tron_raw_tx
+MAX_AUTO_SIGN_AMOUNT_SUN=1000000000000
+MAX_TRON_FEE_LIMIT_SUN=50000000
+MAX_OUTPUTS_PER_BATCH=200
+SIGNER_PORT=${port}
+SIGNER_BIND_HOST=0.0.0.0
+SIGNER_AUTO_ENROLL=true
+AUDIT_STDOUT=true
+AUDIT_LOG_FILE=./data/audit.log
+EOF
+
+    # ── Enterprise BTC signer ─────────────────────────────────────────────────
+    elif [ "$edition" = "enterprise" ] && [ "$chain" = "btc" ]; then
       local enterprise_key_provider enterprise_secret_provider enterprise_signing_provider enterprise_config_provider
       enterprise_key_provider="hashicorp_vault_transit"
       enterprise_secret_provider="vault"
@@ -1248,13 +1355,10 @@ EOF
           enterprise_config_provider="gcp"
           ;;
       esac
-      cat > "$signer_dir/.env" <<EOF
-# chain-api Enterprise Signer — auto-generated by start.sh (regtest dev)
+      cat > "$env_file" <<EOF
+# chain-api Enterprise Signer (BTC) — auto-generated by start.sh (regtest dev)
 # Enterprise provider: ${ENTERPRISE_PROVIDER}
-# BTC withdrawal signing backend: ${BTC_SIGNING_BACKEND}
-#   transit = Vault Transit (${VAULT_TRANSIT_BTC_KEY})
-#   kv_wif  = Vault KV fallback (${VAULT_SECRET_PATH}/${VAULT_KV_HOT_WIF_PATH})
-# BTC sweep signing secret: ${VAULT_KV_SWEEP_XPRV_PATH}
+# BTC signing backend: ${BTC_SIGNING_BACKEND} (transit=${VAULT_TRANSIT_BTC_KEY}, kv_wif fallback)
 CHAIN_API_BASE_URL=http://localhost:3009
 CHAIN_API_FALLBACK_URLS=
 SIGNER_API_KEY=${api_key}
@@ -1263,10 +1367,11 @@ TENANT_ID=tenant_default
 SIGNER_NAME=${name}
 SIGNER_FINGERPRINT=${fingerprint}
 SIGNER_FINGERPRINT_HD=${SIGNER_ENT_HD_FINGERPRINT}
-SIGNER_PUBLIC_KEY=ed25519:devpubkey:enterprise:regtest
+SIGNER_PUBLIC_KEY=ed25519:devpubkey:enterprise:btc:regtest
 KEY_PROVIDER=${enterprise_key_provider}
 SECRET_PROVIDER=${enterprise_secret_provider}
 SIGNING_PROVIDER=${enterprise_signing_provider}
+CONFIG_PROVIDER=${enterprise_config_provider}
 BTC_SWEEP_XPRV_SECRET_NAME=${VAULT_KV_SWEEP_XPRV_PATH}
 POLICY_SECRET_NAME=${VAULT_KV_POLICY_PATH}
 VAULT_ADDR=http://vault:8200
@@ -1280,15 +1385,9 @@ VAULT_KV_SWEEP_XPRV_PATH=${VAULT_KV_SWEEP_XPRV_PATH}
 VAULT_KV_POLICY_PATH=${VAULT_KV_POLICY_PATH}
 VAULT_SECRET_CACHE_TTL_MS=60000
 BTC_NETWORK=regtest
-TRON_NETWORK=private
-TRON_SIGNER_FINGERPRINT=${SIGNER_ENT_TRON_FINGERPRINT}
-TRON_DEV_ACCOUNT_XPRV=${oss_tron_xprv}
-TRON_SWEEP_XPRV_SECRET_NAME=tron-sweep-xprv
-TRON_USDT_CONTRACT_ADDRESS=${oss_tron_contract}
 POLL_INTERVAL_MS=1000
 TASK_BATCH_SIZE=20
 SIGNER_CONCURRENCY=4
-CONFIG_PROVIDER=${enterprise_config_provider}
 TRANSPORT_SECURITY=https
 SIGNER_PORT=${port}
 SIGNER_BIND_HOST=0.0.0.0
@@ -1308,14 +1407,14 @@ SUPPORTED_FORMATS=btc_psbt
 EOF
       case "$ENTERPRISE_PROVIDER" in
         aws)
-          cat >> "$signer_dir/.env" <<EOF
+          cat >> "$env_file" <<EOF
 AWS_REGION=${AWS_REGION:-eu-central-1}
 AWS_SECRETS_PREFIX=${AWS_SECRETS_PREFIX:-chain-api/signer/dev-enterprise}
 AWS_KMS_BTC_KEY_ID=${AWS_KMS_BTC_KEY_ID:-alias/chain-api-btc-hot-wallet}
 EOF
           ;;
         azure)
-          cat >> "$signer_dir/.env" <<EOF
+          cat >> "$env_file" <<EOF
 AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
 AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
 AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET:-}
@@ -1324,7 +1423,7 @@ AZURE_BTC_KEY_NAME=${AZURE_BTC_KEY_NAME:-btc-hot-wallet}
 EOF
           ;;
         gcp)
-          cat >> "$signer_dir/.env" <<EOF
+          cat >> "$env_file" <<EOF
 GCP_PROJECT_ID=${GCP_PROJECT_ID:-your-gcp-project}
 GCP_SECRET_PREFIX=${GCP_SECRET_PREFIX:-chain-api-signer-dev}
 GCP_KMS_LOCATION=${GCP_KMS_LOCATION:-global}
@@ -1334,8 +1433,129 @@ GCP_KMS_CRYPTO_KEY_VERSION=${GCP_KMS_CRYPTO_KEY_VERSION:-}
 EOF
           ;;
       esac
+
+    # ── Enterprise TRON signer ────────────────────────────────────────────────
+    elif [ "$edition" = "enterprise" ] && [ "$chain" = "tron" ]; then
+      local ent_tron_key_provider ent_tron_secret_provider ent_tron_signing_provider ent_tron_config_provider
+      ent_tron_secret_provider="vault"
+      ent_tron_config_provider="vault"
+      if [ "$TRON_SIGNING_BACKEND" = "transit" ]; then
+        ent_tron_key_provider="hashicorp_vault_transit"
+        ent_tron_signing_provider="vault_transit"
+      else
+        ent_tron_key_provider="env"
+        ent_tron_signing_provider="env"
+      fi
+      case "$ENTERPRISE_PROVIDER" in
+        aws)
+          ent_tron_key_provider="aws_kms"
+          ent_tron_secret_provider="aws"
+          ent_tron_signing_provider="aws_kms"
+          ent_tron_config_provider="aws"
+          ;;
+        azure)
+          ent_tron_key_provider="env"
+          ent_tron_secret_provider="azure"
+          ent_tron_signing_provider="azure_key_vault"
+          ent_tron_config_provider="azure"
+          ;;
+        gcp)
+          # GCP KMS does not support secp256k1 for TRON — fall back to dev env key
+          ent_tron_key_provider="env"
+          ent_tron_secret_provider="gcp"
+          ent_tron_signing_provider="env"
+          ent_tron_config_provider="gcp"
+          ;;
+      esac
+      cat > "$env_file" <<EOF
+# chain-api Enterprise Signer (TRON) — auto-generated by start.sh (private-net dev)
+# Enterprise provider: ${ENTERPRISE_PROVIDER}
+# TRON signing backend: ${TRON_SIGNING_BACKEND} (transit=${VAULT_TRANSIT_TRON_KEY} or dev_env_key)
+CHAIN_API_BASE_URL=http://localhost:3009
+CHAIN_API_FALLBACK_URLS=
+SIGNER_API_KEY=${api_key}
+SIGNER_ID=${signer_id}
+TENANT_ID=tenant_default
+SIGNER_NAME=${name}
+SIGNER_FINGERPRINT=${fingerprint}
+SIGNER_FINGERPRINT_HD=${SIGNER_ENT_TRON_HD_FINGERPRINT}
+SIGNER_PUBLIC_KEY=ed25519:devpubkey:enterprise:tron:private
+KEY_PROVIDER=${ent_tron_key_provider}
+SECRET_PROVIDER=${ent_tron_secret_provider}
+SIGNING_PROVIDER=${ent_tron_signing_provider}
+CONFIG_PROVIDER=${ent_tron_config_provider}
+POLICY_SECRET_NAME=${VAULT_KV_POLICY_PATH}
+VAULT_ADDR=http://vault:8200
+VAULT_AUTH_METHOD=token
+VAULT_TOKEN=${VAULT_DEV_SIGNER_TOKEN}
+VAULT_SECRET_PATH=${VAULT_SECRET_PATH}
+VAULT_KV_POLICY_PATH=${VAULT_KV_POLICY_PATH}
+VAULT_SECRET_CACHE_TTL_MS=60000
+TRON_NETWORK=private
+TRON_SIGNER_FINGERPRINT=${fingerprint}
+TRON_SIGNER_FINGERPRINT_HD=${SIGNER_ENT_TRON_HD_FINGERPRINT}
+TRON_SWEEP_XPRV_SECRET_NAME=${VAULT_KV_TRON_SWEEP_XPRV_PATH}
+TRON_USDT_CONTRACT_ADDRESS=${oss_tron_contract}
+POLL_INTERVAL_MS=1000
+TASK_BATCH_SIZE=20
+SIGNER_CONCURRENCY=4
+TRANSPORT_SECURITY=https
+SIGNER_PORT=${port}
+SIGNER_BIND_HOST=0.0.0.0
+AUDIT_SINK=siem
+SIEM_PROVIDER=${SIEM_PROVIDER}
+ELASTIC_URL=${ELASTIC_URL_INTERNAL}
+ELASTIC_INDEX_PREFIX=${ELASTIC_INDEX_PREFIX}
+ELASTIC_BATCH_SIZE=1
+ELASTIC_FLUSH_INTERVAL_MS=1000
+AUDIT_FALLBACK_FILE=./data/audit-fallback.jsonl
+AUDIT_CHAIN_ENABLED=true
+AUDIT_CHAIN_FILE=./data/audit-chain.jsonl
+SIGNER_RESPONSE_SIGNING_KEY_HEX=${SIGNER_ENT_RESPONSE_KEY_HEX}
+SUPPORTED_CHAINS=tron
+SUPPORTED_ASSETS=tron:USDT,tron:TRX
+SUPPORTED_FORMATS=tron_raw_tx
+MAX_AUTO_SIGN_AMOUNT_SUN=1000000000000
+MAX_TRON_FEE_LIMIT_SUN=50000000
+EOF
+      # TRON signing key — Vault Transit or dev env key fallback
+      if [ "$TRON_SIGNING_BACKEND" = "transit" ] && [ "$ENTERPRISE_PROVIDER" = "vault" ]; then
+        cat >> "$env_file" <<EOF
+VAULT_TRANSIT_TRON_KEY=${VAULT_TRANSIT_TRON_KEY}
+EOF
+      else
+        cat >> "$env_file" <<EOF
+TRON_DEV_ACCOUNT_XPRV=${oss_tron_xprv}
+EOF
+      fi
+      case "$ENTERPRISE_PROVIDER" in
+        aws)
+          cat >> "$env_file" <<EOF
+AWS_REGION=${AWS_REGION:-eu-central-1}
+AWS_SECRETS_PREFIX=${AWS_SECRETS_PREFIX:-chain-api/signer/dev-enterprise}
+AWS_KMS_TRON_KEY_ID=${AWS_KMS_TRON_KEY_ID:-alias/chain-api-tron-hot-wallet}
+EOF
+          ;;
+        azure)
+          cat >> "$env_file" <<EOF
+AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
+AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
+AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET:-}
+AZURE_KEY_VAULT_URL=${AZURE_KEY_VAULT_URL:-https://your-vault-name.vault.azure.net}
+AZURE_TRON_KEY_NAME=${AZURE_TRON_KEY_NAME:-tron-hot-wallet}
+EOF
+          ;;
+        gcp)
+          cat >> "$env_file" <<EOF
+GCP_PROJECT_ID=${GCP_PROJECT_ID:-your-gcp-project}
+GCP_SECRET_PREFIX=${GCP_SECRET_PREFIX:-chain-api-signer-dev}
+# GCP Cloud KMS: secp256k1 not supported for TRON — using TRON_DEV_ACCOUNT_XPRV fallback above
+EOF
+          ;;
+      esac
     fi
-    ok ".env written → $signer_dir/.env  (CHAIN_API_BASE_URL=http://localhost:3009)"
+
+    ok ".env written → ${env_file}  (CHAIN_API_BASE_URL=http://localhost:3009)"
 
     info "Setting auto-sign policy for $name..."
     curl -sf -X PUT "${base}/v1/external-signers/policies" \
@@ -1346,57 +1566,76 @@ EOF
     ok "Auto-sign policy set"
   }
 
-  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && \
-    _enroll_signer "community"  "$SIGNER_OSS_FINGERPRINT" "Dev OSS Signer"        "$SIGNER_OSS_DIR" "3101" \
-      '{"chains":["bitcoin","tron"],"assets":["bitcoin:BTC","tron:USDT","tron:TRX"],"formats":["btc_psbt","tron_raw_tx"]}'
-  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
-    _enroll_signer "enterprise" "$SIGNER_ENT_FINGERPRINT" "Dev Enterprise Signer" "$SIGNER_ENT_DIR" "3102" \
+  if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
+    _enroll_signer "community"  "btc"  "$SIGNER_OSS_FINGERPRINT"      "Dev OSS Signer (BTC)"         "$SIGNER_OSS_DIR" "3101" \
       '{"chains":["bitcoin"],"assets":["bitcoin:BTC"],"formats":["btc_psbt"]}'
+    _enroll_signer "community"  "tron" "$SIGNER_OSS_TRON_FINGERPRINT" "Dev OSS Signer (TRON)"        "$SIGNER_OSS_DIR" "3103" \
+      '{"chains":["tron"],"assets":["tron:USDT","tron:TRX"],"formats":["tron_raw_tx"]}'
+  fi
+  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
+    _enroll_signer "enterprise" "btc"  "$SIGNER_ENT_FINGERPRINT"      "Dev Enterprise Signer (BTC)"  "$SIGNER_ENT_DIR" "3102" \
+      '{"chains":["bitcoin"],"assets":["bitcoin:BTC"],"formats":["btc_psbt"]}'
+    _enroll_signer "enterprise" "tron" "$SIGNER_ENT_TRON_FINGERPRINT" "Dev Enterprise Signer (TRON)" "$SIGNER_ENT_DIR" "3104" \
+      '{"chains":["tron"],"assets":["tron:USDT","tron:TRX"],"formats":["tron_raw_tx"]}'
+  fi
 }
 
 # ─── Start signers via Docker Compose profiles ────────────────────────────────
 step_signers_docker() {
   header "Step — Start signer(s) via Docker Compose"
 
+  [ "$SIGNER_MODE" = "none" ] && return
+
   local profile=""
   [[ "$SIGNER_MODE" == "oss" ]]        && profile="signer-oss"
   [[ "$SIGNER_MODE" == "enterprise" ]] && profile="signer-enterprise"
   [[ "$SIGNER_MODE" == "both" ]]       && profile="signer-all"
 
-  [ -z "$profile" ] && return
-
   if [[ "${CHAINAPI_SKIP_LOCAL_BUILD:-false}" == "true" ]]; then
-    info "Pulling and starting signer(s) from Docker Hub (profile: $profile)..."
+    info "Pulling signer images (profile: $profile)..."
     case "$SIGNER_MODE" in
-      oss) $V3_COMPOSE_CMD --profile "$profile" pull signer-oss ;;
-      enterprise) $V3_COMPOSE_CMD --profile "$profile" pull signer-enterprise ;;
-      both) $V3_COMPOSE_CMD --profile "$profile" pull signer-oss signer-enterprise ;;
+      oss)        $V3_COMPOSE_CMD --profile "$profile" pull signer-oss signer-oss-tron ;;
+      enterprise) $V3_COMPOSE_CMD --profile "$profile" pull signer-enterprise signer-enterprise-tron ;;
+      both)       $V3_COMPOSE_CMD --profile "$profile" pull signer-oss signer-oss-tron signer-enterprise signer-enterprise-tron ;;
     esac
   else
-    info "Building and starting signer(s) (profile: $profile)..."
+    info "Building signer images (profile: $profile)..."
     $V3_COMPOSE_CMD --profile "$profile" build
   fi
-  if [[ "$SIGNER_MODE" == "enterprise" && "$ENTERPRISE_PROVIDER" != "vault" ]]; then
-    $V3_COMPOSE_CMD --profile "$profile" up $COMPOSE_UP_FLAGS -d --no-deps signer-enterprise
-  else
-    $V3_COMPOSE_CMD --profile "$profile" up $COMPOSE_UP_FLAGS -d
+
+  # OSS signers (BTC + TRON) have no Vault/Elastic deps — start normally.
+  if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
+    $V3_COMPOSE_CMD --profile signer-oss up $COMPOSE_UP_FLAGS -d signer-oss signer-oss-tron
+  fi
+
+  # Enterprise signers: skip Vault+Elastic deps when provider is not vault.
+  if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
+    if [ "$ENTERPRISE_PROVIDER" != "vault" ]; then
+      $V3_COMPOSE_CMD --profile signer-enterprise up $COMPOSE_UP_FLAGS -d --no-deps \
+        signer-enterprise signer-enterprise-tron
+    else
+      $V3_COMPOSE_CMD --profile signer-enterprise up $COMPOSE_UP_FLAGS -d \
+        signer-enterprise signer-enterprise-tron
+    fi
   fi
 
   sleep 3
 
   if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
-    ok "signer-oss container started → localhost:3101"
-    detail "Polling: http://nginx:3009 (container) = http://localhost:3009 (host)"
+    ok "signer-oss (BTC)  started → localhost:3101"
+    ok "signer-oss-tron   started → localhost:3103"
+    detail "Both OSS signers poll http://nginx:3009 (container) = http://localhost:3009 (host)"
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
-    ok "signer-enterprise container started → localhost:3102"
+    ok "signer-enterprise (BTC)  started → localhost:3102"
+    ok "signer-enterprise-tron   started → localhost:3104"
     if [ "$ENTERPRISE_PROVIDER" = "vault" ]; then
       detail "Vault: http://vault:8200 (container) = http://localhost:8200 (host)"
+      detail "TRON signing backend: ${TRON_SIGNING_BACKEND}"
     fi
     detail "Enterprise provider: ${ENTERPRISE_PROVIDER}"
     detail "SIEM: ${SIEM_PROVIDER} → ${ELASTIC_URL_INTERNAL} (container) = ${ELASTIC_URL_HOST} (host)"
   fi
-  detail "Signer .env → CHAIN_API_BASE_URL=http://localhost:3009 (overridden to nginx in container)"
 }
 
 # ─── Step 10: Verify cluster ───────────────────────────────────────────────────
@@ -1478,21 +1717,28 @@ step_status() {
   echo -e "  ${C_GREEN}ui${C_RESET}                →  http://localhost:3002"
   echo ""
   if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
-    echo -e "  ${C_BOLD}── Signers ─────────────────────────────────────────────${C_RESET}"
-    echo -e "  ${C_GREEN}signer-oss${C_RESET}        →  http://localhost:3101  (Docker, polls nginx:3009)"
-    detail "Signer polls nginx (failover across engines). Task claims safe: PostgreSQL isolation."
+    echo -e "  ${C_BOLD}── Signers (OSS) ───────────────────────────────────────${C_RESET}"
+    echo -e "  ${C_GREEN}signer-oss${C_RESET}        →  http://localhost:3101  (BTC, polls nginx:3009)"
+    echo -e "  ${C_GREEN}signer-oss-tron${C_RESET}   →  http://localhost:3103  (TRON, polls nginx:3009)"
+    detail "Both OSS signers poll nginx (failover across engines). Task claims safe: PostgreSQL isolation."
+    detail "signer-oss FINGERPRINT=${SIGNER_OSS_FINGERPRINT}"
+    detail "signer-oss-tron FINGERPRINT=${SIGNER_OSS_TRON_FINGERPRINT}"
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
-    echo -e "  ${C_GREEN}signer-ent${C_RESET}        →  http://localhost:3102  (Docker, polls nginx:3009)"
+    echo -e "  ${C_BOLD}── Signers (Enterprise) ────────────────────────────────${C_RESET}"
+    echo -e "  ${C_GREEN}signer-enterprise${C_RESET}      →  http://localhost:3102  (BTC, polls nginx:3009)"
+    echo -e "  ${C_GREEN}signer-enterprise-tron${C_RESET} →  http://localhost:3104  (TRON, polls nginx:3009)"
     if [ "$ENTERPRISE_PROVIDER" = "vault" ]; then
-      detail "Enterprise signer uses Vault Transit/KV → http://localhost:8200 (token: dev-root-token)"
+      detail "Enterprise signers use Vault Transit/KV → http://localhost:8200 (token: dev-root-token)"
+      detail "BTC signing backend=${BTC_SIGNING_BACKEND}  TRON signing backend=${TRON_SIGNING_BACKEND}"
     else
-      detail "Enterprise signer uses external ${ENTERPRISE_PROVIDER} KMS/secrets configured in signer/.env"
+      detail "Enterprise signers use external ${ENTERPRISE_PROVIDER} KMS/secrets configured in signer/.env"
     fi
     detail "Enterprise signer audit sink: Elastic SIEM → http://localhost:9200"
     detail "Browse audit events in Kibana → http://localhost:5601/app/discover"
     detail "Data view/index pattern: ${ELASTIC_INDEX_PREFIX}-*"
-    detail "SIGNER_FINGERPRINT=${SIGNER_ENT_FINGERPRINT}"
+    detail "signer-enterprise FINGERPRINT=${SIGNER_ENT_FINGERPRINT}"
+    detail "signer-enterprise-tron FINGERPRINT=${SIGNER_ENT_TRON_FINGERPRINT}"
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
     echo ""
@@ -1536,9 +1782,9 @@ step_status() {
   echo "    $V3_COMPOSE_CMD logs -f btc-indexer-1 btc-indexer-2 tron-indexer-1 tron-indexer-2"
   echo "    $V3_COMPOSE_CMD logs -f tron-node-1 tron-node-2"
   [[ "$SIGNER_MODE" != "none" && "$ENTERPRISE_PROVIDER" = "vault" ]] && \
-    echo "    $V3_COMPOSE_CMD logs -f signer-oss signer-enterprise vault"
+    echo "    $V3_COMPOSE_CMD logs -f signer-oss signer-oss-tron signer-enterprise signer-enterprise-tron vault"
   [[ "$SIGNER_MODE" != "none" && "$ENTERPRISE_PROVIDER" != "vault" ]] && \
-    echo "    $V3_COMPOSE_CMD logs -f signer-oss signer-enterprise"
+    echo "    $V3_COMPOSE_CMD logs -f signer-oss signer-oss-tron signer-enterprise signer-enterprise-tron"
   [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
     echo "    $V3_COMPOSE_CMD logs -f elasticsearch kibana   # SIEM debug only"
   echo ""
@@ -1551,9 +1797,9 @@ step_status() {
 step_tail() {
   trap "cmd_stop; exit 0" INT TERM
   local services="engine-1 engine-2 btc-indexer-1 btc-indexer-2 tron-indexer-1 tron-indexer-2 nginx"
-  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && services="$services signer-oss"
-  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ && "$ENTERPRISE_PROVIDER" = "vault" ]] && services="$services vault signer-enterprise"
-  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ && "$ENTERPRISE_PROVIDER" != "vault" ]] && services="$services signer-enterprise"
+  [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && services="$services signer-oss signer-oss-tron"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ && "$ENTERPRISE_PROVIDER" = "vault" ]]  && services="$services vault signer-enterprise signer-enterprise-tron"
+  [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ && "$ENTERPRISE_PROVIDER" != "vault" ]] && services="$services signer-enterprise signer-enterprise-tron"
   info "Tailing logs: $services (Ctrl+C to stop all)..."
   $V3_COMPOSE_CMD logs -f $services &
   wait
