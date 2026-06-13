@@ -3,9 +3,11 @@
 #
 # Architecture:
 #   2 × Bitcoin Core (regtest, peered)    — btc-node-1, btc-node-2 (BOTH EQUAL)
+#   2 × TRON FullNode (private net)       — tron-node-1 (SR witness), tron-node-2 (observer)
 #   1 × PostgreSQL                        — shared DB for all engine instances
 #   2 × chain-api engine (active-active)  — engine-1, engine-2 (SKIP LOCKED)
 #   2 × btc-indexer                       — one per BTC node, write to chain_events
+#   2 × tron-indexer                      — one per TRON node, write to chain_events
 #   1 × nginx                             — load balancer (engine-1 + engine-2 upstream)
 #   1 × test-ui proxy                     — optional, for manual testing
 #
@@ -32,6 +34,18 @@
 #   docker compose -f docker-compose.v3.yml logs -f
 #   docker compose -f docker-compose.v3.yml down -v   # wipe all volumes
 # ─────────────────────────────────────────────────────────────────────────────
+
+x-tron-node-common: &tron-node-common
+  image: tronprotocol/java-tron:GreatVoyage-v4.7.7
+  mem_limit: 2g
+  mem_reservation: 512m
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "curl -sf http://localhost:8090/wallet/getnowblock >/dev/null || exit 1"]
+    interval: 5s
+    timeout: 5s
+    retries: 40
+    start_period: 30s
 
 x-btc-node-common: &btc-node-common
   image: lncm/bitcoind:v25.0
@@ -73,6 +87,14 @@ x-engine-common: &engine-common
     BTC_NODE_2_RPC_PASSWORD: bitcoin
     # v3: disable legacy FWallet deposit monitor — deposits handled by btc-indexer → chain_events
     LEGACY_DEPOSIT_MONITOR_ENABLED: "false"
+    # TRON private network (tron-node-1 is the SR witness / primary HTTP endpoint)
+    TRON_NODE_URL: http://tron-node-1:8090
+    TRON_SOLIDITY_NODE_URL: http://tron-node-1:8091
+    TRON_NETWORK: private
+    TRON_DEFAULT_CONFIRMATIONS: "1"
+    TRON_FINALITY_CONFIRMATIONS: "20"
+    # Set by start.sh after deploy-trc20.js runs; empty until then
+    TRON_USDT_CONTRACT_ADDRESS: ${TRON_USDT_CONTRACT_ADDRESS:-}
   depends_on:
     postgres:
       condition: service_healthy
@@ -93,6 +115,20 @@ x-indexer-common: &indexer-common
     INDEXER_LOG_LEVEL: info
     DATABASE_URL: postgres://chainapi:chainapi_dev@postgres:5432/chainapi
     INDEXER_FINALITY_CONFIRMATIONS: 10
+
+x-tron-indexer-common: &tron-indexer-common
+  build:
+    context: ../packages/tron-indexer
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  environment: &tron-indexer-env-common
+    INDEXER_CHAIN_ID: tron
+    INDEXER_POLL_INTERVAL_MS: "3000"
+    INDEXER_LOG_LEVEL: info
+    DATABASE_URL: postgres://chainapi:chainapi_dev@postgres:5432/chainapi
+    INDEXER_FINALITY_CONFIRMATIONS: "20"
+    # Set by start.sh after deploy-trc20.js; empty until first reset/start
+    INDEXER_WATCHED_CONTRACTS: ${TRON_USDT_CONTRACT_ADDRESS:-}
 
 services:
 
@@ -167,6 +203,38 @@ services:
       - btc_node_2:/data/.bitcoin
     depends_on:
       btc-node-1:
+        condition: service_healthy
+
+  # ── TRON FullNode — Node 1 (SR witness / block producer) ──────────────────
+  # Dev role: produces blocks every 3s on the private TRON network.
+  # Architecture role: primary HTTP endpoint for engine and tron-indexer-1.
+  # localwitness key is the TRON genesis account — kept in config-node1.conf.
+  tron-node-1:
+    <<: *tron-node-common
+    container_name: chainapi-tron-node-1
+    entrypoint: ["java", "-jar", "/usr/local/bin/FullNode.jar"]
+    command: ["--witness", "-c", "/etc/tron/config.conf"]
+    ports:
+      - "8090:8090"     # HTTP FullNode API
+      - "8091:8091"     # HTTP SolidityNode API
+      - "18888:18888"   # P2P
+    volumes:
+      - tron_node_1:/data/tron
+      - ./tron/config-node1.conf:/etc/tron/config.conf:ro
+
+  # ── TRON FullNode — Node 2 (observer / sync-only) ──────────────────────────
+  # Dev role: syncs from tron-node-1 via P2P. No block production.
+  # Architecture role: indexer redundancy — tron-indexer-2 watches this node.
+  tron-node-2:
+    <<: *tron-node-common
+    container_name: chainapi-tron-node-2
+    entrypoint: ["java", "-jar", "/usr/local/bin/FullNode.jar"]
+    command: ["-c", "/etc/tron/config.conf"]
+    volumes:
+      - tron_node_2:/data/tron
+      - ./tron/config-node2.conf:/etc/tron/config.conf:ro
+    depends_on:
+      tron-node-1:
         condition: service_healthy
 
   # ── Engine — Instance 1 (cluster leader candidate) ─────────────────────────
@@ -245,6 +313,34 @@ services:
       engine-1:
         condition: service_healthy
       btc-node-2:
+        condition: service_healthy
+
+  # ── tron-indexer — watches tron-node-1 ────────────────────────────────────
+  tron-indexer-1:
+    <<: *tron-indexer-common
+    container_name: chainapi-tron-indexer-1
+    environment:
+      <<: *tron-indexer-env-common
+      INDEXER_NODE_ID: tron-node-1
+      INDEXER_TRON_NODE_URL: http://tron-node-1:8090
+    depends_on:
+      engine-1:
+        condition: service_healthy   # wait for migrations to complete
+      tron-node-1:
+        condition: service_healthy
+
+  # ── tron-indexer — watches tron-node-2 ────────────────────────────────────
+  tron-indexer-2:
+    <<: *tron-indexer-common
+    container_name: chainapi-tron-indexer-2
+    environment:
+      <<: *tron-indexer-env-common
+      INDEXER_NODE_ID: tron-node-2
+      INDEXER_TRON_NODE_URL: http://tron-node-2:8090
+    depends_on:
+      engine-1:
+        condition: service_healthy
+      tron-node-2:
         condition: service_healthy
 
   # ── nginx load balancer (engine-1 + engine-2 upstream) ─────────────────────
@@ -418,5 +514,7 @@ volumes:
   postgres_data:
   btc_node_1:
   btc_node_2:
+  tron_node_1:
+  tron_node_2:
   signer_oss_data:
   signer_enterprise_data:

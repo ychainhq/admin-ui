@@ -6,11 +6,15 @@
 # ────────────
 #   btc-node-1    — Bitcoin Core regtest (active, mines blocks in dev)
 #   btc-node-2    — Bitcoin Core regtest (active, equivalent to node-1; syncs via P2P in dev)
+#   tron-node-1   — TRON FullNode private net (SR witness, produces blocks every 3s)
+#   tron-node-2   — TRON FullNode private net (observer, syncs from tron-node-1)
 #   postgres      — PostgreSQL 16 (shared DB for both engines)
 #   engine-1      — chain-api (active, cluster leader candidate)
 #   engine-2      — chain-api (active-active, SKIP LOCKED for work distribution)
 #   btc-indexer-1 — scans btc-node-1 blocks → chain_events
 #   btc-indexer-2 — scans btc-node-2 blocks → chain_events (dedup via UNIQUE)
+#   tron-indexer-1 — scans tron-node-1 blocks → chain_events (TRX + TRC-20 USDT)
+#   tron-indexer-2 — scans tron-node-2 blocks → chain_events (dedup via UNIQUE)
 #   ui            — test proxy (http://localhost:3002)
 #
 #   Signers (optional, via --signer):
@@ -30,16 +34,18 @@
 #
 # ENDPOINTS
 # ─────────
-#   engine-1:       http://localhost:3000
-#   engine-2:       http://localhost:3001
-#   nginx LB:       http://localhost:3009  (stable endpoint for clients/signers)
-#   Vault dev:      http://localhost:8200  (enterprise signer only; token: dev-root-token)
-#   Elastic SIEM:   http://localhost:9200  (enterprise signer audit indices)
-#   Kibana:         http://localhost:5601  (browse signer audit events)
-#   btc-node-1 RPC: http://localhost:18443
-#   btc-node-2 RPC: http://localhost:18453
-#   PostgreSQL:     localhost:5433  (user: chainapi, db: chainapi)
-#   Test UI:        http://localhost:3002
+#   engine-1:         http://localhost:3000
+#   engine-2:         http://localhost:3001
+#   nginx LB:         http://localhost:3009  (stable endpoint for clients/signers)
+#   Vault dev:        http://localhost:8200  (enterprise signer only; token: dev-root-token)
+#   Elastic SIEM:     http://localhost:9200  (enterprise signer audit indices)
+#   Kibana:           http://localhost:5601  (browse signer audit events)
+#   btc-node-1 RPC:   http://localhost:18443
+#   btc-node-2 RPC:   http://localhost:18453
+#   tron-node-1 HTTP: http://localhost:8090  (FullNode API; tron-node-2 is container-internal only)
+#   tron-node-1 Solid:http://localhost:8091  (SolidityNode API)
+#   PostgreSQL:       localhost:5433  (user: chainapi, db: chainapi)
+#   Test UI:          http://localhost:3002
 #
 # DEBUG PORTS (used with --debug)
 # ──────────────────────────────
@@ -57,6 +63,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENGINE_DIR="$ROOT_DIR/engine"
 SIGNER_OSS_DIR="$ROOT_DIR/signer-oss"
 SIGNER_ENT_DIR="$ROOT_DIR/signer"
+CONTRACTS_DIR="$SCRIPT_DIR/contracts"
 
 UI_ENV="$SCRIPT_DIR/.env"
 ENGINE_ENV="$ENGINE_DIR/.env"
@@ -68,6 +75,16 @@ SIGNER_OSS_FINGERPRINT="btc:regtest:dev_oss"
 SIGNER_ENT_FINGERPRINT="btc:regtest:dev_enterprise"
 SIGNER_ENT_HD_FINGERPRINT="btc_hd:regtest:dev_enterprise_hd"
 SIGNER_ENT_RESPONSE_KEY_HEX=""
+
+# TRON private network dev constants
+# TRON_GENESIS_PRIVATE_KEY_HEX is the well-known TRON Foundation dev key used in
+# their own private-net documentation. Safe for dev use only — never for production.
+TRON_GENESIS_PRIVATE_KEY_HEX="da146374a75310b9666e834ee4ad0866d6f4035967bfc76217c5a495fff9f0d0"
+TRON_GENESIS_ADDRESS="TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY"
+TRON_USDT_CONTRACT_ADDRESS=""  # set after TRC-20 deployment; persisted in engine/.env
+TRON_ACCOUNT_XPUB=""           # read from engine/.env after db:seed
+SIGNER_OSS_TRON_FINGERPRINT="tron:private:dev_oss"
+SIGNER_ENT_TRON_FINGERPRINT="tron:private:dev_enterprise"
 
 # Enterprise Vault dev constants
 VAULT_DEV_ROOT_TOKEN="dev-root-token"
@@ -219,6 +236,8 @@ cmd_reset() {
   echo -e "  ${C_YELLOW}This will destroy:${C_RESET}"
   echo    "    • PostgreSQL data volume"
   echo    "    • Both Bitcoin Core blockchain volumes (btc_node_1, btc_node_2)"
+  echo    "    • Both TRON FullNode volumes (tron_node_1, tron_node_2)"
+  echo    "    • Compiled TRC-20 artifact ($CONTRACTS_DIR/out/)"
   if [[ "${CHAINAPI_SKIP_LOCAL_BUILD:-false}" == "true" ]]; then
     echo    "    • Local containers using Docker Hub images (images will be pulled again if missing)"
   else
@@ -234,6 +253,13 @@ cmd_reset() {
 
   $V3_COMPOSE_CMD --profile signer-all down -v 2>/dev/null || true
   ok "Containers stopped and volumes removed"
+
+  # Remove compiled TRC-20 artifact so it gets recompiled on next start
+  rm -rf "$CONTRACTS_DIR/out"
+  # Clear TRON_USDT_CONTRACT_ADDRESS from engine/.env (new contract deployed each reset)
+  if [ -f "$ENGINE_ENV" ]; then
+    sed -i '' '/^TRON_USDT_CONTRACT_ADDRESS=/d' "$ENGINE_ENV" 2>/dev/null || true
+  fi
 
   # Prune build cache (biggest hog, easily rebuilt) + stopped containers.
   # Do NOT prune images — avoids re-pulling from Docker Hub on every reset.
@@ -258,28 +284,31 @@ cmd_reset() {
 step_build() {
   if [[ "${CHAINAPI_SKIP_LOCAL_BUILD:-false}" == "true" ]]; then
     header "Step 1 — Pull Docker Hub images"
-    info "Pulling engine, btc-indexer, and ui images..."
-    $V3_COMPOSE_CMD pull engine-1 engine-2 btc-indexer-1 btc-indexer-2 ui
+    info "Pulling engine, indexer, and ui images..."
+    $V3_COMPOSE_CMD pull engine-1 engine-2 btc-indexer-1 btc-indexer-2 tron-indexer-1 tron-indexer-2 ui
     ok "Docker Hub images pulled"
     return
   fi
 
   header "Step 1 — Build Docker images"
-  info "Building engine, btc-indexer, and ui images..."
+  info "Building engine, indexers (BTC + TRON), and ui images..."
   # reset uses --no-cache (guarantees fresh build after code changes, e.g. migrate.ts).
   # start uses normal cache (faster for iterative runs — Docker detects file changes).
   local cache_flag=""
   [[ "$CMD" == "reset" ]] && cache_flag="--no-cache"
-  $V3_COMPOSE_CMD build $cache_flag engine-1 engine-2 btc-indexer-1 btc-indexer-2 ui
+  $V3_COMPOSE_CMD build $cache_flag engine-1 engine-2 btc-indexer-1 btc-indexer-2 tron-indexer-1 tron-indexer-2 ui
   ok "All images built"
 }
 
 # ─── Step 2: Start infrastructure ─────────────────────────────────────────────
 step_infra() {
-  header "Step 2 — Start PostgreSQL + Bitcoin Core nodes"
+  header "Step 2 — Start PostgreSQL + Bitcoin Core + TRON nodes"
 
-  info "Starting postgres + btc-node-1 + btc-node-2..."
-  if ! $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d postgres btc-node-1 btc-node-2; then
+  # Start all infra in parallel. TRON nodes take 30-60s to produce the first block,
+  # so we start them now and wait for BTC/postgres first (Genesis step runs while TRON warms up).
+  # We wait for TRON readiness later in step_tron_genesis.
+  info "Starting postgres + btc-node-1 + btc-node-2 + tron-node-1 + tron-node-2..."
+  if ! $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d postgres btc-node-1 btc-node-2 tron-node-1 tron-node-2; then
     echo ""
     err "Failed to start infrastructure containers."
     echo ""
@@ -288,11 +317,13 @@ step_infra() {
     echo "       Current Docker disk usage:"
     docker system df 2>/dev/null | sed 's/^/       /'
     echo ""
-    echo "    2. Port already in use:"
-    lsof -i :18443 -i :18444 -i :5432 2>/dev/null | grep -v "^COMMAND" | head -5 | sed 's/^/       /' || true
+    echo "    2. Port already in use (BTC RPC: 18443, TRON HTTP: 8090, 8091, PG: 5432):"
+    lsof -i :18443 -i :18444 -i :8090 -i :8091 -i :5432 2>/dev/null | grep -v "^COMMAND" | head -8 | sed 's/^/       /' || true
     echo ""
     warn "btc-node-1 logs:"
     docker logs chainapi-btc-node-1 2>/dev/null | tail -10 | sed 's/^/    /' || true
+    warn "tron-node-1 logs (first 10 lines):"
+    docker logs chainapi-tron-node-1 2>/dev/null | tail -10 | sed 's/^/    /' || true
     die "Infrastructure startup failed"
   fi
 
@@ -411,7 +442,14 @@ ENVEOF
   env_set "$ENGINE_ENV" "DATABASE_URL" "postgres://chainapi:chainapi_dev@localhost:5433/chainapi"
   env_set "$ENGINE_ENV" "BITCOIN_NETWORK" "regtest"
   env_set "$ENGINE_ENV" "BITCOIN_CORE_PROVISIONING_ENABLED" "false"
-  ok "engine/.env configured (PostgreSQL)"
+  # TRON private network — tron-node-1 is the SR witness, exposed on localhost:8090/8091
+  env_set "$ENGINE_ENV" "TRON_NODE_URL" "http://localhost:8090"
+  env_set "$ENGINE_ENV" "TRON_SOLIDITY_NODE_URL" "http://localhost:8091"
+  env_set "$ENGINE_ENV" "TRON_NETWORK" "private"
+  env_set "$ENGINE_ENV" "TRON_DEFAULT_CONFIRMATIONS" "1"
+  env_set "$ENGINE_ENV" "TRON_FINALITY_CONFIRMATIONS" "20"
+  # TRON_USDT_CONTRACT_ADDRESS is set by step_tron_genesis after deployment
+  ok "engine/.env configured (PostgreSQL + TRON private network)"
 }
 
 # ─── Step 5: DB migrations + seed ─────────────────────────────────────────────
@@ -426,36 +464,145 @@ step_seed() {
     die "Seed failed — see output above"
   }
 
-  local new_api new_admin new_xpub new_xprv
-  new_api=$(echo "$seed_out"   | grep -oE 'API_KEY=cak_[a-f0-9]+'       | head -1 | cut -d= -f2 || true)
-  new_admin=$(echo "$seed_out" | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+'     | head -1 | cut -d= -f2 || true)
-  new_xpub=$(echo "$seed_out"  | grep -oE 'BTC_DEV_XPUB=[A-Za-z0-9]+'  | head -1 | cut -d= -f2 || true)
-  new_xprv=$(echo "$seed_out"  | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+'  | head -1 | cut -d= -f2 || true)
+  local new_api new_admin new_xpub new_xprv new_tron_xpub new_tron_xprv
+  new_api=$(echo "$seed_out"          | grep -oE 'API_KEY=cak_[a-f0-9]+'           | head -1 | cut -d= -f2 || true)
+  new_admin=$(echo "$seed_out"        | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+'         | head -1 | cut -d= -f2 || true)
+  new_xpub=$(echo "$seed_out"         | grep -oE 'BTC_DEV_XPUB=[A-Za-z0-9]+'      | head -1 | cut -d= -f2 || true)
+  new_xprv=$(echo "$seed_out"         | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+'      | head -1 | cut -d= -f2 || true)
+  new_tron_xpub=$(echo "$seed_out"    | grep -oE 'TRON_DEV_XPUB=[A-Za-z0-9]+'     | head -1 | cut -d= -f2 || true)
+  new_tron_xprv=$(echo "$seed_out"    | grep -oE 'TRON_DEV_XPRV=[A-Za-z0-9]+'     | head -1 | cut -d= -f2 || true)
 
   local engine_api_key engine_admin_key
   engine_api_key=$(env_get "$ENGINE_ENV" "API_KEY")
   engine_admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
 
-  [ -n "$new_api"   ] && { env_set "$ENGINE_ENV" "API_KEY"     "$new_api";   engine_api_key="$new_api"; }
-  [ -n "$new_admin" ] && { env_set "$ENGINE_ENV" "ADMIN_KEY"   "$new_admin"; engine_admin_key="$new_admin"; }
-  [ -n "$new_xpub"  ] && env_set "$ENGINE_ENV" "BTC_DEV_XPUB" "$new_xpub"
-  [ -n "$new_xprv"  ] && env_set "$ENGINE_ENV" "BTC_DEV_XPRV" "$new_xprv"
+  [ -n "$new_api"       ] && { env_set "$ENGINE_ENV" "API_KEY"       "$new_api";       engine_api_key="$new_api"; }
+  [ -n "$new_admin"     ] && { env_set "$ENGINE_ENV" "ADMIN_KEY"     "$new_admin";     engine_admin_key="$new_admin"; }
+  [ -n "$new_xpub"      ] && env_set "$ENGINE_ENV" "BTC_DEV_XPUB"   "$new_xpub"
+  [ -n "$new_xprv"      ] && env_set "$ENGINE_ENV" "BTC_DEV_XPRV"   "$new_xprv"
+  [ -n "$new_tron_xpub" ] && { env_set "$ENGINE_ENV" "TRON_DEV_XPUB" "$new_tron_xpub"; TRON_ACCOUNT_XPUB="$new_tron_xpub"; }
+  [ -n "$new_tron_xprv" ] && env_set "$ENGINE_ENV" "TRON_DEV_XPRV"  "$new_tron_xprv"
 
   [ -z "$engine_api_key"   ] && engine_api_key=$(env_get "$ENGINE_ENV" "API_KEY")
   [ -z "$engine_admin_key" ] && engine_admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+  [ -z "$TRON_ACCOUNT_XPUB" ] && TRON_ACCOUNT_XPUB=$(env_get "$ENGINE_ENV" "TRON_DEV_XPUB")
 
   [ -n "$engine_api_key" ] && [ -n "$engine_admin_key" ] || \
     die "Seed ran but API keys not found — check engine/.env"
 
   ok "Migrations + seed complete"
   echo ""
-  echo -e "  ${C_CYAN}API key${C_RESET}    ${engine_api_key}"
-  echo -e "  ${C_CYAN}Admin key${C_RESET}  ${engine_admin_key}"
-  [ -n "$new_xpub" ] && echo -e "  ${C_CYAN}BTC xpub${C_RESET}   ${new_xpub}"
+  echo -e "  ${C_CYAN}API key${C_RESET}      ${engine_api_key}"
+  echo -e "  ${C_CYAN}Admin key${C_RESET}    ${engine_admin_key}"
+  [ -n "$new_xpub"      ] && echo -e "  ${C_CYAN}BTC xpub${C_RESET}     ${new_xpub}"
+  [ -n "$new_tron_xpub" ] && echo -e "  ${C_CYAN}TRON xpub${C_RESET}    ${new_tron_xpub}"
 
   # Export for downstream steps
   V3_API_KEY="$engine_api_key"
   V3_ADMIN_KEY="$engine_admin_key"
+}
+
+# ─── Step 5b: Deploy USDT TRC-20 on TRON private network ──────────────────────
+step_tron_genesis() {
+  header "Step 5b — Deploy USDT TRC-20 (TRON private network)"
+
+  # tron-node-1 is exposed on localhost:8090 (mapped in docker-compose)
+  info "Waiting for tron-node-1 HTTP API (may take 30-60s for SR witness to start producing blocks)..."
+  local tries=0
+  until curl -sf "http://localhost:8090/wallet/getnowblock" > /dev/null 2>&1; do
+    printf "."
+    sleep 3
+    tries=$((tries+1))
+    if [ "$tries" -ge 40 ]; then
+      echo ""
+      warn "tron-node-1 logs (last 20 lines):"
+      $V3_COMPOSE_CMD logs --tail 20 tron-node-1 2>/dev/null | sed 's/^/    /' || true
+      die "tron-node-1 did not respond after 120s — check logs above"
+    fi
+  done
+  echo " OK"
+  ok "tron-node-1 HTTP API ready → http://localhost:8090"
+
+  # Idempotency: skip if contract address already persisted (e.g. start after partial reset)
+  local existing_contract
+  existing_contract=$(env_get "$ENGINE_ENV" "TRON_USDT_CONTRACT_ADDRESS")
+  if [ -n "$existing_contract" ]; then
+    TRON_USDT_CONTRACT_ADDRESS="$existing_contract"
+    export TRON_USDT_CONTRACT_ADDRESS
+    ok "USDT TRC-20 already deployed: $TRON_USDT_CONTRACT_ADDRESS (reusing)"
+    return
+  fi
+
+  # Compile TRC20Token.sol using the official solc Docker image
+  local bytecode_file="$CONTRACTS_DIR/out/TRC20Token.bin"
+  if [ ! -f "$bytecode_file" ]; then
+    info "Compiling TRC20Token.sol (docker run ethereum/solc:0.8.20-alpine)..."
+    mkdir -p "$CONTRACTS_DIR/out"
+    if docker run --rm \
+      -v "$CONTRACTS_DIR:/contracts" \
+      ethereum/solc:0.8.20-alpine \
+      --optimize --optimize-runs 200 \
+      --bin --abi \
+      /contracts/TRC20Token.sol \
+      -o /contracts/out \
+      --overwrite > /dev/null 2>&1; then
+      ok "TRC20Token.sol compiled"
+    else
+      die "Solidity compilation failed — check $CONTRACTS_DIR/TRC20Token.sol"
+    fi
+  else
+    ok "TRC20Token.bin already compiled (cached)"
+  fi
+
+  [ -f "$bytecode_file" ] || die "Compiled bytecode not found: $bytecode_file"
+  local trc20_bytecode
+  trc20_bytecode=$(cat "$bytecode_file")
+  [ -n "$trc20_bytecode" ] || die "Compiled bytecode is empty — delete $CONTRACTS_DIR/out and retry"
+
+  info "Deploying USDT TRC-20 contract (1,000,000,000 USDT to genesis account)..."
+  local deploy_out
+  deploy_out=$(
+    TRON_NODE_URL="http://localhost:8090" \
+    TRON_GENESIS_PRIV_HEX="$TRON_GENESIS_PRIVATE_KEY_HEX" \
+    TRC20_BYTECODE="$trc20_bytecode" \
+    TRON_TOTAL_SUPPLY_SUN="1000000000000000" \
+    node "$SCRIPT_DIR/scripts/deploy-trc20.js" 2>&1
+  ) || {
+    echo "$deploy_out" | tail -5 | sed 's/^/    /' >&2
+    die "TRC-20 deployment failed — check tron-node-1 logs"
+  }
+
+  TRON_USDT_CONTRACT_ADDRESS=$(echo "$deploy_out" | grep -oE 'CONTRACT_ADDRESS=T[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)
+  [ -n "$TRON_USDT_CONTRACT_ADDRESS" ] || {
+    echo "$deploy_out" | tail -5 | sed 's/^/    /' >&2
+    die "TRC-20 deployment output did not contain CONTRACT_ADDRESS"
+  }
+
+  ok "USDT TRC-20 deployed: $TRON_USDT_CONTRACT_ADDRESS"
+  env_set "$ENGINE_ENV" "TRON_USDT_CONTRACT_ADDRESS" "$TRON_USDT_CONTRACT_ADDRESS"
+  export TRON_USDT_CONTRACT_ADDRESS
+  detail "Contract persisted in engine/.env — reused on next start (without reset)"
+}
+
+# ─── Configure tron xpub on tenant_default via API (after engines are up) ─────
+step_configure_tron_tenant() {
+  local admin_key base
+  admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+  base="http://localhost:3009"
+
+  [ -n "$TRON_ACCOUNT_XPUB" ] || TRON_ACCOUNT_XPUB=$(env_get "$ENGINE_ENV" "TRON_DEV_XPUB")
+  if [ -z "$TRON_ACCOUNT_XPUB" ]; then
+    warn "TRON_DEV_XPUB not set in engine/.env — skipping TRON tenant config"
+    return
+  fi
+
+  info "Setting TRON xpub on tenant_default..."
+  curl -sf -X PATCH "${base}/admin/v1/tenants/tenant_default/config" \
+    -H "X-Admin-Key: $admin_key" \
+    -H "Content-Type: application/json" \
+    -d "{\"tronXpub\":\"${TRON_ACCOUNT_XPUB}\"}" > /dev/null \
+    && ok "tenant_default tronXpub configured (HD deposit addresses enabled)" \
+    || warn "Could not set tronXpub on tenant_default — check engine logs"
 }
 
 # ─── Step 6: Start engines ─────────────────────────────────────────────────────
@@ -469,6 +616,8 @@ step_engines() {
   export API_KEY="$api_key"
   export ADMIN_KEY="$admin_key"
   export CUSTOMER_SESSION_SECRET=$(env_get "$ENGINE_ENV" "CUSTOMER_SESSION_SECRET" || echo "change-me-in-production-min-32-chars!!")
+  # Pass TRON_USDT_CONTRACT_ADDRESS to docker-compose env substitution (picks up ${TRON_USDT_CONTRACT_ADDRESS:-})
+  export TRON_USDT_CONTRACT_ADDRESS
 
   if [[ "$DEBUG_MODE" == "true" ]]; then
     echo -e "  ${C_YELLOW}Debug mode — engines start with Node.js inspector (--inspect)${C_RESET}"
@@ -541,11 +690,12 @@ step_register_nodes() {
   base="http://localhost:3000"
 
   _register_node() {
-    local label="$1" role="$2" priority="$3" rpc_url="$4" pwd_ref="$5"
+    local chain_id="$1" label="$2" role="$3" priority="$4" rpc_url="$5"
+    local rpc_user="${6:-}" pwd_ref="${7:-}" network="${8:-mainnet}"
 
     # Idempotency: skip if a node with this rpcUrl already exists
     local existing_id
-    existing_id=$(curl -sf "${base}/admin/v1/chain-nodes?chainId=bitcoin" \
+    existing_id=$(curl -sf "${base}/admin/v1/chain-nodes?chainId=${chain_id}" \
       -H "X-Admin-Key: $admin_key" 2>/dev/null \
       | python3 -c "
 import sys, json
@@ -563,8 +713,14 @@ for n in data:
 
     info "Registering chain node: $label ($role, priority=$priority)..."
     local body result
-    body=$(printf '{"chainId":"bitcoin","label":"%s","rpcUrl":"%s","rpcUser":"bitcoin","rpcPasswordRef":"%s","network":"regtest","role":"%s","priority":%d}' \
-      "$label" "$rpc_url" "$pwd_ref" "$role" "$priority")
+    # Build JSON body — rpcUser and rpcPasswordRef are optional (omit for TRON open-HTTP nodes)
+    if [ -n "$rpc_user" ] && [ -n "$pwd_ref" ]; then
+      body=$(printf '{"chainId":"%s","label":"%s","rpcUrl":"%s","rpcUser":"%s","rpcPasswordRef":"%s","network":"%s","role":"%s","priority":%d}' \
+        "$chain_id" "$label" "$rpc_url" "$rpc_user" "$pwd_ref" "$network" "$role" "$priority")
+    else
+      body=$(printf '{"chainId":"%s","label":"%s","rpcUrl":"%s","network":"%s","role":"%s","priority":%d}' \
+        "$chain_id" "$label" "$rpc_url" "$network" "$role" "$priority")
+    fi
 
     result=$(curl -sf -X POST "${base}/admin/v1/chain-nodes" \
       -H "X-Admin-Key: $admin_key" \
@@ -576,20 +732,27 @@ for n in data:
     [ -n "$node_id" ] && ok "Registered: $label → $node_id" || warn "Registration response: $result"
   }
 
-  # btc-node-1 is primary (full node, priority 10)
-  # rpcPasswordRef uses env: prefix — engine reads from BTC_NODE_*_RPC_PASSWORD env var
-  _register_node "btc-node-1 (primary)" "full" 10 "http://btc-node-1:18443" "env:BTC_NODE_1_RPC_PASSWORD"
-  _register_node "btc-node-2 (standby)" "full" 20 "http://btc-node-2:18443" "env:BTC_NODE_2_RPC_PASSWORD"
+  # BTC nodes — rpcUser + rpcPasswordRef required (Bitcoin Core Basic Auth)
+  _register_node "bitcoin" "btc-node-1 (primary)" "full" 10 "http://btc-node-1:18443" \
+    "bitcoin" "env:BTC_NODE_1_RPC_PASSWORD" "regtest"
+  _register_node "bitcoin" "btc-node-2 (standby)" "full" 20 "http://btc-node-2:18443" \
+    "bitcoin" "env:BTC_NODE_2_RPC_PASSWORD" "regtest"
 
-  ok "Chain nodes registered (btc-node-1 priority=10, btc-node-2 priority=20)"
-  detail "Note: chain_nodes use env: password refs. In production set:"
-  detail "  BTC_NODE_1_RPC_PASSWORD=<password> in engine environment"
-  detail "  BTC_NODE_2_RPC_PASSWORD=<password> in engine environment"
+  # TRON nodes — no Basic Auth (open HTTP API); rpcUser and rpcPasswordRef omitted
+  _register_node "tron" "tron-node-1 (SR witness)" "full" 10 "http://tron-node-1:8090" \
+    "" "" "private"
+  _register_node "tron" "tron-node-2 (observer)"   "full" 20 "http://tron-node-2:8090" \
+    "" "" "private"
+
+  ok "Chain nodes registered"
+  detail "BTC:  btc-node-1 priority=10 (miner/primary), btc-node-2 priority=20"
+  detail "TRON: tron-node-1 priority=10 (SR witness),  tron-node-2 priority=20"
+  detail "Note: BTC nodes use env: password refs — set BTC_NODE_{1,2}_RPC_PASSWORD in engine env"
 }
 
-# ─── Step 8: Start btc-indexers ───────────────────────────────────────────────
+# ─── Step 8: Start btc-indexers + tron-indexers ──────────────────────────────
 step_indexers() {
-  header "Step 8 — Start btc-indexers"
+  header "Step 8 — Start BTC and TRON indexers"
 
   info "Starting btc-indexer-1 (watches btc-node-1)..."
   $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d btc-indexer-1
@@ -597,12 +760,26 @@ step_indexers() {
   info "Starting btc-indexer-2 (watches btc-node-2)..."
   $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d btc-indexer-2
 
+  # Export TRON_USDT_CONTRACT_ADDRESS so docker compose passes it to tron-indexers
+  # as INDEXER_WATCHED_CONTRACTS (set from $TRON_USDT_CONTRACT_ADDRESS interpolation in compose).
+  export TRON_USDT_CONTRACT_ADDRESS
+
+  info "Starting tron-indexer-1 (watches tron-node-1)..."
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d tron-indexer-1
+
+  info "Starting tron-indexer-2 (watches tron-node-2)..."
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d tron-indexer-2
+
   sleep 3
 
   ok "btc-indexer-1 started — watching btc-node-1 (port 18443)"
   ok "btc-indexer-2 started — watching btc-node-2 (port 18453)"
-  detail "Indexers scan blocks every 5s → write to chain_events table"
-  detail "Deduplication: ON CONFLICT DO NOTHING if both detect the same tx"
+  ok "tron-indexer-1 started — watching tron-node-1 (port 8090)"
+  ok "tron-indexer-2 started — watching tron-node-2 (container internal)"
+  detail "BTC indexers scan every 5s, TRON indexers scan every 3s → chain_events table"
+  detail "Deduplication: ON CONFLICT DO NOTHING if both indexers detect the same event"
+  [ -n "$TRON_USDT_CONTRACT_ADDRESS" ] && \
+    detail "TRON USDT contract watched: $TRON_USDT_CONTRACT_ADDRESS"
 }
 
 # ─── Step 9: nginx load balancer + UI proxy ────────────────────────────────────
@@ -985,7 +1162,7 @@ step_enroll_signers() {
   base="http://localhost:3009"
 
   _enroll_signer() {
-    local edition="$1" fingerprint="$2" name="$3" signer_dir="$4" port="$5"
+    local edition="$1" fingerprint="$2" name="$3" signer_dir="$4" port="$5" capabilities_json="$6"
 
     [ -d "$signer_dir" ] || die "$name directory not found: $signer_dir"
     info "Enrolling '$name' via nginx → shared DB..."
@@ -993,8 +1170,8 @@ step_enroll_signers() {
     local key_provider
     key_provider="env"
     [ "$edition" = "enterprise" ] && key_provider="$ENTERPRISE_PROVIDER"
-    body=$(printf '{"name":"%s","signerFingerprint":"%s","publicKey":"ed25519:devpubkey:%s","capabilities":{"chains":["bitcoin"],"assets":["bitcoin:BTC"],"formats":["btc_psbt"]},"edition":"%s","connectivityMode":"polling","keyProvider":"%s"}' \
-      "$name" "$fingerprint" "$edition" "$edition" "$key_provider")
+    body=$(printf '{"name":"%s","signerFingerprint":"%s","publicKey":"ed25519:devpubkey:%s","capabilities":%s,"edition":"%s","connectivityMode":"polling","keyProvider":"%s"}' \
+      "$name" "$fingerprint" "$edition" "$capabilities_json" "$edition" "$key_provider")
     result=$(curl -sf -X POST "${base}/v1/external-signers/enroll" \
       -H "Authorization: Bearer $api_key" \
       -H "Content-Type: application/json" \
@@ -1003,6 +1180,11 @@ step_enroll_signers() {
       "import sys,json; d=json.load(sys.stdin); print(d['data']['id'])" 2>/dev/null) \
       || die "Parse error: $result"
     ok "Enrolled → $signer_id (stored in shared DB, visible to both engines)"
+
+    local oss_tron_xprv
+    oss_tron_xprv=$(env_get_dev_secret "$ENGINE_ENV" "TRON_DEV_XPRV")
+    local oss_tron_contract
+    oss_tron_contract=$(env_get "$ENGINE_ENV" "TRON_USDT_CONTRACT_ADDRESS")
 
     if [ "$edition" = "community" ]; then
       cat > "$signer_dir/.env" <<EOF
@@ -1021,12 +1203,17 @@ BTC_SIGNING_MODE=dev_env_key
 BTC_DEV_PRIVATE_KEY_WIF=${HOT_WALLET_WIF}
 BTC_DEV_ACCOUNT_XPRV=${ACCOUNT_XPRV}
 BTC_NETWORK=regtest
+TRON_NETWORK=private
+TRON_SIGNER_FINGERPRINT=${SIGNER_OSS_TRON_FINGERPRINT}
+TRON_DEV_ACCOUNT_XPRV=${oss_tron_xprv}
+TRON_USDT_CONTRACT_ADDRESS=${oss_tron_contract}
 POLL_INTERVAL_MS=3000
 TASK_BATCH_SIZE=5
-SUPPORTED_CHAINS=bitcoin
-SUPPORTED_ASSETS=bitcoin:BTC
-SUPPORTED_FORMATS=btc_psbt
+SUPPORTED_CHAINS=bitcoin,tron
+SUPPORTED_ASSETS=bitcoin:BTC,tron:USDT,tron:TRX
+SUPPORTED_FORMATS=btc_psbt,tron_raw_tx
 MAX_AUTO_SIGN_AMOUNT_SATS=100000000
+MAX_AUTO_SIGN_AMOUNT_SUN=1000000000000
 MAX_FEE_RATE_SAT_VB=50
 MAX_OUTPUTS_PER_BATCH=200
 SIGNER_PORT=${port}
@@ -1093,6 +1280,11 @@ VAULT_KV_SWEEP_XPRV_PATH=${VAULT_KV_SWEEP_XPRV_PATH}
 VAULT_KV_POLICY_PATH=${VAULT_KV_POLICY_PATH}
 VAULT_SECRET_CACHE_TTL_MS=60000
 BTC_NETWORK=regtest
+TRON_NETWORK=private
+TRON_SIGNER_FINGERPRINT=${SIGNER_ENT_TRON_FINGERPRINT}
+TRON_DEV_ACCOUNT_XPRV=${oss_tron_xprv}
+TRON_SWEEP_XPRV_SECRET_NAME=tron-sweep-xprv
+TRON_USDT_CONTRACT_ADDRESS=${oss_tron_contract}
 POLL_INTERVAL_MS=1000
 TASK_BATCH_SIZE=20
 SIGNER_CONCURRENCY=4
@@ -1155,9 +1347,11 @@ EOF
   }
 
   [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && \
-    _enroll_signer "community"  "$SIGNER_OSS_FINGERPRINT" "Dev OSS Signer"        "$SIGNER_OSS_DIR" "3101"
+    _enroll_signer "community"  "$SIGNER_OSS_FINGERPRINT" "Dev OSS Signer"        "$SIGNER_OSS_DIR" "3101" \
+      '{"chains":["bitcoin","tron"],"assets":["bitcoin:BTC","tron:USDT","tron:TRX"],"formats":["btc_psbt","tron_raw_tx"]}'
   [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
-    _enroll_signer "enterprise" "$SIGNER_ENT_FINGERPRINT" "Dev Enterprise Signer" "$SIGNER_ENT_DIR" "3102"
+    _enroll_signer "enterprise" "$SIGNER_ENT_FINGERPRINT" "Dev Enterprise Signer" "$SIGNER_ENT_DIR" "3102" \
+      '{"chains":["bitcoin"],"assets":["bitcoin:BTC"],"formats":["btc_psbt"]}'
 }
 
 # ─── Start signers via Docker Compose profiles ────────────────────────────────
@@ -1260,9 +1454,18 @@ step_status() {
   echo -e "  ${C_GREEN}btc-node-1${C_RESET}        →  http://localhost:18443  (active, mines in dev)"
   echo -e "  ${C_GREEN}btc-node-2${C_RESET}        →  http://localhost:18453  (active, equivalent to node-1)"
   echo ""
+  echo -e "  ${C_BOLD}── TRON Private Network ────────────────────────────────${C_RESET}"
+  echo -e "  ${C_GREEN}tron-node-1${C_RESET}       →  http://localhost:8090   (SR witness, FullNode API)"
+  echo -e "  ${C_GREEN}tron-node-1${C_RESET}       →  http://localhost:8091   (SolidityNode API)"
+  echo -e "  ${C_GREEN}tron-node-2${C_RESET}       →  container-internal only (observer, peered to node-1)"
+  [ -n "$TRON_USDT_CONTRACT_ADDRESS" ] && \
+    echo -e "  ${C_CYAN}USDT contract${C_RESET}     →  $TRON_USDT_CONTRACT_ADDRESS"
+  echo ""
   echo -e "  ${C_BOLD}── Block Indexers ──────────────────────────────────────${C_RESET}"
   echo -e "  ${C_GREEN}btc-indexer-1${C_RESET}     →  watches btc-node-1 → chain_events"
   echo -e "  ${C_GREEN}btc-indexer-2${C_RESET}     →  watches btc-node-2 → chain_events (dedup)"
+  echo -e "  ${C_GREEN}tron-indexer-1${C_RESET}    →  watches tron-node-1 → chain_events (TRX + USDT)"
+  echo -e "  ${C_GREEN}tron-indexer-2${C_RESET}    →  watches tron-node-2 → chain_events (dedup)"
   echo ""
   echo -e "  ${C_BOLD}── Database ────────────────────────────────────────────${C_RESET}"
   echo -e "  ${C_GREEN}PostgreSQL${C_RESET}        →  localhost:5433  db=chainapi  user=chainapi"
@@ -1330,7 +1533,8 @@ step_status() {
   fi
   echo -e "  ${C_CYAN}Logs:${C_RESET}"
   echo "    $V3_COMPOSE_CMD logs -f engine-1 engine-2 nginx"
-  echo "    $V3_COMPOSE_CMD logs -f btc-indexer-1 btc-indexer-2"
+  echo "    $V3_COMPOSE_CMD logs -f btc-indexer-1 btc-indexer-2 tron-indexer-1 tron-indexer-2"
+  echo "    $V3_COMPOSE_CMD logs -f tron-node-1 tron-node-2"
   [[ "$SIGNER_MODE" != "none" && "$ENTERPRISE_PROVIDER" = "vault" ]] && \
     echo "    $V3_COMPOSE_CMD logs -f signer-oss signer-enterprise vault"
   [[ "$SIGNER_MODE" != "none" && "$ENTERPRISE_PROVIDER" != "vault" ]] && \
@@ -1346,7 +1550,7 @@ step_status() {
 # ─── Tail logs ────────────────────────────────────────────────────────────────
 step_tail() {
   trap "cmd_stop; exit 0" INT TERM
-  local services="engine-1 engine-2 btc-indexer-1 btc-indexer-2 nginx"
+  local services="engine-1 engine-2 btc-indexer-1 btc-indexer-2 tron-indexer-1 tron-indexer-2 nginx"
   [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]        && services="$services signer-oss"
   [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ && "$ENTERPRISE_PROVIDER" = "vault" ]] && services="$services vault signer-enterprise"
   [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ && "$ENTERPRISE_PROVIDER" != "vault" ]] && services="$services signer-enterprise"
@@ -1367,15 +1571,17 @@ case "$CMD" in
   reset)
     cmd_reset
     step_build
-    step_infra
-    step_genesis
-    step_engine_env
-    step_seed
-    step_engines
-    step_register_nodes
-    step_indexers
+    step_infra                # starts postgres + btc-nodes + tron-nodes simultaneously
+    step_genesis              # BTC genesis (while TRON nodes warm up in background)
+    step_engine_env           # write engine/.env with TRON vars
+    step_seed                 # migrations + seed → extracts BTC+TRON xpub/xprv
+    step_tron_genesis         # waits for tron-node-1, compiles+deploys USDT TRC-20
+    step_engines              # start engines with TRON_USDT_CONTRACT_ADDRESS already set
+    step_register_nodes       # register btc-node-1/2 + tron-node-1/2
+    step_indexers             # start btc-indexer-1/2 + tron-indexer-1/2
     # nginx must start BEFORE signer enrollment — enrollment calls localhost:3009 (nginx)
     step_nginx_ui
+    step_configure_tron_tenant  # set tronXpub on tenant_default via API
     if [[ "$SIGNER_MODE" != "none" ]]; then
       step_derive_wif
       step_enterprise_vault
@@ -1390,15 +1596,17 @@ case "$CMD" in
 
   start|"")
     step_build
-    step_infra
-    step_genesis
-    step_engine_env
-    step_seed
-    step_engines
-    step_register_nodes
-    step_indexers
+    step_infra                # starts postgres + btc-nodes + tron-nodes simultaneously
+    step_genesis              # BTC genesis (while TRON nodes warm up in background)
+    step_engine_env           # write engine/.env with TRON vars
+    step_seed                 # migrations + seed → extracts BTC+TRON xpub/xprv
+    step_tron_genesis         # waits for tron-node-1, compiles+deploys USDT TRC-20
+    step_engines              # start engines with TRON_USDT_CONTRACT_ADDRESS already set
+    step_register_nodes       # register btc-node-1/2 + tron-node-1/2
+    step_indexers             # start btc-indexer-1/2 + tron-indexer-1/2
     # nginx must start BEFORE signer enrollment — enrollment calls localhost:3009 (nginx)
     step_nginx_ui
+    step_configure_tron_tenant  # set tronXpub on tenant_default via API
     if [[ "$SIGNER_MODE" != "none" ]]; then
       step_derive_wif
       step_enterprise_vault
