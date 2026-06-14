@@ -405,6 +405,14 @@ export const api = {
   getBitcoinFees: () =>
     tenantRequest('/api/chains/bitcoin/fees'),
 
+  getTronFees: ({ assetId, amount } = {}) => {
+    const params = new URLSearchParams();
+    if (assetId) params.set('assetId', assetId);
+    if (amount)  params.set('amount', amount);
+    const qs = params.toString();
+    return tenantRequest(`/api/chains/tron/fees${qs ? '?' + qs : ''}`);
+  },
+
   resolveAddress: async (address) => {
     const params = new URLSearchParams({ address });
     const res = await tenantRequest(`/api/addresses/resolve?${params}`);

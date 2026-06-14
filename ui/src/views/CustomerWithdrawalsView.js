@@ -9,7 +9,7 @@ import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { template as headerTpl, createCustomerDetailHeaderController } from '../components/CustomerDetailHeader.js';
 import { getActiveTenantKey } from '../api.js';
-import { getConfirmedBitcoinBalance } from '../balanceHelpers.js';
+import { getConfirmedBitcoinBalance, formatSunAsTrx } from '../balanceHelpers.js';
 
 const ROUTE = '/customers';
 const ACTIVE_TAB = 'withdrawals';
@@ -406,15 +406,18 @@ export function createController({ api, router, id }) {
 
     // Fee estimate panel
     feeEstimate: {
-      visible:         false,
-      feeSats:         '—',
-      rateLabel:       '—',
-      showDebit:       false,
-      debitLabel:      'Total deducted from balance',
-      debitAmount:     '—',
-      showRecipient:   false,
-      recipientAmount: '—',
+      visible:              false,
+      feeSats:              '—',   // primary fee line (sats for BTC, TRX for TRON)
+      rateLabel:            '—',   // rate/resource detail line
+      showDebit:            false,
+      debitLabel:           'Total deducted from balance',
+      debitAmount:          '—',
+      showRecipient:        false,
+      recipientAmount:      '—',
+      showFeeCoverageNote:  false,
+      feeCoverageNote:      '',    // for USDT: "Network fee paid in TRX by platform"
     },
+    _chainId: 'bitcoin', // active chain for withdrawal form
 
     balance: {
       loading: false,
@@ -578,12 +581,19 @@ export function createController({ api, router, id }) {
         return;
       }
 
+      if (self._chainId === 'tron') {
+        self._loadTronFeeEstimate(amountStr);
+        return;
+      }
+
+      // Bitcoin: local computation using cached fee rate
       const feeRate = self._feeRateNormal;
       const estimatedFee = BigInt(Math.ceil(ESTIMATED_VSIZE_1IN_2OUT * feeRate));
 
       self.feeEstimate.visible = true;
       self.feeEstimate.feeSats = estimatedFee.toString() + ' sats';
       self.feeEstimate.rateLabel = `~${feeRate} sat/vB (normal priority) · ~${ESTIMATED_VSIZE_1IN_2OUT} vB`;
+      self.feeEstimate.showFeeCoverageNote = false;
 
       const coverage = self._feeCoverage;
       self.feeEstimate.showDebit = coverage === 'sender_pays';
@@ -595,6 +605,66 @@ export function createController({ api, router, id }) {
       } else if (coverage === 'recipient_pays') {
         const recipientGets = amount - estimatedFee;
         self.feeEstimate.recipientAmount = (recipientGets > 0n ? recipientGets : 0n).toString() + ' sats';
+      }
+    },
+
+    async _loadTronFeeEstimate(amountStr) {
+      // Show a placeholder while loading
+      self.feeEstimate.visible = true;
+      self.feeEstimate.feeSats = '…';
+      self.feeEstimate.rateLabel = 'Estimating…';
+      self.feeEstimate.showDebit = false;
+      self.feeEstimate.showRecipient = false;
+      self.feeEstimate.showFeeCoverageNote = false;
+
+      try {
+        const assetId = self._assetId || 'tron:USDT';
+        const fees = await api.getTronFees({ assetId, amount: amountStr });
+        const data = fees?.data;
+        if (!data) { self.feeEstimate.visible = false; return; }
+
+        const isUsdt = assetId === 'tron:USDT';
+        const estimatedFeeSun = BigInt(data.estimatedFeeSun ?? '0');
+        const amount = BigInt(amountStr);
+
+        if (data.hotWalletHasEnoughResources) {
+          self.feeEstimate.feeSats = '0 TRX (platform covers via staked resources)';
+        } else {
+          self.feeEstimate.feeSats = `~${formatSunAsTrx(data.estimatedFeeSun)}`;
+        }
+
+        const bd = data.breakdown ?? {};
+        if (isUsdt && bd.energyNeeded > 0) {
+          self.feeEstimate.rateLabel = `${bd.energyNeeded.toLocaleString()} energy × ${bd.energyPriceSun} sun/unit`;
+        } else {
+          self.feeEstimate.rateLabel = `${bd.bandwidthNeeded ?? 185} bytes bandwidth × ${bd.bandwidthPriceSun ?? 1000} sun/byte`;
+        }
+
+        const coverage = self._feeCoverage;
+
+        if (isUsdt) {
+          // For USDT: fee is always in TRX (different asset) — tenant always covers
+          self.feeEstimate.showDebit = false;
+          self.feeEstimate.showRecipient = false;
+          if (!data.hotWalletHasEnoughResources) {
+            self.feeEstimate.showFeeCoverageNote = true;
+            self.feeEstimate.feeCoverageNote = 'Network fee paid in TRX by platform — USDT amount is unchanged';
+          }
+        } else {
+          // For TRX: fee is in same asset — apply coverage setting
+          self.feeEstimate.showFeeCoverageNote = false;
+          self.feeEstimate.showDebit = coverage === 'sender_pays';
+          self.feeEstimate.showRecipient = coverage === 'recipient_pays';
+          if (coverage === 'sender_pays') {
+            self.feeEstimate.debitLabel = 'Total deducted from your TRX balance';
+            self.feeEstimate.debitAmount = formatSunAsTrx((amount + estimatedFeeSun).toString());
+          } else if (coverage === 'recipient_pays') {
+            const recipientGets = amount - estimatedFeeSun;
+            self.feeEstimate.recipientAmount = formatSunAsTrx((recipientGets > 0n ? recipientGets : 0n).toString());
+          }
+        }
+      } catch {
+        self.feeEstimate.visible = false;
       }
     },
 

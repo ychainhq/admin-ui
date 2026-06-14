@@ -8,6 +8,7 @@ import { template as withdrawalBatchSearchTpl, createWithdrawalBatchSearchFormCo
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { getActiveTenantKey } from '../api.js';
+import { formatFeeDisplay } from '../balanceHelpers.js';
 
 const ROUTE = '/withdrawal-batches';
 
@@ -40,9 +41,14 @@ function normalizeBatch(b) {
   const txHash = b.tx_hash || b.txHash || '';
   const feeRaw = b.fee_raw ?? b.feeRaw ?? null;
   const feeRate = b.fee_rate_sat_vb ?? b.feeRateSatVb ?? null;
+  const chainId = b.chain_id || b.chainId || 'bitcoin';
   const signerId = b.signer_id || b.signerId || null;
   const replacedBy = b.replaced_by_batch_id || b.replacedByBatchId || null;
   const replacementOf = b.replacement_of_batch_id || b.replacementOfBatchId || null;
+
+  const isTron = chainId === 'tron';
+  const feeDisplay = feeRaw !== null ? formatFeeDisplay(feeRaw, chainId) : '—';
+  const rateDisplay = isTron ? '—' : (feeRate !== null ? `${feeRate} sat/vB` : '—');
 
   return {
     id:                  b.id || '—',
@@ -53,8 +59,8 @@ function normalizeBatch(b) {
     txHashShort:         txHash.length > 16 ? txHash.slice(0, 8) + '…' + txHash.slice(-6) : (txHash || '—'),
     outputsCount:        b.outputs_count ?? b.outputsCount ?? '—',
     totalOutputRaw:      b.total_output_raw ?? b.totalOutputRaw ?? '—',
-    feeRaw:              feeRaw !== null ? feeRaw : '—',
-    feeRateSatVb:        feeRate !== null ? feeRate : '—',
+    feeRaw:              feeDisplay,
+    feeRateSatVb:        rateDisplay,
     decisionMode:        b.decision_mode || b.decisionMode || '—',
     approvedBy:          b.approved_by || b.approvedBy || '—',
     signerIdShort:       signerId ? shortId(signerId) : '—',
@@ -141,9 +147,9 @@ const template = `
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">BATCH ID</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">OUTPUTS</th>
-                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">TOTAL (sats)</th>
-                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">FEE (sats)</th>
-                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">RATE (sat/vB)</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">TOTAL (raw)</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">FEE</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">RATE</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">MODE</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">APPROVED BY</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">SIGNER</th>
@@ -193,9 +199,9 @@ const template = `
                 <p class="font-mono-data text-on-surface-variant text-[11px] mb-xs"><span rv-text="batch.txHashShort"></span></p>
                 <div class="grid grid-cols-2 gap-xs text-[11px]">
                   <span class="text-on-surface-variant">Outputs: <span rv-text="batch.outputsCount" class="font-mono-data text-on-surface"></span></span>
-                  <span class="text-on-surface-variant">Total: <span rv-text="batch.totalOutputRaw" class="font-mono-data text-on-surface"></span> sats</span>
-                  <span class="text-on-surface-variant">Fee: <span rv-text="batch.feeRaw" class="font-mono-data text-on-surface"></span> sats</span>
-                  <span class="text-on-surface-variant">Rate: <span rv-text="batch.feeRateSatVb" class="font-mono-data text-on-surface"></span> sat/vB</span>
+                  <span class="text-on-surface-variant">Total: <span rv-text="batch.totalOutputRaw" class="font-mono-data text-on-surface"></span></span>
+                  <span class="text-on-surface-variant">Fee: <span rv-text="batch.feeRaw" class="font-mono-data text-on-surface"></span></span>
+                  <span class="text-on-surface-variant">Rate: <span rv-text="batch.feeRateSatVb" class="font-mono-data text-on-surface"></span></span>
                   <span class="text-on-surface-variant">Mode: <span rv-text="batch.decisionMode" class="font-mono-data text-on-surface"></span></span>
                   <span class="text-on-surface-variant">Signer: <span rv-text="batch.signerIdShort" class="font-mono-data text-on-surface"></span></span>
                 </div>
