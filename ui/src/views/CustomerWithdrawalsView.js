@@ -9,7 +9,7 @@ import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { template as headerTpl, createCustomerDetailHeaderController } from '../components/CustomerDetailHeader.js';
 import { getActiveTenantKey } from '../api.js';
-import { getConfirmedBitcoinBalance, formatSunAsTrx } from '../balanceHelpers.js';
+import { getConfirmedBitcoinBalance, formatSunAsTrx, formatMicroUsdt } from '../balanceHelpers.js';
 
 const ROUTE = '/customers';
 const ACTIVE_TAB = 'withdrawals';
@@ -643,12 +643,37 @@ export function createController({ api, router, id }) {
         const coverage = self._feeCoverage;
 
         if (isUsdt) {
-          // For USDT: fee is always in TRX (different asset) — tenant always covers
-          self.feeEstimate.showDebit = false;
-          self.feeEstimate.showRecipient = false;
-          if (!data.hotWalletHasEnoughResources) {
+          // TRX gas: always paid by hot wallet — show informational note
+          const trxGasNote = data.hotWalletHasEnoughResources
+            ? 'TRX gas covered by staked resources (0 cost)'
+            : `TRX gas ~${formatSunAsTrx(data.estimatedFeeSun)} paid by platform hot wallet`;
+
+          // USDT fee: configurable via tronUsdtWithdrawalFee + feeCoverage
+          const usdtFeeRaw = data.tronUsdtWithdrawalFee ?? '0';
+          const usdtFee = BigInt(usdtFeeRaw);
+          const responseCoverage = data.feeCoverage ?? coverage;
+
+          if (usdtFee === 0n || responseCoverage === 'tenant_pays') {
+            self.feeEstimate.showDebit = false;
+            self.feeEstimate.showRecipient = false;
             self.feeEstimate.showFeeCoverageNote = true;
-            self.feeEstimate.feeCoverageNote = 'Network fee paid in TRX by platform — USDT amount is unchanged';
+            self.feeEstimate.feeCoverageNote = `${trxGasNote}. No USDT withdrawal fee.`;
+          } else if (responseCoverage === 'sender_pays') {
+            const usdtFeeDisplay = formatMicroUsdt(usdtFeeRaw);
+            self.feeEstimate.showDebit = true;
+            self.feeEstimate.showRecipient = false;
+            self.feeEstimate.showFeeCoverageNote = true;
+            self.feeEstimate.feeCoverageNote = trxGasNote;
+            self.feeEstimate.debitLabel = `Total deducted from your USDT balance (amount + ${usdtFeeDisplay} fee)`;
+            self.feeEstimate.debitAmount = formatMicroUsdt((amount + usdtFee).toString());
+          } else if (responseCoverage === 'recipient_pays') {
+            const usdtFeeDisplay = formatMicroUsdt(usdtFeeRaw);
+            const recipientGets = amount > usdtFee ? amount - usdtFee : 0n;
+            self.feeEstimate.showDebit = false;
+            self.feeEstimate.showRecipient = true;
+            self.feeEstimate.showFeeCoverageNote = true;
+            self.feeEstimate.feeCoverageNote = trxGasNote;
+            self.feeEstimate.recipientAmount = formatMicroUsdt(recipientGets.toString());
           }
         } else {
           // For TRX: fee is in same asset — apply coverage setting

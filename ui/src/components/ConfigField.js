@@ -76,6 +76,13 @@ export const BATCH_CONFIG_FIELD_DEFINITIONS = [
     ],
   },
   {
+    key: 'tronUsdtWithdrawalFee',
+    label: 'tronUsdtWithdrawalFee',
+    description: 'Fixed USDT fee charged per withdrawal (micro-USDT, 6 decimals). "0" = no customer fee (platform absorbs). "1000000" = 1 USDT. Applied per the feeCoverage mode above.',
+    inputType: 'text',
+    placeholder: 'e.g. 1000000 (= 1 USDT), 0 = no fee',
+  },
+  {
     key: 'btcMinOutputsPerBatch',
     label: 'btcMinOutputsPerBatch',
     description: 'Minimum number of queued withdrawals needed to trigger a batch.',

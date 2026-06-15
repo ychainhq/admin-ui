@@ -126,6 +126,20 @@ export function formatSunAsTrx(sunStr) {
 }
 
 /**
+ * Format micro-USDT (6 decimals) as human-readable USDT string.
+ * "1000000" → "1 USDT", "500000" → "0.5 USDT"
+ */
+export function formatMicroUsdt(microStr) {
+  if (microStr === null || microStr === undefined || microStr === '') return '0 USDT';
+  const n = Number(microStr);
+  if (isNaN(n)) return '— USDT';
+  if (n === 0) return '0 USDT';
+  const usdt = n / 1_000_000;
+  const formatted = usdt % 1 === 0 ? usdt.toFixed(0) : usdt.toFixed(6).replace(/\.?0+$/, '');
+  return `${formatted} USDT`;
+}
+
+/**
  * Chain-aware fee display: TRON in TRX, Bitcoin in sats.
  */
 export function formatFeeDisplay(feeRaw, chainId) {
