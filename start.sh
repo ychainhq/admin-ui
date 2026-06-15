@@ -295,12 +295,12 @@ cmd_reset() {
   docker system df 2>/dev/null | grep -v "^TYPE" | sed 's/^/     /' || true
 
   if [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]]; then
-    [ -f "$SIGNER_OSS_DIR/.env"      ] && { rm -f "$SIGNER_OSS_DIR/.env";      ok "signer-oss/.env removed"; }
-    [ -f "$SIGNER_OSS_DIR/.env.tron" ] && { rm -f "$SIGNER_OSS_DIR/.env.tron"; ok "signer-oss/.env.tron removed"; }
+    if [ -f "$SIGNER_OSS_DIR/.env"      ]; then rm -f "$SIGNER_OSS_DIR/.env";      ok "signer-oss/.env removed"; fi
+    if [ -f "$SIGNER_OSS_DIR/.env.tron" ]; then rm -f "$SIGNER_OSS_DIR/.env.tron"; ok "signer-oss/.env.tron removed"; fi
   fi
   if [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]]; then
-    [ -f "$SIGNER_ENT_DIR/.env"      ] && { rm -f "$SIGNER_ENT_DIR/.env";      ok "signer/.env removed"; }
-    [ -f "$SIGNER_ENT_DIR/.env.tron" ] && { rm -f "$SIGNER_ENT_DIR/.env.tron"; ok "signer/.env.tron removed"; }
+    if [ -f "$SIGNER_ENT_DIR/.env"      ]; then rm -f "$SIGNER_ENT_DIR/.env";      ok "signer/.env removed"; fi
+    if [ -f "$SIGNER_ENT_DIR/.env.tron" ]; then rm -f "$SIGNER_ENT_DIR/.env.tron"; ok "signer/.env.tron removed"; fi
   fi
 }
 
