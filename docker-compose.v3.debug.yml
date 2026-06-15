@@ -4,12 +4,16 @@
 # Do NOT use directly — start.sh handles compose file merging.
 #
 # What this adds (NODE_OPTIONS=--inspect + port exposure):
-#   engine-1:          port 9229 → "Attach: Engine-1 (Docker)"
-#   engine-2:          port 9232 → "Attach: Engine-2 (Docker)"
-#   signer-oss:        port 9230 → "Attach: OSS Signer (Docker)"     (only with --signer oss|both)
-#   signer-enterprise: port 9231 → "Attach: Enterprise Signer (Docker)" (only with --signer enterprise|both)
-#   btc-indexer-1:     port 9233 → "Attach: btc-indexer-1 (Docker)"
-#   btc-indexer-2:     port 9234 → "Attach: btc-indexer-2 (Docker)"
+#   engine-1:               port 9229 → "Attach: Engine-1 (Docker)"
+#   engine-2:               port 9232 → "Attach: Engine-2 (Docker)"
+#   signer-oss:             port 9230 → "Attach: OSS Signer BTC (Docker)"         (only with --signer oss|both)
+#   signer-enterprise:      port 9231 → "Attach: Enterprise Signer BTC (Docker)"  (only with --signer enterprise|both)
+#   btc-indexer-1:          port 9233 → "Attach: btc-indexer-1 (Docker)"
+#   btc-indexer-2:          port 9234 → "Attach: btc-indexer-2 (Docker)"
+#   tron-indexer-1:         port 9235 → "Attach: tron-indexer-1 (Docker)"
+#   tron-indexer-2:         port 9236 → "Attach: tron-indexer-2 (Docker)"
+#   signer-oss-tron:        port 9237 → "Attach: OSS Signer TRON (Docker)"        (only with --signer oss|both)
+#   signer-enterprise-tron: port 9238 → "Attach: Enterprise Signer TRON (Docker)" (only with --signer enterprise|both)
 #
 # Note: engine-2 uses 9232 to avoid conflict with signer-oss on 9230.
 
@@ -51,3 +55,27 @@ services:
       NODE_OPTIONS: "--inspect=0.0.0.0:9234"
     ports:
       - "9234:9234"
+
+  tron-indexer-1:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9235"
+    ports:
+      - "9235:9235"
+
+  tron-indexer-2:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9236"
+    ports:
+      - "9236:9236"
+
+  signer-oss-tron:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9237"
+    ports:
+      - "9237:9237"
+
+  signer-enterprise-tron:
+    environment:
+      NODE_OPTIONS: "--inspect=0.0.0.0:9238"
+    ports:
+      - "9238:9238"

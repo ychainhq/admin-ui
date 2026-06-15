@@ -58,12 +58,16 @@
 #
 # DEBUG PORTS (used with --debug)
 # ──────────────────────────────
-#   engine-1 (Docker):          9229 → "Attach: Engine-1 (Docker)"
-#   engine-2 (Docker):          9232 → "Attach: Engine-2 (Docker)"
-#   signer-oss (Docker):        9230 → "Attach: OSS Signer (Docker)"
-#   signer-enterprise (Docker): 9231 → "Attach: Enterprise Signer (Docker)"
-#   btc-indexer-1 (Docker):     9233 → "Attach: btc-indexer-1 (Docker)"
-#   btc-indexer-2 (Docker):     9234 → "Attach: btc-indexer-2 (Docker)"
+#   engine-1 (Docker):               9229 → "Attach: Engine-1 (Docker)"
+#   engine-2 (Docker):               9232 → "Attach: Engine-2 (Docker)"
+#   signer-oss (Docker):             9230 → "Attach: OSS Signer BTC (Docker)"
+#   signer-enterprise (Docker):      9231 → "Attach: Enterprise Signer BTC (Docker)"
+#   btc-indexer-1 (Docker):          9233 → "Attach: btc-indexer-1 (Docker)"
+#   btc-indexer-2 (Docker):          9234 → "Attach: btc-indexer-2 (Docker)"
+#   tron-indexer-1 (Docker):         9235 → "Attach: tron-indexer-1 (Docker)"
+#   tron-indexer-2 (Docker):         9236 → "Attach: tron-indexer-2 (Docker)"
+#   signer-oss-tron (Docker):        9237 → "Attach: OSS Signer TRON (Docker)"
+#   signer-enterprise-tron (Docker): 9238 → "Attach: Enterprise Signer TRON (Docker)"
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -120,11 +124,17 @@ ELASTIC_URL_HOST="http://localhost:9200"
 KIBANA_URL_HOST="http://localhost:5601"
 ELASTIC_INDEX_PREFIX="chain-api-signer"
 
-# Debug ports (Docker containers for engines, local for signers)
+# Debug ports (Docker containers for engines, indexers, signers)
 ENGINE1_DOCKER_DEBUG_PORT=9229
 ENGINE2_DOCKER_DEBUG_PORT=9232
 SIGNER_OSS_DEBUG_PORT=9230
 SIGNER_ENT_DEBUG_PORT=9231
+BTC_INDEXER1_DOCKER_DEBUG_PORT=9233
+BTC_INDEXER2_DOCKER_DEBUG_PORT=9234
+TRON_INDEXER1_DOCKER_DEBUG_PORT=9235
+TRON_INDEXER2_DOCKER_DEBUG_PORT=9236
+SIGNER_OSS_TRON_DEBUG_PORT=9237
+SIGNER_ENT_TRON_DEBUG_PORT=9238
 
 # Compose files
 V3_COMPOSE="$SCRIPT_DIR/docker-compose.v3.yml"
@@ -1680,13 +1690,21 @@ step_status() {
   if [[ "$DEBUG_MODE" == "true" ]]; then
     echo ""
     echo -e "  ${C_BOLD}${C_YELLOW}── Debug (Node.js inspector — Docker) ──────────────────${C_RESET}"
-    echo -e "  ${C_CYAN}engine-1 inspector${C_RESET}  →  localhost:${ENGINE1_DOCKER_DEBUG_PORT}  (VSCode: \"Attach: Engine-1 (v3 Docker)\")"
-    echo -e "  ${C_CYAN}engine-2 inspector${C_RESET}  →  localhost:${ENGINE2_DOCKER_DEBUG_PORT}  (VSCode: \"Attach: Engine-2 (v3 Docker)\")"
+    echo -e "  ${C_CYAN}engine-1 inspector${C_RESET}       →  localhost:${ENGINE1_DOCKER_DEBUG_PORT}   (VSCode: \"Attach: Engine-1 (Docker)\")"
+    echo -e "  ${C_CYAN}engine-2 inspector${C_RESET}       →  localhost:${ENGINE2_DOCKER_DEBUG_PORT}   (VSCode: \"Attach: Engine-2 (Docker)\")"
+    echo -e "  ${C_CYAN}btc-indexer-1${C_RESET}            →  localhost:${BTC_INDEXER1_DOCKER_DEBUG_PORT}   (VSCode: \"Attach: btc-indexer-1 (Docker)\")"
+    echo -e "  ${C_CYAN}btc-indexer-2${C_RESET}            →  localhost:${BTC_INDEXER2_DOCKER_DEBUG_PORT}   (VSCode: \"Attach: btc-indexer-2 (Docker)\")"
+    echo -e "  ${C_CYAN}tron-indexer-1${C_RESET}           →  localhost:${TRON_INDEXER1_DOCKER_DEBUG_PORT}   (VSCode: \"Attach: tron-indexer-1 (Docker)\")"
+    echo -e "  ${C_CYAN}tron-indexer-2${C_RESET}           →  localhost:${TRON_INDEXER2_DOCKER_DEBUG_PORT}   (VSCode: \"Attach: tron-indexer-2 (Docker)\")"
     [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && \
-      echo -e "  ${C_CYAN}signer-oss inspector${C_RESET} →  127.0.0.1:${SIGNER_OSS_DEBUG_PORT}  (VSCode: \"Attach: OSS Signer\")"
+      echo -e "  ${C_CYAN}signer-oss-btc${C_RESET}           →  localhost:${SIGNER_OSS_DEBUG_PORT}   (VSCode: \"Attach: OSS Signer BTC (Docker)\")"
+    [[ "$SIGNER_MODE" =~ ^(oss|both)$ ]] && \
+      echo -e "  ${C_CYAN}signer-oss-tron${C_RESET}          →  localhost:${SIGNER_OSS_TRON_DEBUG_PORT}   (VSCode: \"Attach: OSS Signer TRON (Docker)\")"
     [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
-      echo -e "  ${C_CYAN}signer-ent inspector${C_RESET} →  127.0.0.1:${SIGNER_ENT_DEBUG_PORT}  (VSCode: \"Attach: Enterprise Signer\")"
-    echo -e "  ${C_YELLOW}VSCode → Run & Debug → pick \"Attach: Engine-1 (v3 Docker)\" or compound${C_RESET}"
+      echo -e "  ${C_CYAN}signer-enterprise-btc${C_RESET}    →  localhost:${SIGNER_ENT_DEBUG_PORT}   (VSCode: \"Attach: Enterprise Signer BTC (Docker)\")"
+    [[ "$SIGNER_MODE" =~ ^(enterprise|both)$ ]] && \
+      echo -e "  ${C_CYAN}signer-enterprise-tron${C_RESET}   →  localhost:${SIGNER_ENT_TRON_DEBUG_PORT}   (VSCode: \"Attach: Enterprise Signer TRON (Docker)\")"
+    echo -e "  ${C_YELLOW}VSCode → Run & Debug → pick \"Attach: ...\" or compound${C_RESET}"
   fi
   echo ""
   echo -e "  ${C_BOLD}── Bitcoin Core (regtest, peered) ──────────────────────${C_RESET}"
