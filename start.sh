@@ -285,12 +285,14 @@ cmd_reset() {
     sed -i '' '/^TRON_USDT_CONTRACT_ADDRESS=/d' "$ENGINE_ENV" 2>/dev/null || true
   fi
 
-  # Prune build cache (biggest hog, easily rebuilt) + stopped containers.
-  # Do NOT prune images — avoids re-pulling from Docker Hub on every reset.
-  info "Pruning Docker build cache and stopped containers..."
-  docker builder prune -af 2>&1 | tail -1
+  # Prune unused images, build cache, and stopped containers.
+  # Unused images can easily accumulate to 20+ GB and cause ENOSPC during build.
+  # Base images (node, nginx, postgres, java-tron) are re-pulled from Docker Hub on next build.
+  info "Pruning unused Docker images, build cache, and stopped containers..."
+  docker image prune -af     2>&1 | tail -1
+  docker builder prune -af   2>&1 | tail -1
   docker container prune -f  2>&1 | tail -1
-  ok "Docker build cache and stopped containers pruned"
+  ok "Unused Docker images, build cache, and stopped containers pruned"
 
   docker system df 2>/dev/null | grep -v "^TYPE" | sed 's/^/     /' || true
 

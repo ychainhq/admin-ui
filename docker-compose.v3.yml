@@ -213,7 +213,6 @@ services:
   tron-node-1:
     <<: *tron-node-common
     container_name: chainapi-tron-node-1
-    entrypoint: ["java", "-jar", "/usr/local/bin/FullNode.jar"]
     command: ["--witness", "-c", "/etc/tron/config.conf"]
     ports:
       - "8090:8090"     # HTTP FullNode API
@@ -229,7 +228,6 @@ services:
   tron-node-2:
     <<: *tron-node-common
     container_name: chainapi-tron-node-2
-    entrypoint: ["java", "-jar", "/usr/local/bin/FullNode.jar"]
     command: ["-c", "/etc/tron/config.conf"]
     volumes:
       - tron_node_2:/data/tron
