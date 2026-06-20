@@ -347,9 +347,9 @@ step_infra() {
     lsof -i :18443 -i :18444 -i :8090 -i :8091 -i :5432 2>/dev/null | grep -v "^COMMAND" | head -8 | sed 's/^/       /' || true
     echo ""
     warn "btc-node-1 logs:"
-    docker logs chainapi-btc-node-1 2>/dev/null | tail -10 | sed 's/^/    /' || true
-    warn "tron-node-1 logs (first 10 lines):"
-    docker logs chainapi-tron-node-1 2>/dev/null | tail -10 | sed 's/^/    /' || true
+    docker logs chainapi-btc-node-1 2>&1 | tail -10 | sed 's/^/    /' || true
+    warn "tron-node-1 logs:"
+    docker logs chainapi-tron-node-1 2>&1 | tail -20 | sed 's/^/    /' || true
     die "Infrastructure startup failed"
   fi
 
@@ -549,6 +549,51 @@ step_tron_genesis() {
   echo " OK"
   ok "tron-node-1 HTTP API ready → http://localhost:8090"
 
+  # tron-node-2 starts only after tron-node-1 is healthy (depends_on), so JVM warmup
+  # under Rosetta 2 can take 60-120s after we get here. We use docker inspect to
+  # wait for tron-node-2's own healthcheck rather than a fixed delay.
+  info "Waiting for tron-node-2 to become healthy (JVM warmup on Rosetta 2 may take 90-120s)..."
+  local node2_tries=0 node2_status
+  while true; do
+    node2_status=$(docker inspect --format='{{.State.Health.Status}}' chainapi-tron-node-2 2>/dev/null || echo "not-started")
+    if [ "$node2_status" = "healthy" ]; then
+      echo " OK"
+      ok "tron-node-2 healthy"
+      break
+    fi
+    printf "."
+    sleep 3
+    node2_tries=$((node2_tries+1))
+    if [ "$node2_tries" -ge 60 ]; then  # 180s hard cap
+      echo ""
+      warn "tron-node-2 not healthy after 180s (last status: $node2_status)"
+      warn "tron-node-2 logs (last 20 lines):"
+      docker logs chainapi-tron-node-2 2>&1 | tail -20 | sed 's/^/    /' || true
+      die "tron-node-2 failed to start — fix the issue above and retry"
+    fi
+  done
+  # Broadcast no longer depends on an "effective" peer because the dev configs set
+  # node.rpc.minEffectiveConnection=0. Still wait briefly for a basic P2P connection
+  # so tron-indexer-2 has a chance to catch up before later services start.
+  info "Waiting for TRON P2P connection..."
+  local p2p_tries=0
+  until curl -sf "http://localhost:8090/wallet/getnodeinfo" 2>/dev/null \
+        | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+sys.exit(0 if d.get('currentConnectCount', 0) > 0 else 1)
+" 2>/dev/null; do
+    printf "."
+    sleep 2
+    p2p_tries=$((p2p_tries+1))
+    if [ "$p2p_tries" -ge 15 ]; then
+      echo ""
+      warn "TRON P2P connection not confirmed after 30s — continuing; dev RPC allows local broadcast"
+      break
+    fi
+  done
+  [ "$p2p_tries" -lt 15 ] && { echo " OK"; ok "TRON P2P connected — tron-node-2 will continue syncing in background"; }
+
   # Idempotency: skip if contract address already persisted (e.g. start after partial reset)
   local existing_contract
   existing_contract=$(env_get "$ENGINE_ENV" "TRON_USDT_CONTRACT_ADDRESS")
@@ -586,16 +631,17 @@ step_tron_genesis() {
   [ -n "$trc20_bytecode" ] || die "Compiled bytecode is empty — delete $CONTRACTS_DIR/out and retry"
 
   info "Deploying USDT TRC-20 contract (1,000,000,000 USDT to genesis account)..."
+  # stderr (console.error progress/retry messages) flows live to the terminal.
+  # Only stdout (CONTRACT_ADDRESS=...) is captured.
   local deploy_out
   deploy_out=$(
     TRON_NODE_URL="http://localhost:8090" \
     TRON_GENESIS_PRIV_HEX="$TRON_GENESIS_PRIVATE_KEY_HEX" \
     TRC20_BYTECODE="$trc20_bytecode" \
     TRON_TOTAL_SUPPLY_SUN="1000000000000000" \
-    node "$SCRIPT_DIR/scripts/deploy-trc20.js" 2>&1
+    node "$SCRIPT_DIR/scripts/deploy-trc20.js"
   ) || {
-    echo "$deploy_out" | tail -5 | sed 's/^/    /' >&2
-    die "TRC-20 deployment failed — check tron-node-1 logs"
+    die "TRC-20 deployment failed — see deploy-trc20 output above"
   }
 
   TRON_USDT_CONTRACT_ADDRESS=$(echo "$deploy_out" | grep -oE 'CONTRACT_ADDRESS=T[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)

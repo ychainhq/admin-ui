@@ -122,7 +122,10 @@ async function main() {
   // ABI-encoded constructor arg: uint256 supply
   const constructorParam = abiEncodeUint256(TOTAL_SUPPLY);
 
-  // Build the CreateSmartContract transaction
+  // Build the CreateSmartContract transaction.
+  // Note: abi is intentionally omitted — GreatVoyage-v4.7.7 rejects the TRON ABI JSON format
+  // with a JsonFormat$ParseException. ABI is optional for deployment; the contract still deploys
+  // and functions correctly. On-chain calls use raw ABI-encoded data regardless of the stored ABI.
   const deployBody = {
     owner_address: ownerAddressHex,
     fee_limit: FEE_LIMIT,
@@ -132,19 +135,6 @@ async function main() {
     bytecode: BYTECODE,
     parameter: constructorParam,
     name: 'TetherToken',
-    abi: JSON.stringify({
-      entrys: [
-        { name: 'Transfer',  type: 'Event',    inputs: [{ indexed: true, name: 'from', type: 'address' }, { indexed: true, name: 'to', type: 'address' }, { name: 'value', type: 'uint256' }] },
-        { name: 'Approval',  type: 'Event',    inputs: [{ indexed: true, name: 'owner', type: 'address' }, { indexed: true, name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }] },
-        { name: '',          type: 'Constructor', inputs: [{ name: 'supply', type: 'uint256' }], stateMutability: 'nonpayable' },
-        { name: 'totalSupply',   type: 'Function', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', inputs: [] },
-        { name: 'balanceOf',     type: 'Function', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', inputs: [{ name: '', type: 'address' }] },
-        { name: 'allowance',     type: 'Function', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', inputs: [{ name: '', type: 'address' }, { name: '', type: 'address' }] },
-        { name: 'transfer',      type: 'Function', outputs: [{ name: '', type: 'bool' }],    stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'value', type: 'uint256' }] },
-        { name: 'approve',       type: 'Function', outputs: [{ name: '', type: 'bool' }],    stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }] },
-        { name: 'transferFrom',  type: 'Function', outputs: [{ name: '', type: 'bool' }],    stateMutability: 'nonpayable', inputs: [{ name: 'from', type: 'address' }, { name: 'to', type: 'address' }, { name: 'value', type: 'uint256' }] },
-      ],
-    }),
   };
 
   console.error('[deploy-trc20] Building CreateSmartContract transaction...');
@@ -158,14 +148,34 @@ async function main() {
   const sigHex = signTxId(unsignedTx.txID, GENESIS_PRIV);
   const signedTx = { ...unsignedTx, signature: [sigHex] };
 
+  // In GreatVoyage-v4.7.7, broadcasttransaction can return peer-state errors while
+  // the observer node is still catching up. The dev TRON configs set
+  // node.rpc.minEffectiveConnection=0, but keep retrying so older running containers
+  // produce a clear transient failure instead of masking signature/balance problems.
+  // Retry broadcast on transient peer errors.
+  // NO_CONNECTION              — no P2P peers at all (peer hasn't connected yet)
+  // NOT_ENOUGH_EFFECTIVE_CONNECTION — peer connected but still syncing blocks (not yet "effective")
+  // Both resolve once the peer finishes its initial block sync, which after a fresh reset
+  // is only a handful of blocks and takes a few seconds.
+  const RETRYABLE = new Set(['NO_CONNECTION', 'NOT_ENOUGH_EFFECTIVE_CONNECTION']);
+  const MAX_BROADCAST_ATTEMPTS = 60;
   console.error('[deploy-trc20] Broadcasting signed transaction...');
-  const broadcastResult = await post('/wallet/broadcasttransaction', signedTx);
-  if (!broadcastResult.result) {
-    throw new Error(`Broadcast failed: ${JSON.stringify(broadcastResult)}`);
+  let broadcastResult;
+  for (let attempt = 1; attempt <= MAX_BROADCAST_ATTEMPTS; attempt++) {
+    broadcastResult = await post('/wallet/broadcasttransaction', signedTx);
+    if (broadcastResult.result) break;
+    if (!RETRYABLE.has(broadcastResult.code)) {
+      throw new Error(`Broadcast failed: ${JSON.stringify(broadcastResult)}`);
+    }
+    console.error(`[deploy-trc20] ${broadcastResult.code} (attempt ${attempt}/${MAX_BROADCAST_ATTEMPTS}) — waiting 3s for TRON peer state...`);
+    await new Promise(r => setTimeout(r, 3_000));
   }
-  console.error(`[deploy-trc20] Broadcast OK. Waiting for confirmation...`);
+  if (!broadcastResult.result) {
+    throw new Error(`Broadcast failed after ${MAX_BROADCAST_ATTEMPTS} attempts: ${JSON.stringify(broadcastResult)}`);
+  }
+  console.error('[deploy-trc20] Broadcast OK. Waiting for confirmation...');
 
-  const txInfo = await waitForConfirmation(unsignedTx.txID);
+  const txInfo = await waitForConfirmation(unsignedTx.txID, 120_000);
 
   // Contract address is in txInfo.contract_address (hex without 0x, prefixed with 41)
   const contractAddressHex = txInfo.contract_address;
