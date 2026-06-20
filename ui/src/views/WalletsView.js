@@ -31,13 +31,12 @@ function formatDisplayBalance(value) {
 
 function walletBalanceDisplay(balanceRes) {
   const balances = balanceRes?.balances || {};
-  const bitcoin = balances.bitcoin;
-  const firstBalance = bitcoin || Object.values(balances)[0];
-  if (!firstBalance) return '0.00000000 BTC';
-  if (firstBalance.total_display || firstBalance.totalDisplay) {
-    return formatDisplayBalance(firstBalance.total_display || firstBalance.totalDisplay);
-  }
-  return formatSats(firstBalance.total || firstBalance.confirmed || '0');
+  const entries = Object.values(balances);
+  if (entries.length === 0) return '—';
+  const parts = entries
+    .map(b => b.total_display || b.totalDisplay || null)
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join(' | ') : '—';
 }
 
 const TYPE_BADGE = {
@@ -151,6 +150,7 @@ const template = `
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">NAME</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TYPE</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ROLE</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CHAINS</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">BALANCE</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ACTIONS</th>
@@ -164,6 +164,7 @@ const template = `
                       <span rv-text="wallet.typeLabel" rv-attr-class="wallet.typeBadgeClass"></span>
                     </td>
                     <td rv-text="wallet.roleLabel" class="px-md py-3 font-body-sm text-on-surface-variant"></td>
+                    <td rv-text="wallet.chainsLabel" class="px-md py-3 font-mono-data text-secondary text-[11px]"></td>
                     <td class="px-md py-3">
                       <span rv-text="wallet.statusLabel" rv-attr-class="wallet.statusBadgeClass"></span>
                     </td>
@@ -199,7 +200,10 @@ const template = `
                       <span rv-text="wallet.typeLabel" rv-attr-class="wallet.typeBadgeClass"></span>
                       <span rv-text="wallet.statusLabel" rv-attr-class="wallet.statusBadgeClass"></span>
                     </div>
-                    <p rv-text="wallet.roleLabel" class="font-body-sm text-on-surface-variant mt-xs"></p>
+                    <p class="font-body-sm text-on-surface-variant mt-xs">
+                      <span rv-text="wallet.roleLabel"></span>
+                      <span rv-show="wallet.chainsLabel" class="ml-xs font-mono-data text-secondary text-[11px]" rv-text="wallet.chainsLabel"></span>
+                    </p>
                   </div>
                   <span rv-text="wallet.balance" class="font-mono-data text-on-surface text-[13px]"></span>
                 </div>
@@ -275,12 +279,15 @@ export function createController({ api, router }) {
           } catch {
             balance = '—';
           }
+          const chains = Array.isArray(w.chains) ? w.chains : [];
+          const primaryChain = chains[0] || 'bitcoin';
           return {
             id:            w.id || '—',
             name:          w.name || '—',
             typeLabel:     type.toUpperCase(),
             typeBadgeClass: typeBadge(type),
             roleLabel:     labelize(role),
+            chainsLabel:   chains.length ? chains.map(c => c.toUpperCase()).join(' · ') : '—',
             statusLabel:   labelize(status),
             statusBadgeClass: statusBadge(status),
             balance,
@@ -293,7 +300,7 @@ export function createController({ api, router }) {
               wallet.sweeping = true;
               self.sweepResult = null;
               self.sweepError = null;
-              api.createSweep({ sourceWalletId: w.id, chain: w.chain || 'bitcoin', note: 'UI sweep' })
+              api.createSweep({ sourceWalletId: w.id, chain: primaryChain, note: 'UI sweep' })
                 .then(result => {
                   const taskId = result.signingTaskId || result.signing_task_id || result.id || JSON.stringify(result);
                   self.sweepResult = `Signing task created: ${taskId}`;
