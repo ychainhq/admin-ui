@@ -11,6 +11,18 @@ const SAMPLE_ADDRESS = {
   label: 'Main hot addr',
   address_type: 'p2wpkh',
   address_role: 'tenant_hot',
+  chain_id: 'bitcoin',
+  status: 'active',
+  created_at: 1700000000,
+};
+
+const TRON_ADDRESS = {
+  id: 'addr_tron_001',
+  address: 'TXexampleTRON000',
+  label: 'TRON hot addr',
+  address_type: 'tron',
+  address_role: 'tenant_hot',
+  chain_id: 'tron',
   status: 'active',
   created_at: 1700000000,
 };
@@ -43,9 +55,10 @@ describe('WalletAddressesView — createController', () => {
     expect(ctrl.loading).toBe(false);
   });
 
-  test('canPreFund starts false', () => {
+  test('isBtcHotWallet and isTronHotWallet start false', () => {
     const { ctrl } = makeCtrl();
-    expect(ctrl.canPreFund).toBe(false);
+    expect(ctrl.isBtcHotWallet).toBe(false);
+    expect(ctrl.isTronHotWallet).toBe(false);
   });
 
   test('addressesEmpty starts true', () => {
@@ -79,23 +92,41 @@ describe('WalletAddressesView — createController', () => {
     expect(ctrl.walletName).toBe('Hot Wallet');
   });
 
-  test('init() sets canPreFund=true for tenant_hot wallet', async () => {
-    const { ctrl } = makeCtrl({ getWallet: jest.fn().mockResolvedValue(HOT_WALLET) });
+  test('init() sets isBtcHotWallet=true for tenant_hot BTC wallet', async () => {
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [SAMPLE_ADDRESS], pagination: { nextCursor: null } }),
+    });
     await ctrl.init();
-    expect(ctrl.canPreFund).toBe(true);
+    expect(ctrl.isBtcHotWallet).toBe(true);
+    expect(ctrl.isTronHotWallet).toBe(false);
   });
 
-  test('init() sets canPreFund=false for tenant_cold wallet', async () => {
-    const { ctrl } = makeCtrl({ getWallet: jest.fn().mockResolvedValue(COLD_WALLET) });
+  test('init() sets isTronHotWallet=true for tenant_hot TRON wallet', async () => {
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [TRON_ADDRESS], pagination: { nextCursor: null } }),
+    });
     await ctrl.init();
-    expect(ctrl.canPreFund).toBe(false);
+    expect(ctrl.isTronHotWallet).toBe(true);
+    expect(ctrl.isBtcHotWallet).toBe(false);
+  });
+
+  test('init() sets isBtcHotWallet=false for tenant_cold wallet', async () => {
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(COLD_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [SAMPLE_ADDRESS], pagination: { nextCursor: null } }),
+    });
+    await ctrl.init();
+    expect(ctrl.isBtcHotWallet).toBe(false);
   });
 
   test('init() keeps walletName as walletId when getWallet fails', async () => {
     const { ctrl } = makeCtrl({ getWallet: jest.fn().mockRejectedValue(new Error('Not found')) });
     await ctrl.init();
     expect(ctrl.walletName).toBe(WALLET_ID);
-    expect(ctrl.canPreFund).toBe(false);
+    expect(ctrl.isBtcHotWallet).toBe(false);
+    expect(ctrl.isTronHotWallet).toBe(false);
   });
 
   // ─── init — addresses load ────────────────────────────────────────────────────
@@ -195,10 +226,19 @@ describe('WalletAddressesView — createController', () => {
   });
 
   // ─── addr.canPreFund reflects wallet-level flag ───────────────────────────────
-  test('addr.canPreFund is true when wallet is tenant_hot', async () => {
+  test('addr.canPreFund is true for BTC hot wallet', async () => {
     const { ctrl } = makeCtrl({
       getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
       getWalletAddresses: jest.fn().mockResolvedValue({ data: [SAMPLE_ADDRESS], pagination: { nextCursor: null } }),
+    });
+    await ctrl.init();
+    expect(ctrl.addresses[0].canPreFund).toBe(true);
+  });
+
+  test('addr.canPreFund is true for TRON hot wallet', async () => {
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [TRON_ADDRESS], pagination: { nextCursor: null } }),
     });
     await ctrl.init();
     expect(ctrl.addresses[0].canPreFund).toBe(true);
@@ -388,10 +428,11 @@ describe('WalletAddressesView — createController', () => {
   });
 
   // ─── init — BTC Core wallet dropdown (hot wallet only) ────────────────────────
-  test('init() calls api.rpc listwallets for hot wallet', async () => {
+  test('init() calls api.rpc listwallets for BTC hot wallet', async () => {
     const rpc = jest.fn().mockResolvedValue({ result: [] });
     const { ctrl } = makeCtrl({
       getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [SAMPLE_ADDRESS], pagination: { nextCursor: null } }),
       rpc,
     });
     await ctrl.init();
@@ -402,6 +443,18 @@ describe('WalletAddressesView — createController', () => {
     const rpc = jest.fn().mockResolvedValue({ result: [] });
     const { ctrl } = makeCtrl({
       getWallet: jest.fn().mockResolvedValue(COLD_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [SAMPLE_ADDRESS], pagination: { nextCursor: null } }),
+      rpc,
+    });
+    await ctrl.init();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('init() does not call api.rpc listwallets for TRON hot wallet', async () => {
+    const rpc = jest.fn().mockResolvedValue({ result: [] });
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [TRON_ADDRESS], pagination: { nextCursor: null } }),
       rpc,
     });
     await ctrl.init();
@@ -416,6 +469,7 @@ describe('WalletAddressesView — createController', () => {
     });
     const { ctrl } = makeCtrl({
       getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [SAMPLE_ADDRESS], pagination: { nextCursor: null } }),
       rpc,
     });
     await ctrl.init();
@@ -434,9 +488,146 @@ describe('WalletAddressesView — createController', () => {
     });
     const { ctrl } = makeCtrl({
       getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [SAMPLE_ADDRESS], pagination: { nextCursor: null } }),
       rpc,
     });
     await ctrl.init();
     expect(ctrl.preFund.fromWallet).toBe('funded');
+  });
+
+  // ─── chainLabel in address rows ───────────────────────────────────────────────
+  test('addr.chainLabel shows chain from address chain_id', async () => {
+    const { ctrl } = makeCtrl({
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [SAMPLE_ADDRESS], pagination: { nextCursor: null } }),
+    });
+    await ctrl.load();
+    expect(ctrl.addresses[0].chainLabel).toBe('BITCOIN');
+  });
+
+  test('addr.chainLabel shows TRON for tron address', async () => {
+    const { ctrl } = makeCtrl({
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [TRON_ADDRESS], pagination: { nextCursor: null } }),
+    });
+    await ctrl.load();
+    expect(ctrl.addresses[0].chainLabel).toBe('TRON');
+  });
+
+  // ─── tronFund ─────────────────────────────────────────────────────────────────
+  test('tronFund initial state is correct', () => {
+    const { ctrl } = makeCtrl();
+    expect(ctrl.tronFund.toAddress).toBe('');
+    expect(ctrl.tronFund.hasAddress).toBe(false);
+    expect(ctrl.tronFund.asset).toBe('trx');
+    expect(ctrl.tronFund.amount).toBe('');
+    expect(ctrl.tronFund.loading).toBe(false);
+    expect(ctrl.tronFund.error).toBeNull();
+    expect(ctrl.tronFund.result).toBeNull();
+  });
+
+  test('tronFund.onAssetChange updates asset and amountLabel', () => {
+    const { ctrl } = makeCtrl();
+    ctrl.tronFund.onAssetChange({ target: { value: 'usdt' } });
+    expect(ctrl.tronFund.asset).toBe('usdt');
+    expect(ctrl.tronFund.amountLabel).toContain('USDT');
+  });
+
+  test('tronFund.run() converts TRX to SUN and calls api.tronFund', async () => {
+    const tronFund = jest.fn().mockResolvedValue({ txid: 'tx_tron_123' });
+    const { ctrl } = makeCtrl({ tronFund });
+    ctrl.tronFund.toAddress = 'TXexampleTRON000';
+    ctrl.tronFund.asset = 'trx';
+    ctrl.tronFund.amount = '100';
+    await ctrl.tronFund.run();
+    expect(tronFund).toHaveBeenCalledWith(expect.objectContaining({
+      toAddress: 'TXexampleTRON000',
+      amount: 100_000_000,
+      asset: 'trx',
+    }));
+    expect(ctrl.tronFund.result).toContain('tx_tron_123');
+  });
+
+  test('tronFund.run() converts USDT to micro-USDT', async () => {
+    const tronFund = jest.fn().mockResolvedValue({ txid: 'tx_usdt_456' });
+    const { ctrl } = makeCtrl({ tronFund });
+    ctrl.tronFund.toAddress = 'TXexampleTRON000';
+    ctrl.tronFund.asset = 'usdt';
+    ctrl.tronFund.amount = '10';
+    await ctrl.tronFund.run();
+    expect(tronFund).toHaveBeenCalledWith(expect.objectContaining({ amount: 10_000_000, asset: 'usdt' }));
+  });
+
+  test('tronFund.run() sets error when no address selected', async () => {
+    const { ctrl } = makeCtrl();
+    ctrl.tronFund.amount = '100';
+    await ctrl.tronFund.run();
+    expect(ctrl.tronFund.error).toBeTruthy();
+  });
+
+  test('tronFund.run() sets error when api.tronFund throws', async () => {
+    const tronFund = jest.fn().mockRejectedValue(new Error('TRON node unreachable'));
+    const { ctrl } = makeCtrl({ tronFund });
+    ctrl.tronFund.toAddress = 'TXexampleTRON000';
+    ctrl.tronFund.amount = '10';
+    await ctrl.tronFund.run();
+    expect(ctrl.tronFund.error).toBe('TRON node unreachable');
+    expect(ctrl.tronFund.loading).toBe(false);
+  });
+
+  test('selectForPreFund on TRON wallet sets tronFund.toAddress', async () => {
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({ data: [TRON_ADDRESS], pagination: { nextCursor: null } }),
+    });
+    await ctrl.init();
+    ctrl.addresses[0].selectForPreFund();
+    expect(ctrl.tronFund.toAddress).toBe('TXexampleTRON000');
+    expect(ctrl.tronFund.hasAddress).toBe(true);
+    expect(ctrl.preFund.toAddress).toBe('');
+  });
+
+  // ─── selectForPreFund routes by address chain_id, not wallet-level flag ────────
+  test('BTC address routes to preFund even when wallet also has TRON addresses', async () => {
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({
+        data: [SAMPLE_ADDRESS, TRON_ADDRESS],
+        pagination: { nextCursor: null },
+      }),
+    });
+    await ctrl.init();
+    const btcAddr = ctrl.addresses.find(a => a.chainLabel === 'BITCOIN');
+    btcAddr.selectForPreFund();
+    expect(ctrl.preFund.toAddress).toBe('bcrt1qexample000');
+    expect(ctrl.preFund.hasAddress).toBe(true);
+    expect(ctrl.tronFund.toAddress).toBe('');
+  });
+
+  test('TRON address routes to tronFund even when wallet also has BTC addresses', async () => {
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({
+        data: [SAMPLE_ADDRESS, TRON_ADDRESS],
+        pagination: { nextCursor: null },
+      }),
+    });
+    await ctrl.init();
+    const tronAddr = ctrl.addresses.find(a => a.chainLabel === 'TRON');
+    tronAddr.selectForPreFund();
+    expect(ctrl.tronFund.toAddress).toBe('TXexampleTRON000');
+    expect(ctrl.tronFund.hasAddress).toBe(true);
+    expect(ctrl.preFund.toAddress).toBe('');
+  });
+
+  test('mixed wallet shows both isBtcHotWallet and isTronHotWallet', async () => {
+    const { ctrl } = makeCtrl({
+      getWallet: jest.fn().mockResolvedValue(HOT_WALLET),
+      getWalletAddresses: jest.fn().mockResolvedValue({
+        data: [SAMPLE_ADDRESS, TRON_ADDRESS],
+        pagination: { nextCursor: null },
+      }),
+    });
+    await ctrl.init();
+    expect(ctrl.isBtcHotWallet).toBe(true);
+    expect(ctrl.isTronHotWallet).toBe(true);
   });
 });

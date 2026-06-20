@@ -20,7 +20,9 @@ function formatDate(ts) {
   return new Date(ts * 1000).toLocaleString();
 }
 
-const preFundBodyHtml = `
+// ─── BTC pre-fund panel ────────────────────────────────────────────────────────
+
+const preFundBtcBodyHtml = `
 <div class="space-y-sm">
   <div class="flex items-center gap-sm p-sm rounded-lg bg-white/5 border border-white/10">
     <span class="material-symbols-outlined text-on-surface-variant text-[16px] shrink-0">location_on</span>
@@ -63,6 +65,45 @@ const preFundBodyHtml = `
 </div>
 `;
 
+// ─── TRON pre-fund panel ───────────────────────────────────────────────────────
+
+const preFundTronBodyHtml = `
+<div class="space-y-sm">
+  <div class="flex items-center gap-sm p-sm rounded-lg bg-white/5 border border-white/10">
+    <span class="material-symbols-outlined text-on-surface-variant text-[16px] shrink-0">location_on</span>
+    <div class="flex-1 min-w-0">
+      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-0.5">Target Address</p>
+      <p rv-show="tronFund.hasAddress" rv-text="tronFund.toAddress" class="font-mono-data text-secondary text-[12px] break-all"></p>
+      <p rv-hide="tronFund.hasAddress" class="font-body-sm text-on-surface-variant italic text-[12px]">Click Pre-fund on an address row below to select target</p>
+    </div>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+    <div>
+      <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Asset</label>
+      <select rv-on-change="tronFund.onAssetChange"
+        class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary transition-all outline-none">
+        <option value="trx">TRX (gas / native)</option>
+        <option value="usdt">USDT (TRC-20)</option>
+      </select>
+    </div>
+    <div>
+      <label rv-text="tronFund.amountLabel" class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Amount</label>
+      <input rv-on-input="tronFund.onAmountInput"
+        class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
+        type="number" placeholder="100" step="0.000001" min="0.000001" autocomplete="off" />
+    </div>
+  </div>
+  <div class="p-sm rounded-lg bg-white/5 border border-white/10 text-[11px] text-on-surface-variant">
+    Funds are sent from the dev genesis account. TRON blocks confirm in ~3s — no manual mining needed.
+  </div>
+  <button rv-on-click="tronFund.run" rv-attr-disabled="tronFund.loading"
+    class="w-full flex items-center justify-center gap-xs bg-secondary text-on-secondary-fixed px-md py-2 rounded-lg font-label-md font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
+    <span class="material-symbols-outlined text-[18px]">send</span>
+    Send
+  </button>
+</div>
+`;
+
 const desktopTopBarTpl = desktopTopBarHtml({
   breadcrumbHtml: `
     <span class="text-on-surface-variant">Platform</span>
@@ -100,14 +141,25 @@ const template = `
 
         <div rv-hide="loading">
 
-          <!-- Pre-fund panel — hot wallet only -->
-          <div rv-show="canPreFund" class="mb-md max-w-2xl">
+          <!-- BTC pre-fund panel -->
+          <div rv-show="isBtcHotWallet" class="mb-md max-w-2xl">
             ${opCardHtml({
               icon: 'bolt',
               title: 'Pre-fund Hot Wallet',
               description: 'Send BTC from a Bitcoin Core wallet to a hot wallet address, then mine blocks to confirm',
               scopePrefix: 'preFund',
-              bodyHtml: preFundBodyHtml,
+              bodyHtml: preFundBtcBodyHtml,
+            })}
+          </div>
+
+          <!-- TRON pre-fund panel -->
+          <div rv-show="isTronHotWallet" class="mb-md max-w-2xl">
+            ${opCardHtml({
+              icon: 'bolt',
+              title: 'Pre-fund TRON Hot Wallet',
+              description: 'Send TRX (for gas) or USDT (TRC-20) from the dev genesis account to a hot wallet address',
+              scopePrefix: 'tronFund',
+              bodyHtml: preFundTronBodyHtml,
             })}
           </div>
 
@@ -136,6 +188,7 @@ const template = `
                 <thead>
                   <tr class="border-b border-white/5 bg-white/[0.02]">
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ADDRESS</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CHAIN</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">LABEL</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">TYPE</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ROLE</th>
@@ -149,6 +202,7 @@ const template = `
                     <td class="px-md py-3 font-mono-data text-on-surface text-[12px] max-w-[240px]">
                       <span rv-text="addr.address" class="block truncate" rv-attr-title="addr.address"></span>
                     </td>
+                    <td rv-text="addr.chainLabel" class="px-md py-3 font-body-sm text-on-surface-variant"></td>
                     <td rv-text="addr.label" class="px-md py-3 font-body-sm text-on-surface-variant"></td>
                     <td rv-text="addr.typeLabel" class="px-md py-3 font-body-sm text-on-surface-variant"></td>
                     <td rv-text="addr.roleLabel" class="px-md py-3 font-body-sm text-on-surface-variant"></td>
@@ -178,6 +232,8 @@ const template = `
               <div rv-each-addr="addresses" class="px-md py-3">
                 <p rv-text="addr.address" class="font-mono-data text-on-surface text-[12px] break-all mb-xs"></p>
                 <div class="flex items-center gap-sm flex-wrap mb-xs">
+                  <span rv-text="addr.chainLabel" class="text-[10px] text-on-surface-variant font-bold"></span>
+                  <span class="text-on-surface-variant opacity-30">·</span>
                   <span rv-text="addr.typeLabel" class="text-[10px] text-on-surface-variant"></span>
                   <span class="text-on-surface-variant opacity-30">·</span>
                   <span rv-text="addr.roleLabel" class="text-[10px] text-on-surface-variant"></span>
@@ -237,7 +293,10 @@ export function createController({ walletId, api, router }) {
     walletName: walletId,
     loading: false,
     error: null,
-    canPreFund: false,
+    isBtcHotWallet: false,
+    isTronHotWallet: false,
+    _isHot: false,
+    _walletChain: '',
     addresses: [],
     addressesEmpty: true,
 
@@ -246,6 +305,7 @@ export function createController({ walletId, api, router }) {
     _prevCursors: [],
     _nextCursor: undefined,
 
+    // ── BTC pre-fund ────────────────────────────────────────────────────────────
     preFund: {
       walletOptionsHtml: '<option value="" disabled selected>Loading wallets…</option>',
       fromWallet: '',
@@ -269,8 +329,8 @@ export function createController({ walletId, api, router }) {
         const amount = parseFloat(self.preFund.amount);
         const blocks = parseInt(self.preFund.blocks, 10);
 
-        if (!wallet)              { self.preFund.error = 'Select a source wallet'; return; }
-        if (!address)             { self.preFund.error = 'Select a target address from the list below'; return; }
+        if (!wallet)                { self.preFund.error = 'Select a source wallet'; return; }
+        if (!address)               { self.preFund.error = 'Select a target address from the list below'; return; }
         if (!amount || amount <= 0) { self.preFund.error = 'Amount must be greater than 0'; return; }
         if (isNaN(blocks) || blocks < 0) { self.preFund.error = 'Confirmation blocks must be 0 or more'; return; }
 
@@ -304,6 +364,48 @@ export function createController({ walletId, api, router }) {
       },
     },
 
+    // ── TRON pre-fund ───────────────────────────────────────────────────────────
+    tronFund: {
+      toAddress: '',
+      hasAddress: false,
+      asset: 'trx',
+      amount: '',
+      amountLabel: 'Amount (TRX)',
+      loading: false,
+      error: null,
+      result: null,
+      onAssetChange(e) {
+        self.tronFund.asset = e.target.value;
+        self.tronFund.amountLabel = e.target.value === 'usdt' ? 'Amount (USDT)' : 'Amount (TRX)';
+      },
+      onAmountInput(e) { self.tronFund.amount = e.target.value; },
+      async run() {
+        const address = self.tronFund.toAddress.trim();
+        const amountHuman = parseFloat(self.tronFund.amount);
+        const asset = self.tronFund.asset;
+
+        if (!address)                   { self.tronFund.error = 'Select a target address from the list below'; return; }
+        if (!amountHuman || amountHuman <= 0) { self.tronFund.error = 'Amount must be greater than 0'; return; }
+
+        // Convert to smallest unit: TRX → SUN (×1e6), USDT → micro-USDT (×1e6)
+        const amountSmallest = Math.round(amountHuman * 1_000_000);
+
+        self.tronFund.loading = true;
+        self.tronFund.error = null;
+        self.tronFund.result = null;
+        try {
+          const res = await api.tronFund({ toAddress: address, amount: amountSmallest, asset });
+          if (res?.error) throw new Error(res.error.message || 'tron-fund failed');
+          const txid = res?.txid || res?.result?.txid || res?.data?.txid || '(broadcast ok)';
+          self.tronFund.result = txid;
+        } catch (e) {
+          self.tronFund.error = e.message;
+        } finally {
+          self.tronFund.loading = false;
+        }
+      },
+    },
+
     goToWallets(e) { e?.preventDefault(); router.navigate('#/wallets'); },
 
     async load() {
@@ -315,22 +417,37 @@ export function createController({ walletId, api, router }) {
         self._nextCursor = res.pagination?.nextCursor || undefined;
         const currentPage = self._prevCursors.length + 1;
 
+        // Derive chains from all loaded addresses (wallet may have addresses on multiple chains)
+        if (items.length > 0) {
+          const chains = new Set(items.map(a => a.chain_id).filter(Boolean));
+          self.isBtcHotWallet  = self._isHot && chains.has('bitcoin');
+          self.isTronHotWallet = self._isHot && chains.has('tron');
+        }
+
+        const canPreFund = self.isBtcHotWallet || self.isTronHotWallet;
+
         self.addresses = items.map(a => ({
           id: a.id,
           address: a.address,
           label: a.label || '—',
           hasLabel: !!a.label,
+          chainLabel: labelize(a.chain_id || 'unknown'),
           typeLabel: labelize(a.address_type || 'unknown'),
           roleLabel: labelize(a.address_role),
           statusLabel: labelize(a.status),
           createdAt: formatDate(a.created_at),
-          canPreFund: self.canPreFund,
+          canPreFund,
           copy() {
             navigator.clipboard?.writeText(a.address)?.catch(() => {});
           },
           selectForPreFund() {
-            self.preFund.toAddress = a.address;
-            self.preFund.hasAddress = true;
+            if (a.chain_id === 'tron') {
+              self.tronFund.toAddress = a.address;
+              self.tronFund.hasAddress = true;
+            } else {
+              self.preFund.toAddress = a.address;
+              self.preFund.hasAddress = true;
+            }
           },
         }));
         self.addressesEmpty = self.addresses.length === 0;
@@ -359,19 +476,18 @@ export function createController({ walletId, api, router }) {
     },
 
     async init() {
-      // Load wallet metadata to get name + determine pre-fund eligibility
       try {
         const w = await api.getWallet(walletId);
         self.walletName = w.name || walletId;
-        self.canPreFund = (w.wallet_role === 'tenant_hot');
+        self._isHot = (w.wallet_role === 'tenant_hot');
       } catch {
-        // non-critical — walletName stays as walletId
+        // non-critical
       }
 
-      await self.load();
+      await self.load(); // sets isBtcHotWallet / isTronHotWallet from first address chain_id
 
-      // Populate Bitcoin Core wallet dropdown — only needed for hot wallets
-      if (self.canPreFund) {
+      // Populate Bitcoin Core wallet dropdown — only for BTC hot wallets
+      if (self.isBtcHotWallet) {
         try {
           const walletsRes = await api.rpc('listwallets', []);
           const names = walletsRes?.result || [];
