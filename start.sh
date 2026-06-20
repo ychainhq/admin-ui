@@ -490,28 +490,34 @@ step_seed() {
     die "Seed failed — see output above"
   }
 
-  local new_api new_admin new_xpub new_xprv new_tron_xpub new_tron_xprv
-  new_api=$(echo "$seed_out"          | grep -oE 'API_KEY=cak_[a-f0-9]+'           | head -1 | cut -d= -f2 || true)
-  new_admin=$(echo "$seed_out"        | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+'         | head -1 | cut -d= -f2 || true)
-  new_xpub=$(echo "$seed_out"         | grep -oE 'BTC_DEV_XPUB=[A-Za-z0-9]+'      | head -1 | cut -d= -f2 || true)
-  new_xprv=$(echo "$seed_out"         | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+'      | head -1 | cut -d= -f2 || true)
-  new_tron_xpub=$(echo "$seed_out"    | grep -oE 'TRON_DEV_XPUB=[A-Za-z0-9]+'     | head -1 | cut -d= -f2 || true)
-  new_tron_xprv=$(echo "$seed_out"    | grep -oE 'TRON_DEV_XPRV=[A-Za-z0-9]+'     | head -1 | cut -d= -f2 || true)
+  local new_api new_admin new_xpub new_xprv new_tron_xpub new_tron_xprv new_tron_priv_hex new_tron_hot_addr
+  new_api=$(echo "$seed_out"             | grep -oE 'API_KEY=cak_[a-f0-9]+'             | head -1 | cut -d= -f2 || true)
+  new_admin=$(echo "$seed_out"           | grep -oE 'ADMIN_KEY=aak_[a-f0-9]+'           | head -1 | cut -d= -f2 || true)
+  new_xpub=$(echo "$seed_out"            | grep -oE 'BTC_DEV_XPUB=[A-Za-z0-9]+'        | head -1 | cut -d= -f2 || true)
+  new_xprv=$(echo "$seed_out"            | grep -oE 'BTC_DEV_XPRV=[A-Za-z0-9]+'        | head -1 | cut -d= -f2 || true)
+  new_tron_xpub=$(echo "$seed_out"       | grep -oE 'TRON_DEV_XPUB=[A-Za-z0-9]+'       | head -1 | cut -d= -f2 || true)
+  new_tron_xprv=$(echo "$seed_out"       | grep -oE 'TRON_DEV_XPRV=[A-Za-z0-9]+'       | head -1 | cut -d= -f2 || true)
+  new_tron_priv_hex=$(echo "$seed_out"   | grep -oE 'TRON_DEV_PRIV_KEY_HEX=[a-f0-9]+'  | head -1 | cut -d= -f2 || true)
+  new_tron_hot_addr=$(echo "$seed_out"   | grep -oE 'TRON_DEV_HOT_ADDRESS=[A-Za-z0-9]+' | head -1 | cut -d= -f2 || true)
 
   local engine_api_key engine_admin_key
   engine_api_key=$(env_get "$ENGINE_ENV" "API_KEY")
   engine_admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
 
-  [ -n "$new_api"       ] && { env_set "$ENGINE_ENV" "API_KEY"       "$new_api";       engine_api_key="$new_api"; }
-  [ -n "$new_admin"     ] && { env_set "$ENGINE_ENV" "ADMIN_KEY"     "$new_admin";     engine_admin_key="$new_admin"; }
-  [ -n "$new_xpub"      ] && env_set "$ENGINE_ENV" "BTC_DEV_XPUB"   "$new_xpub"
-  [ -n "$new_xprv"      ] && env_set "$ENGINE_ENV" "BTC_DEV_XPRV"   "$new_xprv"
-  [ -n "$new_tron_xpub" ] && { env_set "$ENGINE_ENV" "TRON_DEV_XPUB" "$new_tron_xpub"; TRON_ACCOUNT_XPUB="$new_tron_xpub"; }
-  [ -n "$new_tron_xprv" ] && env_set "$ENGINE_ENV" "TRON_DEV_XPRV"  "$new_tron_xprv"
+  [ -n "$new_api"            ] && { env_set "$ENGINE_ENV" "API_KEY"              "$new_api";            engine_api_key="$new_api"; }
+  [ -n "$new_admin"          ] && { env_set "$ENGINE_ENV" "ADMIN_KEY"            "$new_admin";          engine_admin_key="$new_admin"; }
+  [ -n "$new_xpub"           ] && env_set "$ENGINE_ENV" "BTC_DEV_XPUB"           "$new_xpub"
+  [ -n "$new_xprv"           ] && env_set "$ENGINE_ENV" "BTC_DEV_XPRV"           "$new_xprv"
+  [ -n "$new_tron_xpub"      ] && { env_set "$ENGINE_ENV" "TRON_DEV_XPUB"        "$new_tron_xpub";      TRON_ACCOUNT_XPUB="$new_tron_xpub"; }
+  [ -n "$new_tron_xprv"      ] && env_set "$ENGINE_ENV" "TRON_DEV_XPRV"          "$new_tron_xprv"
+  [ -n "$new_tron_priv_hex"  ] && { env_set "$ENGINE_ENV" "TRON_DEV_PRIV_KEY_HEX" "$new_tron_priv_hex"; TRON_HOT_PRIV_KEY_HEX="$new_tron_priv_hex"; }
+  [ -n "$new_tron_hot_addr"  ] && { env_set "$ENGINE_ENV" "TRON_DEV_HOT_ADDRESS"  "$new_tron_hot_addr"; TRON_HOT_ADDRESS="$new_tron_hot_addr"; }
 
-  [ -z "$engine_api_key"   ] && engine_api_key=$(env_get "$ENGINE_ENV" "API_KEY")
-  [ -z "$engine_admin_key" ] && engine_admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
-  [ -z "$TRON_ACCOUNT_XPUB" ] && TRON_ACCOUNT_XPUB=$(env_get "$ENGINE_ENV" "TRON_DEV_XPUB")
+  [ -z "$engine_api_key"        ] && engine_api_key=$(env_get "$ENGINE_ENV" "API_KEY")
+  [ -z "$engine_admin_key"      ] && engine_admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
+  [ -z "$TRON_ACCOUNT_XPUB"     ] && TRON_ACCOUNT_XPUB=$(env_get "$ENGINE_ENV" "TRON_DEV_XPUB")
+  [ -z "$TRON_HOT_PRIV_KEY_HEX" ] && TRON_HOT_PRIV_KEY_HEX=$(env_get "$ENGINE_ENV" "TRON_DEV_PRIV_KEY_HEX")
+  [ -z "$TRON_HOT_ADDRESS"      ] && TRON_HOT_ADDRESS=$(env_get "$ENGINE_ENV" "TRON_DEV_HOT_ADDRESS")
 
   [ -n "$engine_api_key" ] && [ -n "$engine_admin_key" ] || \
     die "Seed ran but API keys not found — check engine/.env"
@@ -662,19 +668,25 @@ step_configure_tron_tenant() {
   admin_key=$(env_get "$ENGINE_ENV" "ADMIN_KEY")
   base="http://localhost:3009"
 
-  [ -n "$TRON_ACCOUNT_XPUB" ] || TRON_ACCOUNT_XPUB=$(env_get "$ENGINE_ENV" "TRON_DEV_XPUB")
+  [ -n "$TRON_ACCOUNT_XPUB"     ] || TRON_ACCOUNT_XPUB=$(env_get "$ENGINE_ENV" "TRON_DEV_XPUB")
+  [ -n "$TRON_HOT_ADDRESS"      ] || TRON_HOT_ADDRESS=$(env_get "$ENGINE_ENV" "TRON_DEV_HOT_ADDRESS")
   if [ -z "$TRON_ACCOUNT_XPUB" ]; then
     warn "TRON_DEV_XPUB not set in engine/.env — skipping TRON tenant config"
     return
   fi
 
-  info "Setting TRON xpub on tenant_default..."
+  local tron_body
+  tron_body="{\"tronXpub\":\"${TRON_ACCOUNT_XPUB}\""
+  [ -n "$TRON_HOT_ADDRESS" ] && tron_body="${tron_body},\"tronHotAddress\":\"${TRON_HOT_ADDRESS}\""
+  tron_body="${tron_body}}"
+
+  info "Setting TRON xpub + hot address on tenant_default..."
   curl -sf -X PATCH "${base}/admin/v1/tenants/tenant_default/config" \
     -H "X-Admin-Key: $admin_key" \
     -H "Content-Type: application/json" \
-    -d "{\"tronXpub\":\"${TRON_ACCOUNT_XPUB}\"}" > /dev/null \
-    && ok "tenant_default tronXpub configured (HD deposit addresses enabled)" \
-    || warn "Could not set tronXpub on tenant_default — check engine logs"
+    -d "$tron_body" > /dev/null \
+    && ok "tenant_default TRON config set (xpub + hot wallet address)" \
+    || warn "Could not set TRON config on tenant_default — check engine logs"
 }
 
 # ─── Step 6: Start engines ─────────────────────────────────────────────────────
@@ -1318,8 +1330,9 @@ step_enroll_signers() {
       || die "Parse error: $result"
     ok "Enrolled → $signer_id (stored in shared DB, visible to both engines)"
 
-    local oss_tron_xprv oss_tron_contract
+    local oss_tron_xprv oss_tron_priv_hex oss_tron_contract
     oss_tron_xprv=$(env_get_dev_secret "$ENGINE_ENV" "TRON_DEV_XPRV")
+    oss_tron_priv_hex=$(env_get_dev_secret "$ENGINE_ENV" "TRON_DEV_PRIV_KEY_HEX")
     oss_tron_contract=$(env_get "$ENGINE_ENV" "TRON_USDT_CONTRACT_ADDRESS")
 
     # ── OSS BTC signer ────────────────────────────────────────────────────────
@@ -1370,6 +1383,7 @@ TRON_NETWORK=private
 TRON_SIGNER_FINGERPRINT=${fingerprint}
 TRON_SIGNER_FINGERPRINT_HD=${SIGNER_OSS_TRON_HD_FINGERPRINT}
 TRON_DEV_ACCOUNT_XPRV=${oss_tron_xprv}
+TRON_DEV_PRIVATE_KEY_HEX=${oss_tron_priv_hex}
 TRON_USDT_CONTRACT_ADDRESS=${oss_tron_contract}
 POLL_INTERVAL_MS=3000
 TASK_BATCH_SIZE=5
@@ -1584,6 +1598,7 @@ EOF
       else
         cat >> "$env_file" <<EOF
 TRON_DEV_ACCOUNT_XPRV=${oss_tron_xprv}
+TRON_DEV_PRIVATE_KEY_HEX=${oss_tron_priv_hex}
 EOF
       fi
       case "$ENTERPRISE_PROVIDER" in
