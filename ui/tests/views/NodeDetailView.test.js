@@ -261,8 +261,286 @@ describe('NodeDetailView — createController', () => {
   });
 
   test('activeTenant.isEmpty when no tenant stored', () => {
-    sessionStorage.clear();
+    localStorage.clear();
     const { ctrl } = makeCtrl();
     expect(ctrl.activeTenant.isEmpty).toBe(true);
+  });
+});
+
+// ─── TRON node tests ───────────────────────────────────────────────────────────
+
+const TRON_NODE_ID   = 'node_tron_abc';
+const TRON_NODE_DATA = { data: { id: TRON_NODE_ID, label: 'TRON Node', network: 'private', chain_id: 'tron' } };
+const TRON_ADDRESS   = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // valid TRON base58 (USDT contract)
+
+function makeTronCtrl(apiOverrides = {}) {
+  const api = makeMockApi({
+    getChainNode: jest.fn().mockResolvedValue(TRON_NODE_DATA),
+    tronRpc: jest.fn().mockResolvedValue({ block_header: { raw_data: { number: 500 } } }),
+    tronFund: jest.fn().mockResolvedValue({ txid: 'tron_tx_mock123', result: true }),
+    getConfig: jest.fn().mockResolvedValue({ hasAdminKey: true, hasApiKey: false, hasTronDevKey: false }),
+    ...apiOverrides,
+  });
+  const router = makeRouter();
+  const ctrl   = createController({ nodeId: TRON_NODE_ID, api, router });
+  return { ctrl, api, router };
+}
+
+describe('NodeDetailView — TRON node', () => {
+
+  // ─── Chain detection ────────────────────────────────────────────────────────
+
+  test('init() sets isTron=true when chain_id is tron', async () => {
+    const { ctrl } = makeTronCtrl();
+    await ctrl.init();
+    expect(ctrl.isTron).toBe(true);
+    expect(ctrl.isBitcoin).toBe(false);
+  });
+
+  test('init() sets nodeIcon=hexagon for TRON node', async () => {
+    const { ctrl } = makeTronCtrl();
+    await ctrl.init();
+    expect(ctrl.nodeIcon).toBe('hexagon');
+  });
+
+  test('init() isBitcoin remains true when chain_id is bitcoin', async () => {
+    const { ctrl } = makeCtrl(DB_NODE_ID, {
+      rpc: jest.fn().mockResolvedValue({ result: BLOCKCHAININFO }),
+    });
+    await ctrl.init();
+    expect(ctrl.isBitcoin).toBe(true);
+    expect(ctrl.isTron).toBe(false);
+  });
+
+  // ─── TRON status ────────────────────────────────────────────────────────────
+
+  test('TRON init() calls tronRpc wallet/getnowblock instead of rpc getblockchaininfo', async () => {
+    const tronRpc = jest.fn().mockResolvedValue({ block_header: { raw_data: { number: 500 } } });
+    const rpc     = jest.fn().mockResolvedValue({ result: BLOCKCHAININFO });
+    const { ctrl } = makeTronCtrl({ tronRpc, rpc });
+    await ctrl.init();
+    expect(tronRpc).toHaveBeenCalledWith('wallet/getnowblock', {});
+    expect(rpc).not.toHaveBeenCalledWith('getblockchaininfo', expect.anything(), expect.anything());
+  });
+
+  test('TRON init() sets blocksText from block_header.raw_data.number', async () => {
+    const { ctrl } = makeTronCtrl({
+      tronRpc: jest.fn().mockResolvedValue({ block_header: { raw_data: { number: 500 } } }),
+    });
+    await ctrl.init();
+    expect(ctrl.nodeStatus.blocksText).toBe('500');
+  });
+
+  test('TRON init() sets showOffline on tronRpc failure', async () => {
+    const { ctrl } = makeTronCtrl({
+      tronRpc: jest.fn().mockRejectedValue(new Error('TRON unreachable')),
+    });
+    await ctrl.init();
+    expect(ctrl.nodeStatus.showOffline).toBe(true);
+    expect(ctrl.nodeStatus.showOnline).toBe(false);
+  });
+
+  // ─── Dev faucet visibility ──────────────────────────────────────────────────
+
+  test('TRON: tronFundEnabled=true when hasTronDevKey=true in config', async () => {
+    const { ctrl } = makeTronCtrl({
+      getConfig: jest.fn().mockResolvedValue({
+        hasTronDevKey: true,
+        tronUsdtContract: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      }),
+    });
+    await ctrl.init();
+    expect(ctrl.tronFundEnabled).toBe(true);
+    expect(ctrl.tronNoDevKey).toBe(false);
+  });
+
+  test('TRON: tronNoDevKey=true when hasTronDevKey=false', async () => {
+    const { ctrl } = makeTronCtrl({
+      getConfig: jest.fn().mockResolvedValue({ hasTronDevKey: false }),
+    });
+    await ctrl.init();
+    expect(ctrl.tronNoDevKey).toBe(true);
+  });
+
+  test('TRON: prefills trc20Balance.contract and fundUsdt.contractAddress from config', async () => {
+    const contract = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+    const { ctrl } = makeTronCtrl({
+      getConfig: jest.fn().mockResolvedValue({ hasTronDevKey: true, tronUsdtContract: contract }),
+    });
+    await ctrl.init();
+    expect(ctrl.trc20Balance.contract).toBe(contract);
+    expect(ctrl.fundUsdt.contractAddress).toBe(contract);
+  });
+
+  // ─── accountInspector ───────────────────────────────────────────────────────
+
+  test('accountInspector.run() with empty address sets error', async () => {
+    const { ctrl } = makeTronCtrl();
+    await ctrl.accountInspector.run();
+    expect(ctrl.accountInspector.error).toBeTruthy();
+  });
+
+  test('accountInspector.run() calls tronRpc getaccount + getaccountresource', async () => {
+    const tronRpc = jest.fn()
+      .mockResolvedValueOnce({ balance: 5000000 })
+      .mockResolvedValueOnce({ freeNetLimit: 600, freeNetUsed: 100, NetLimit: 0, NetUsed: 0, EnergyLimit: 0, EnergyUsed: 0 });
+    const { ctrl } = makeTronCtrl({ tronRpc });
+    ctrl.accountInspector.address = TRON_ADDRESS;
+    await ctrl.accountInspector.run();
+    expect(tronRpc).toHaveBeenCalledWith('wallet/getaccount', { address: TRON_ADDRESS, visible: true });
+    expect(tronRpc).toHaveBeenCalledWith('wallet/getaccountresource', { address: TRON_ADDRESS, visible: true });
+  });
+
+  test('accountInspector.run() displays TRX balance in result', async () => {
+    const tronRpc = jest.fn()
+      .mockResolvedValueOnce({ balance: 5000000 })
+      .mockResolvedValueOnce({ freeNetLimit: 600, freeNetUsed: 100, NetLimit: 0, NetUsed: 0, EnergyLimit: 0, EnergyUsed: 0 });
+    const { ctrl } = makeTronCtrl({ tronRpc });
+    ctrl.accountInspector.address = TRON_ADDRESS;
+    await ctrl.accountInspector.run();
+    expect(ctrl.accountInspector.result).toContain('5.000000 TRX');
+  });
+
+  test('accountInspector.run() sets error on tronRpc failure', async () => {
+    const { ctrl } = makeTronCtrl({
+      tronRpc: jest.fn().mockRejectedValue(new Error('Network error')),
+    });
+    ctrl.accountInspector.address = TRON_ADDRESS;
+    await ctrl.accountInspector.run();
+    expect(ctrl.accountInspector.error).toBeTruthy();
+    expect(ctrl.accountInspector.result).toBeNull();
+  });
+
+  // ─── trc20Balance ────────────────────────────────────────────────────────────
+
+  test('trc20Balance.run() with empty address sets error', async () => {
+    const { ctrl } = makeTronCtrl();
+    ctrl.trc20Balance.contract = TRON_ADDRESS;
+    await ctrl.trc20Balance.run();
+    expect(ctrl.trc20Balance.error).toBeTruthy();
+  });
+
+  test('trc20Balance.run() with empty contract sets error', async () => {
+    const { ctrl } = makeTronCtrl();
+    ctrl.trc20Balance.address = TRON_ADDRESS;
+    await ctrl.trc20Balance.run();
+    expect(ctrl.trc20Balance.error).toBeTruthy();
+  });
+
+  test('trc20Balance.run() calls triggerconstantcontract with balanceOf selector', async () => {
+    const hexResult = '0000000000000000000000000000000000000000000000000000000005F5E100';
+    const tronRpc = jest.fn().mockResolvedValue({ constant_result: [hexResult] });
+    const { ctrl } = makeTronCtrl({ tronRpc });
+    ctrl.trc20Balance.address  = TRON_ADDRESS;
+    ctrl.trc20Balance.contract = TRON_ADDRESS;
+    await ctrl.trc20Balance.run();
+    expect(tronRpc).toHaveBeenCalledWith(
+      'wallet/triggerconstantcontract',
+      expect.objectContaining({ function_selector: 'balanceOf(address)' }),
+    );
+  });
+
+  test('trc20Balance.run() sets error when constant_result is missing', async () => {
+    const tronRpc = jest.fn().mockResolvedValue({ result: { message: 'REVERT' } });
+    const { ctrl } = makeTronCtrl({ tronRpc });
+    ctrl.trc20Balance.address  = TRON_ADDRESS;
+    ctrl.trc20Balance.contract = TRON_ADDRESS;
+    await ctrl.trc20Balance.run();
+    expect(ctrl.trc20Balance.error).toBeTruthy();
+  });
+
+  // ─── fundTrx ────────────────────────────────────────────────────────────────
+
+  test('fundTrx.run() with empty address sets error', async () => {
+    const { ctrl } = makeTronCtrl();
+    ctrl.fundTrx.amount = '10';
+    await ctrl.fundTrx.run();
+    expect(ctrl.fundTrx.error).toBeTruthy();
+  });
+
+  test('fundTrx.run() calls api.tronFund with amount in sun', async () => {
+    const tronFund = jest.fn().mockResolvedValue({ txid: 'tx_trx_abc', result: true });
+    const { ctrl } = makeTronCtrl({ tronFund });
+    ctrl.fundTrx.toAddress = TRON_ADDRESS;
+    ctrl.fundTrx.amount    = '10';
+    await ctrl.fundTrx.run();
+    expect(tronFund).toHaveBeenCalledWith({
+      toAddress: TRON_ADDRESS,
+      amount:    '10000000',
+      asset:     'trx',
+    });
+  });
+
+  test('fundTrx.run() sets result with txid on success', async () => {
+    const tronFund = jest.fn().mockResolvedValue({ txid: 'tx_trx_abc', result: true });
+    const { ctrl } = makeTronCtrl({ tronFund });
+    ctrl.fundTrx.toAddress = TRON_ADDRESS;
+    ctrl.fundTrx.amount    = '10';
+    await ctrl.fundTrx.run();
+    expect(ctrl.fundTrx.result).toContain('tx_trx_abc');
+    expect(ctrl.fundTrx.error).toBeNull();
+  });
+
+  test('fundTrx.run() sets error on failure', async () => {
+    const tronFund = jest.fn().mockRejectedValue(new Error('Broadcast failed'));
+    const { ctrl } = makeTronCtrl({ tronFund });
+    ctrl.fundTrx.toAddress = TRON_ADDRESS;
+    ctrl.fundTrx.amount    = '10';
+    await ctrl.fundTrx.run();
+    expect(ctrl.fundTrx.error).toBe('Broadcast failed');
+    expect(ctrl.fundTrx.result).toBeNull();
+  });
+
+  test('fundTrx.loading is false after run', async () => {
+    const tronFund = jest.fn().mockResolvedValue({ txid: 'tx_trx_abc', result: true });
+    const { ctrl } = makeTronCtrl({ tronFund });
+    ctrl.fundTrx.toAddress = TRON_ADDRESS;
+    ctrl.fundTrx.amount    = '10';
+    await ctrl.fundTrx.run();
+    expect(ctrl.fundTrx.loading).toBe(false);
+  });
+
+  // ─── fundUsdt ────────────────────────────────────────────────────────────────
+
+  test('fundUsdt.run() with empty address sets error', async () => {
+    const { ctrl } = makeTronCtrl();
+    ctrl.fundUsdt.amount          = '100';
+    ctrl.fundUsdt.contractAddress = TRON_ADDRESS;
+    await ctrl.fundUsdt.run();
+    expect(ctrl.fundUsdt.error).toBeTruthy();
+  });
+
+  test('fundUsdt.run() with empty contract sets error', async () => {
+    const { ctrl } = makeTronCtrl();
+    ctrl.fundUsdt.toAddress = TRON_ADDRESS;
+    ctrl.fundUsdt.amount    = '100';
+    await ctrl.fundUsdt.run();
+    expect(ctrl.fundUsdt.error).toBeTruthy();
+  });
+
+  test('fundUsdt.run() calls api.tronFund with micro-USDT amount', async () => {
+    const tronFund = jest.fn().mockResolvedValue({ txid: 'tx_usdt_abc', result: true });
+    const { ctrl } = makeTronCtrl({ tronFund });
+    ctrl.fundUsdt.toAddress       = TRON_ADDRESS;
+    ctrl.fundUsdt.amount          = '100';
+    ctrl.fundUsdt.contractAddress = TRON_ADDRESS;
+    await ctrl.fundUsdt.run();
+    expect(tronFund).toHaveBeenCalledWith({
+      toAddress:       TRON_ADDRESS,
+      amount:          '100000000',
+      asset:           'usdt',
+      contractAddress: TRON_ADDRESS,
+    });
+  });
+
+  test('fundUsdt.run() sets result with txid on success', async () => {
+    const tronFund = jest.fn().mockResolvedValue({ txid: 'tx_usdt_abc', result: true });
+    const { ctrl } = makeTronCtrl({ tronFund });
+    ctrl.fundUsdt.toAddress       = TRON_ADDRESS;
+    ctrl.fundUsdt.amount          = '100';
+    ctrl.fundUsdt.contractAddress = TRON_ADDRESS;
+    await ctrl.fundUsdt.run();
+    expect(ctrl.fundUsdt.result).toContain('tx_usdt_abc');
+    expect(ctrl.fundUsdt.error).toBeNull();
   });
 });

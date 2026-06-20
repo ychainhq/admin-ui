@@ -62,6 +62,49 @@ function getNodeById(nodeId) {
   return BTC_NODES.find(n => n.id === nodeId) || BTC_NODES[0];
 }
 
+// ─── TRON node configuration ──────────────────────────────────────────────────
+const TRON_NODE_URL       = process.env.TRON_NODE_URL        || 'http://localhost:8090';
+const TRON_DEV_PRIVATE_KEY = process.env.TRON_DEV_PRIVATE_KEY || '';
+const TRON_DEV_ADDRESS    = process.env.TRON_DEV_ADDRESS     || '';
+const TRON_USDT_CONTRACT  = process.env.TRON_USDT_CONTRACT   || '';
+
+// POST to TRON FullNode HTTP API. Throws on non-200 response.
+async function tronPost(tronPath, body) {
+  const r = await fetch(`${TRON_NODE_URL}/${tronPath}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
+  });
+  const json = await r.json();
+  if (!r.ok) throw new Error(`TRON API ${r.status}: ${JSON.stringify(json)}`);
+  return json;
+}
+
+// Minimal base58 decode for TRON addresses (no external deps)
+const BASE58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function base58ToBytes(str) {
+  const bytes = [0];
+  for (const c of str) {
+    let carry = BASE58_CHARS.indexOf(c);
+    if (carry < 0) throw new Error(`Invalid base58 char: ${c}`);
+    for (let i = 0; i < bytes.length; i++) {
+      carry += bytes[i] * 58;
+      bytes[i] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) { bytes.push(carry & 0xff); carry >>= 8; }
+  }
+  for (let i = 0; str[i] === '1'; i++) bytes.push(0);
+  return Buffer.from(bytes.reverse());
+}
+
+// Returns 20-byte hex for ABI encoding (strips 0x41 prefix + 4-byte checksum)
+function tronAddrTo20Hex(base58Addr) {
+  const buf = base58ToBytes(base58Addr); // 25 bytes: prefix(1) + addr(20) + checksum(4)
+  return buf.slice(1, 21).toString('hex');
+}
+
 // ─── Engine configuration ─────────────────────────────────────────────────────
 const CHAIN_API_URL       = process.env.CHAIN_API_URL       || 'http://localhost:3000';
 const CHAIN_API_ADMIN_KEY = process.env.CHAIN_API_ADMIN_KEY || '';
@@ -100,6 +143,12 @@ app.get('/config', (req, res) => {
     // v3: engine URLs (for health monitoring display)
     engineUrls: ENGINE_URLS,
     isV3: BTC_NODES.length > 1 || ENGINE_URLS.length > 1,
+
+    // TRON dev node settings
+    tronNodeUrl:     TRON_NODE_URL,
+    hasTronDevKey:   !!(TRON_DEV_PRIVATE_KEY && TRON_DEV_ADDRESS),
+    tronDevAddress:  TRON_DEV_ADDRESS || null,
+    tronUsdtContract: TRON_USDT_CONTRACT || null,
   });
 });
 
@@ -150,6 +199,97 @@ app.post('/register-tenant-key', (req, res) => {
     tenantKeyCache[tenantId] = activeTenantKey;
   }
   res.json({ success: true });
+});
+
+// ─── TRON FullNode HTTP proxy ─────────────────────────────────────────────────
+// POST /tron-rpc { path, body }
+// Forwards to TRON_NODE_URL/{path}. No auth by default (TRON private net).
+
+app.post('/tron-rpc', async (req, res) => {
+  const { path: tronPath, body } = req.body;
+  if (!tronPath) return res.status(400).json({ error: { message: 'path required' } });
+  try {
+    // Use tronPost but always respond with 200 (lenient — node may return 4xx for unknown addresses)
+    const r = await fetch(`${TRON_NODE_URL}/${tronPath}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(10000),
+    });
+    const text = await r.text();
+    let json;
+    try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    res.status(200).json(json);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+// POST /tron-fund { toAddress, amount, asset: 'trx'|'usdt', contractAddress? }
+// Funds a TRON address from the configured dev account (server-side signing via TRON node).
+// Requires TRON_DEV_PRIVATE_KEY + TRON_DEV_ADDRESS env vars.
+
+app.post('/tron-fund', async (req, res) => {
+  if (!TRON_DEV_PRIVATE_KEY || !TRON_DEV_ADDRESS) {
+    return res.status(400).json({ error: { message: 'Dev key not configured — set TRON_DEV_PRIVATE_KEY and TRON_DEV_ADDRESS in proxy env.' } });
+  }
+  const { toAddress, amount, asset = 'trx', contractAddress } = req.body;
+  if (!toAddress) return res.status(400).json({ error: { message: 'toAddress required' } });
+  if (!amount)    return res.status(400).json({ error: { message: 'amount required' } });
+
+  try {
+    let unsignedTx;
+
+    if (asset === 'trx') {
+      unsignedTx = await tronPost('wallet/createtransaction', {
+        owner_address: TRON_DEV_ADDRESS,
+        to_address:    toAddress,
+        amount:        Number(amount),
+        visible:       true,
+      });
+      if (unsignedTx?.Error || !unsignedTx?.txID) {
+        throw new Error(unsignedTx?.Error || 'Failed to create TRX transaction');
+      }
+    } else {
+      // TRC-20 transfer(address,uint256)
+      const contract = contractAddress || TRON_USDT_CONTRACT;
+      if (!contract) throw new Error('contractAddress required for TRC-20 transfer');
+      const addr20hex = tronAddrTo20Hex(toAddress);
+      const parameter = addr20hex.padStart(64, '0') + BigInt(amount).toString(16).padStart(64, '0');
+      const triggerRes = await tronPost('wallet/triggersmartcontract', {
+        owner_address:     TRON_DEV_ADDRESS,
+        contract_address:  contract,
+        function_selector: 'transfer(address,uint256)',
+        parameter,
+        fee_limit:         40000000,
+        call_value:        0,
+        visible:           true,
+      });
+      if (triggerRes?.result?.result === false) {
+        throw new Error(triggerRes?.result?.message || 'TRC-20 transfer creation failed');
+      }
+      unsignedTx = triggerRes?.transaction ?? triggerRes;
+      if (!unsignedTx?.txID) throw new Error('No transaction returned from triggersmartcontract');
+    }
+
+    // Sign on the TRON node (private key never leaves proxy)
+    const signedTx = await tronPost('wallet/gettransactionsign', {
+      transaction: unsignedTx,
+      privateKey:  TRON_DEV_PRIVATE_KEY,
+    });
+    if (signedTx?.Error) throw new Error(signedTx.Error);
+    if (!signedTx?.signature?.length) throw new Error('Signing failed — no signature returned');
+
+    // Broadcast
+    const broadcastRes = await tronPost('wallet/broadcasttransaction', signedTx);
+    if (!broadcastRes.result) {
+      throw new Error(broadcastRes?.message || broadcastRes?.code || 'Broadcast failed');
+    }
+
+    res.json({ txid: broadcastRes.txid || signedTx.txID, result: true });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
 });
 
 // ─── Bitcoin Core RPC proxy ───────────────────────────────────────────────────

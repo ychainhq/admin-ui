@@ -61,6 +61,10 @@ export function makeMockApi(overrides = {}) {
     resolveAddress: jest.fn().mockResolvedValue({ isInternal: false, customerId: null }),
     resolveAddressAsCustomer: jest.fn().mockResolvedValue({ isInternal: false, customerId: null }),
     tenantRequest: jest.fn().mockResolvedValue({}),
+    tronRpc: jest.fn().mockResolvedValue({}),
+    tronFund: jest.fn().mockResolvedValue({ txid: 'tron_tx_mock123', result: true }),
+    getChainNode: jest.fn().mockResolvedValue({ data: { id: 'node_abc', label: 'BTC Node', network: 'regtest', chain_id: 'bitcoin' } }),
+    getChainNodes: jest.fn().mockResolvedValue({ data: [] }),
     ...overrides,
   };
 }

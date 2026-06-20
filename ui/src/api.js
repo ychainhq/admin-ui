@@ -488,6 +488,17 @@ export const api = {
   getProxyConfig: () =>
     request('/config'),
 
+  // ─── TRON dev proxy ───────────────────────────────────────────────────────────
+
+  // Forward a raw TRON FullNode HTTP API call (POST /{path}).
+  tronRpc: (path, body = {}) =>
+    request('/tron-rpc', { method: 'POST', body: JSON.stringify({ path, body }) }),
+
+  // Fund a TRON address from the configured dev account (requires proxy env vars).
+  // asset: 'trx' | 'usdt'
+  tronFund: ({ toAddress, amount, asset = 'trx', contractAddress } = {}) =>
+    request('/tron-fund', { method: 'POST', body: JSON.stringify({ toAddress, amount, asset, contractAddress }) }),
+
   // tenantRequest is exposed so future views can call /api/* with the active tenant key.
   tenantRequest,
 };

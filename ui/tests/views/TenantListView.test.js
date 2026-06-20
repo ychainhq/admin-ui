@@ -177,23 +177,23 @@ describe('TenantListView — createController', () => {
   });
 
   test('activeTenant.isEmpty when no tenant stored', () => {
-    sessionStorage.clear();
+    localStorage.clear();
     const { ctrl } = makeCtrl();
     expect(ctrl.activeTenant.isEmpty).toBe(true);
     expect(ctrl.activeTenant.isSet).toBe(false);
   });
 
-  test('activeTenant.isSet when tenant stored in sessionStorage', () => {
-    sessionStorage.setItem('chain_api_active_tenant', JSON.stringify({ id: 'ten_01', name: 'Acme Corp' }));
+  test('activeTenant.isSet when tenant stored in localStorage', () => {
+    localStorage.setItem('chain_api_active_tenant', JSON.stringify({ id: 'ten_01', name: 'Acme Corp' }));
     const { ctrl } = makeCtrl();
     expect(ctrl.activeTenant.isSet).toBe(true);
     expect(ctrl.activeTenant.name).toBe('Acme Corp');
     expect(ctrl.activeTenant.id).toBe('ten_01');
-    sessionStorage.clear();
+    localStorage.clear();
   });
 
   test('activeTenant updates live when workWith is called on a loaded tenant', async () => {
-    sessionStorage.clear();
+    localStorage.clear();
     const { ctrl } = makeCtrl({
       getTenants: jest.fn().mockResolvedValue(PAGE_RESPONSE),
     });

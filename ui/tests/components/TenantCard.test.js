@@ -86,12 +86,12 @@ describe('createTenantViewModel', () => {
     expect(router.navigate).not.toHaveBeenCalled();
   });
 
-  test('workWith stores active tenant in sessionStorage', async () => {
-    sessionStorage.clear();
+  test('workWith stores active tenant in localStorage', async () => {
+    localStorage.clear();
     const api = makeMockApi();
     const vm = createTenantViewModel(activeTenant, { router, api });
     await vm.workWith();
-    const stored = JSON.parse(sessionStorage.getItem('chain_api_active_tenant'));
+    const stored = JSON.parse(localStorage.getItem('chain_api_active_tenant'));
     expect(stored.id).toBe('tenant_default');
     expect(stored.name).toBe('Dev Tenant');
   });
