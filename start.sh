@@ -324,6 +324,41 @@ step_build() {
   # start uses normal cache (faster for iterative runs — Docker detects file changes).
   local cache_flag=""
   [[ "$CMD" == "reset" ]] && cache_flag="--no-cache"
+
+  # BuildKit always checks registry metadata for FROM images, even when they are already
+  # locally cached. If Docker Desktop is configured with an HTTP proxy pointing to
+  # 'http.docker.internal' but no proxy is actually running on that port, BuildKit fails:
+  #   "proxyconnect: lookup http.docker.internal: connection refused"
+  #
+  # Automatic workaround (when base image IS in local cache): fall back to DOCKER_BUILDKIT=0.
+  # Fix permanently: Docker Desktop → Settings → Resources → Proxies → clear all entries → Apply & Restart.
+  if [[ "${DOCKER_BUILDKIT:-1}" != "0" ]]; then
+    local _dp
+    _dp=$(docker system info --format '{{.HTTPProxy}} {{.HTTPSProxy}}' 2>/dev/null | tr -d '[:space:]' || true)
+    if [[ "$_dp" == *"docker.internal"* ]]; then
+      # Check if port is actually listening; if not, the proxy is a dead misconfiguration.
+      local _proxy_port
+      _proxy_port=$(echo "$_dp" | grep -oE ':[0-9]+' | head -1 | tr -d ':')
+      if [ -n "$_proxy_port" ] && ! nc -z localhost "$_proxy_port" 2>/dev/null; then
+        echo ""
+        warn "Docker daemon proxy 'http.docker.internal:${_proxy_port}' is NOT listening."
+        echo -e "  ${C_CYAN}The daemon still has old proxy settings — it needs a restart to pick up your changes.${C_RESET}"
+        echo ""
+        echo    "  If you already cleared the proxy in Docker Desktop Settings:"
+        echo    "    → Docker Desktop taskbar icon → Restart  (or Settings → Apply & Restart)"
+        echo ""
+        echo    "  If you haven't cleared it yet:"
+        echo    "    → Docker Desktop → Settings → Resources → Proxies → clear entries → Apply & Restart"
+        echo ""
+        warn "Attempting build anyway (will fail if node:20-alpine is not in local cache)..."
+        export DOCKER_BUILDKIT=0
+      else
+        warn "Docker proxy via 'http.docker.internal' detected — forcing DOCKER_BUILDKIT=0"
+        export DOCKER_BUILDKIT=0
+      fi
+    fi
+  fi
+
   $V3_COMPOSE_CMD build $cache_flag engine-1 engine-2 btc-indexer-1 btc-indexer-2 tron-indexer-1 tron-indexer-2 ui
   ok "All images built"
 }
