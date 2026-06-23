@@ -10,6 +10,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.18.3"
+    "express": "^4.18.3",
+    "@noble/secp256k1": "^1.7.1"
   }
 }

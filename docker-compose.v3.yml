@@ -392,6 +392,11 @@ services:
       ENGINE_URL_2: http://engine-2:3000
       CHAIN_API_KEY: ${API_KEY:-}
       CHAIN_API_ADMIN_KEY: ${ADMIN_KEY:-}
+      # TRON dev funding — genesis account (well-known devnet key, not a secret)
+      TRON_NODE_URL: http://tron-node-1:8090
+      TRON_DEV_PRIVATE_KEY: ${TRON_GENESIS_PRIVATE_KEY_HEX:-da146374a75310b9666e834ee4ad0866d6f4035967bfc76217c5a495fff9f0d0}
+      TRON_DEV_ADDRESS: ${TRON_GENESIS_ADDRESS:-TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY}
+      TRON_USDT_CONTRACT: ${TRON_USDT_CONTRACT_ADDRESS:-}
     volumes:
       - ./ui:/app/ui:ro   # static frontend files (Rivets.js SPA)
     depends_on:

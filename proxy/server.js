@@ -21,8 +21,17 @@
  *  ENGINE_URL_2          — optional second engine (for health monitoring only)
  */
 
-const express = require('express');
-const path    = require('path');
+const express    = require('express');
+const path       = require('path');
+const crypto     = require('crypto');
+const secp256k1  = require('@noble/secp256k1');
+
+// Required by @noble/secp256k1 v1 for synchronous signing (RFC 6979 nonce via HMAC-SHA256)
+secp256k1.utils.hmacSha256Sync = (key, ...msgs) => {
+  const h = crypto.createHmac('sha256', key);
+  msgs.forEach(m => h.update(m));
+  return h.digest();
+};
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -68,7 +77,7 @@ const TRON_DEV_PRIVATE_KEY = process.env.TRON_DEV_PRIVATE_KEY || '';
 const TRON_DEV_ADDRESS    = process.env.TRON_DEV_ADDRESS     || '';
 const TRON_USDT_CONTRACT  = process.env.TRON_USDT_CONTRACT   || '';
 
-// POST to TRON FullNode HTTP API. Throws on non-200 response.
+// POST to TRON FullNode HTTP API. Throws on non-200 or non-JSON response.
 async function tronPost(tronPath, body) {
   const r = await fetch(`${TRON_NODE_URL}/${tronPath}`, {
     method: 'POST',
@@ -76,7 +85,13 @@ async function tronPost(tronPath, body) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(10000),
   });
-  const json = await r.json();
+  const text = await r.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`TRON node ${TRON_NODE_URL} returned non-JSON (HTTP ${r.status}): ${text.slice(0, 300)}`);
+  }
   if (!r.ok) throw new Error(`TRON API ${r.status}: ${JSON.stringify(json)}`);
   return json;
 }
@@ -97,6 +112,12 @@ function base58ToBytes(str) {
   }
   for (let i = 0; str[i] === '1'; i++) bytes.push(0);
   return Buffer.from(bytes.reverse());
+}
+
+// Returns 21-byte hex with 0x41 prefix for TRON RPC calls (non-visible mode)
+function tronAddrToHex(base58Addr) {
+  const buf = base58ToBytes(base58Addr); // 25 bytes: prefix(1) + addr(20) + checksum(4)
+  return buf.slice(0, 21).toString('hex'); // '41' + 20 bytes = 42 hex chars
 }
 
 // Returns 20-byte hex for ABI encoding (strips 0x41 prefix + 4-byte checksum)
@@ -240,12 +261,16 @@ app.post('/tron-fund', async (req, res) => {
   try {
     let unsignedTx;
 
+    // Use hex-format addresses throughout (no visible:true) to avoid java-tron
+    // applying Base58/visible-mode parsing to the signature field on broadcast.
+    const ownerHex = tronAddrToHex(TRON_DEV_ADDRESS);
+    const toHex    = tronAddrToHex(toAddress);
+
     if (asset === 'trx') {
       unsignedTx = await tronPost('wallet/createtransaction', {
-        owner_address: TRON_DEV_ADDRESS,
-        to_address:    toAddress,
+        owner_address: ownerHex,
+        to_address:    toHex,
         amount:        Number(amount),
-        visible:       true,
       });
       if (unsignedTx?.Error || !unsignedTx?.txID) {
         throw new Error(unsignedTx?.Error || 'Failed to create TRX transaction');
@@ -254,16 +279,16 @@ app.post('/tron-fund', async (req, res) => {
       // TRC-20 transfer(address,uint256)
       const contract = contractAddress || TRON_USDT_CONTRACT;
       if (!contract) throw new Error('contractAddress required for TRC-20 transfer');
-      const addr20hex = tronAddrTo20Hex(toAddress);
-      const parameter = addr20hex.padStart(64, '0') + BigInt(amount).toString(16).padStart(64, '0');
+      const contractHex = tronAddrToHex(contract);
+      const addr20hex   = tronAddrTo20Hex(toAddress);
+      const parameter   = addr20hex.padStart(64, '0') + BigInt(amount).toString(16).padStart(64, '0');
       const triggerRes = await tronPost('wallet/triggersmartcontract', {
-        owner_address:     TRON_DEV_ADDRESS,
-        contract_address:  contract,
+        owner_address:     ownerHex,
+        contract_address:  contractHex,
         function_selector: 'transfer(address,uint256)',
         parameter,
         fee_limit:         40000000,
         call_value:        0,
-        visible:           true,
       });
       if (triggerRes?.result?.result === false) {
         throw new Error(triggerRes?.result?.message || 'TRC-20 transfer creation failed');
@@ -272,13 +297,16 @@ app.post('/tron-fund', async (req, res) => {
       if (!unsignedTx?.txID) throw new Error('No transaction returned from triggersmartcontract');
     }
 
-    // Sign on the TRON node (private key never leaves proxy)
-    const signedTx = await tronPost('wallet/gettransactionsign', {
-      transaction: unsignedTx,
-      privateKey:  TRON_DEV_PRIVATE_KEY,
-    });
-    if (signedTx?.Error) throw new Error(signedTx.Error);
-    if (!signedTx?.signature?.length) throw new Error('Signing failed — no signature returned');
+    // Sign locally — gettransactionsign was removed in newer Java-Tron.
+    // Format: r(32) || s(32) || v(1) where v = recovery + 27 (same as TronWeb compact format).
+    // Java-Tron broadcasttransaction reads byte[64] as the recovery header (expects 27 or 28).
+    // der:false is required — @noble/secp256k1 v1 defaults to DER (71 bytes), not compact.
+    const txIdBytes  = Uint8Array.from(Buffer.from(unsignedTx.txID, 'hex'));
+    const privBytes  = Uint8Array.from(Buffer.from(TRON_DEV_PRIVATE_KEY, 'hex'));
+    const [sig, recovery] = secp256k1.signSync(txIdBytes, privBytes, { recovered: true, canonical: true, der: false });
+    const signatureHex = Buffer.from([...sig, recovery + 27]).toString('hex');
+    const { visible: _vis, ...txCore } = unsignedTx;
+    const signedTx = { ...txCore, signature: [signatureHex] };
 
     // Broadcast
     const broadcastRes = await tronPost('wallet/broadcasttransaction', signedTx);
