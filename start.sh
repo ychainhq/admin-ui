@@ -277,7 +277,18 @@ cmd_reset() {
   [[ "$confirm" =~ ^[Yy]$ ]] || { echo "  Aborted."; exit 0; }
   echo ""
 
-  $V3_COMPOSE_CMD --profile signer-all down -v 2>/dev/null || true
+  # docker compose down -v --profile signer-all requires ALL env_file references to exist
+  # at parse time, even for services not currently running. Without stubs, the command
+  # exits non-zero before touching any container or volume — silently swallowed by || true.
+  mkdir -p "$SIGNER_OSS_DIR" "$SIGNER_ENT_DIR"
+  touch "$SIGNER_OSS_DIR/.env" "$SIGNER_OSS_DIR/.env.tron"
+  touch "$SIGNER_ENT_DIR/.env" "$SIGNER_ENT_DIR/.env.tron"
+
+  if ! $V3_COMPOSE_CMD --profile signer-all down -v 2>&1; then
+    warn "docker compose down -v reported errors — forcing volume removal manually"
+    docker ps -a --format '{{.Names}}' | grep '^chainapi-' | xargs -r docker rm -f 2>/dev/null || true
+    docker volume ls --format '{{.Name}}' | grep '^btc-test-ui_' | xargs -r docker volume rm 2>/dev/null || true
+  fi
   ok "Containers stopped and volumes removed"
 
   # Remove compiled TRC-20 artifact so it gets recompiled on next start
@@ -924,7 +935,7 @@ step_nginx_ui() {
   fi
 
   info "Starting nginx (engine-1 + engine-2 upstream → localhost:3009)..."
-  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d nginx
+  $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d --force-recreate nginx
   local tries=0
   until curl -sf "http://127.0.0.1:3009/nginx-health" > /dev/null 2>&1; do
     printf "."; sleep 2; tries=$((tries+1))
