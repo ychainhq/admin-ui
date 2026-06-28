@@ -728,8 +728,10 @@ export function createController({ nodeId, api, router }) {
       // Node status check
       if (isTron) {
         try {
-          const res = await api.tronRpc('wallet/getnowblock', {});
-          const blockNum = res?.block_header?.raw_data?.number ?? null;
+          // Use testNodeConnection so we query *this* node's rpc_url, not the proxy's
+          // fixed TRON_NODE_URL (which always points to node-1 regardless of nodeId).
+          const r = await api.testNodeConnection(nodeId);
+          const blockNum = r?.data?.blocks ?? null;
           self.nodeStatus = {
             checking: false,
             showOnline:  blockNum != null,
