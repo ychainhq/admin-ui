@@ -378,6 +378,25 @@ step_build() {
 step_infra() {
   header "Step 2 — Start PostgreSQL + Bitcoin Core + TRON nodes"
 
+  # Pre-pull infra images sequentially using plain `docker pull` (one at a time) BEFORE
+  # calling `docker compose up`. Docker Compose v2 has a race condition (concurrent map writes
+  # panic) in pullRequiredImages when it pulls multiple images in parallel goroutines. Pre-pulling
+  # ensures images are cached locally so compose skips the pull phase entirely.
+  local infra_images=(
+    postgres:16-alpine
+    lncm/bitcoind:v25.0
+    tronprotocol/java-tron:GreatVoyage-v4.7.7
+  )
+  for img in "${infra_images[@]}"; do
+    if ! docker image inspect "$img" > /dev/null 2>&1; then
+      info "Pulling $img..."
+      if ! docker pull "$img"; then
+        die "Failed to pull $img — check Docker Hub connectivity and disk space"
+      fi
+      ok "$img pulled"
+    fi
+  done
+
   # Start all infra in parallel. TRON nodes take 30-60s to produce the first block,
   # so we start them now and wait for BTC/postgres first (Genesis step runs while TRON warms up).
   # We wait for TRON readiness later in step_tron_genesis.
@@ -391,8 +410,8 @@ step_infra() {
     echo "       Current Docker disk usage:"
     docker system df 2>/dev/null | sed 's/^/       /'
     echo ""
-    echo "    2. Port already in use (BTC RPC: 18443, TRON HTTP: 8090, 8091, PG: 5432):"
-    lsof -i :18443 -i :18444 -i :8090 -i :8091 -i :5432 2>/dev/null | grep -v "^COMMAND" | head -8 | sed 's/^/       /' || true
+    echo "    2. Port already in use (BTC RPC: 18443, TRON HTTP: 8090, 8091, PG host: 5433):"
+    lsof -i :18443 -i :18444 -i :8090 -i :8091 -i :5433 2>/dev/null | grep -v "^COMMAND" | head -8 | sed 's/^/       /' || true
     echo ""
     warn "btc-node-1 logs:"
     docker logs chainapi-btc-node-1 2>&1 | tail -10 | sed 's/^/    /' || true
