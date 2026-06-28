@@ -219,7 +219,7 @@ services:
       - "8091:8091"     # HTTP SolidityNode API
       - "18888:18888"   # P2P
     volumes:
-      - tron_node_1:/data/tron
+      - tron_node_1:/java-tron/output-directory
       - ./tron/config-node1.conf:/etc/tron/config.conf:ro
 
   # ── TRON FullNode — Node 2 (observer / sync-only) ──────────────────────────
@@ -230,7 +230,7 @@ services:
     container_name: chainapi-tron-node-2
     command: ["-c", "/etc/tron/config.conf"]
     volumes:
-      - tron_node_2:/data/tron
+      - tron_node_2:/java-tron/output-directory
       - ./tron/config-node2.conf:/etc/tron/config.conf:ro
     depends_on:
       tron-node-1:
