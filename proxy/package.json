@@ -4,13 +4,24 @@
   "description": "Proxy server for Bitcoin Core RPC with UI",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.18.3",
-    "@noble/secp256k1": "^1.7.1"
+    "@noble/secp256k1": "^1.7.1",
+    "express": "^4.18.3"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ]
   }
 }

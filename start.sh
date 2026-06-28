@@ -970,6 +970,19 @@ step_nginx_ui() {
 
   info "Starting test UI proxy..."
   $V3_COMPOSE_CMD up $COMPOSE_UP_FLAGS -d ui
+  local ui_tries=0
+  until curl -sf --max-time 3 "http://localhost:3002/" > /dev/null 2>&1; do
+    printf "."
+    sleep 2
+    ui_tries=$((ui_tries+1))
+    if [ "$ui_tries" -ge 15 ]; then
+      echo ""
+      warn "UI container logs (last 20 lines):"
+      $V3_COMPOSE_CMD logs --tail 20 ui 2>/dev/null | sed 's/^/    /' || true
+      die "UI proxy did not respond after 30s — check logs above"
+    fi
+  done
+  echo " OK"
   ok "UI proxy started → http://localhost:3002"
 }
 

@@ -25,6 +25,7 @@ const express    = require('express');
 const path       = require('path');
 const crypto     = require('crypto');
 const secp256k1  = require('@noble/secp256k1');
+const { tronAddrToHex, tronAddrTo20Hex, parseTriggerResponse } = require('./lib/tron-utils');
 
 // Required by @noble/secp256k1 v1 for synchronous signing (RFC 6979 nonce via HMAC-SHA256)
 secp256k1.utils.hmacSha256Sync = (key, ...msgs) => {
@@ -96,35 +97,7 @@ async function tronPost(tronPath, body) {
   return json;
 }
 
-// Minimal base58 decode for TRON addresses (no external deps)
-const BASE58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-function base58ToBytes(str) {
-  const bytes = [0];
-  for (const c of str) {
-    let carry = BASE58_CHARS.indexOf(c);
-    if (carry < 0) throw new Error(`Invalid base58 char: ${c}`);
-    for (let i = 0; i < bytes.length; i++) {
-      carry += bytes[i] * 58;
-      bytes[i] = carry & 0xff;
-      carry >>= 8;
-    }
-    while (carry > 0) { bytes.push(carry & 0xff); carry >>= 8; }
-  }
-  for (let i = 0; str[i] === '1'; i++) bytes.push(0);
-  return Buffer.from(bytes.reverse());
-}
-
-// Returns 21-byte hex with 0x41 prefix for TRON RPC calls (non-visible mode)
-function tronAddrToHex(base58Addr) {
-  const buf = base58ToBytes(base58Addr); // 25 bytes: prefix(1) + addr(20) + checksum(4)
-  return buf.slice(0, 21).toString('hex'); // '41' + 20 bytes = 42 hex chars
-}
-
-// Returns 20-byte hex for ABI encoding (strips 0x41 prefix + 4-byte checksum)
-function tronAddrTo20Hex(base58Addr) {
-  const buf = base58ToBytes(base58Addr); // 25 bytes: prefix(1) + addr(20) + checksum(4)
-  return buf.slice(1, 21).toString('hex');
-}
+// Address helpers and triggersmartcontract response validator imported from lib/tron-utils.js
 
 // ─── Engine configuration ─────────────────────────────────────────────────────
 const CHAIN_API_URL       = process.env.CHAIN_API_URL       || 'http://localhost:3000';
@@ -290,11 +263,8 @@ app.post('/tron-fund', async (req, res) => {
         fee_limit:         40000000,
         call_value:        0,
       });
-      if (triggerRes?.result?.result === false) {
-        throw new Error(triggerRes?.result?.message || 'TRC-20 transfer creation failed');
-      }
-      unsignedTx = triggerRes?.transaction ?? triggerRes;
-      if (!unsignedTx?.txID) throw new Error('No transaction returned from triggersmartcontract');
+      console.error('[tron-fund] triggersmartcontract response:', JSON.stringify(triggerRes));
+      unsignedTx = parseTriggerResponse(triggerRes);
     }
 
     // Sign locally — gettransactionsign was removed in newer Java-Tron.
