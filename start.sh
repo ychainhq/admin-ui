@@ -667,14 +667,23 @@ sys.exit(0 if d.get('currentConnectCount', 0) > 0 else 1)
   done
   [ "$p2p_tries" -lt 15 ] && { echo " OK"; ok "TRON P2P connected — tron-node-2 will continue syncing in background"; }
 
-  # Idempotency: skip if contract address already persisted (e.g. start after partial reset)
+  # Idempotency: reuse cached contract address only when it actually exists on-chain.
+  # The cached address can become stale when TRON volumes are wiped (docker down -v)
+  # without going through start.sh reset — or when cmd_reset fails to clear engine/.env.
+  # We verify via wallet/getcontract: empty {} response = contract not deployed on this chain.
   local existing_contract
   existing_contract=$(env_get "$ENGINE_ENV" "TRON_USDT_CONTRACT_ADDRESS")
   if [ -n "$existing_contract" ]; then
-    TRON_USDT_CONTRACT_ADDRESS="$existing_contract"
-    export TRON_USDT_CONTRACT_ADDRESS
-    ok "USDT TRC-20 already deployed: $TRON_USDT_CONTRACT_ADDRESS (reusing)"
-    return
+    if curl -sf "http://localhost:8090/wallet/getcontract?value=${existing_contract}&visible=true" 2>/dev/null \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d else 1)" 2>/dev/null; then
+      TRON_USDT_CONTRACT_ADDRESS="$existing_contract"
+      export TRON_USDT_CONTRACT_ADDRESS
+      ok "USDT TRC-20 already deployed: $TRON_USDT_CONTRACT_ADDRESS (reusing — verified on-chain)"
+      return
+    else
+      warn "Cached TRON USDT contract ${existing_contract} not found on current chain — redeploying..."
+      sed -i '' '/^TRON_USDT_CONTRACT_ADDRESS=/d' "$ENGINE_ENV" 2>/dev/null || true
+    fi
   fi
 
   # Compile TRC20Token.sol using the official solc Docker image
