@@ -235,23 +235,6 @@ services:
     depends_on:
       tron-node-1:
         condition: service_healthy
-    labels:
-      # autoheal container watches this label and restarts when status = unhealthy.
-      autoheal: "true"
-    healthcheck:
-      # Overrides the simple liveness check from x-tron-node-common.
-      # Checks: (a) node-2 HTTP is up, (b) node-2 is within 600 blocks of node-1.
-      # 600-block lag ≈ 30 min at 3 s/block — beyond that, the TIME_BANNED P2P feedback
-      # loop has likely stalled sync. A container restart stops the rapid retries;
-      # java-tron's ~30–60 s startup delay lets node-1's TIME_BANNED (30 s) expire
-      # before the first reconnect attempt, breaking the ban-refresh feedback loop.
-      test:
-        - "CMD-SHELL"
-        - "n2=$(curl -sf --max-time 5 http://localhost:8090/wallet/getnowblock 2>/dev/null | grep -oE '\"number\":[0-9]+' | grep -oE '[0-9]+' | head -1); n1=$(curl -sf --max-time 5 http://tron-node-1:8090/wallet/getnowblock 2>/dev/null | grep -oE '\"number\":[0-9]+' | grep -oE '[0-9]+' | head -1); n2=${n2:-0}; n1=${n1:-0}; [ \"$n2\" -gt 0 ] && [ \"$n1\" -gt 0 ] && [ \"$((n1-n2))\" -lt 600 ]"
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 180s
 
   # ── Engine — Instance 1 (cluster leader candidate) ─────────────────────────
   engine-1:
@@ -420,21 +403,53 @@ services:
       nginx:
         condition: service_healthy
 
-  # ── Autoheal — restarts unhealthy containers labelled autoheal=true ─────────
-  # Monitors Docker events via the socket. Primary target: tron-node-2, whose
-  # block-lag healthcheck detects the TIME_BANNED sync-stall condition.
-  # Restarting node-2 stops the rapid P2P retries that refresh node-1's ban;
-  # node-2's fresh startup takes ~30–60 s, during which the 30-s ban expires.
-  autoheal:
-    image: willfarrell/autoheal:latest
-    container_name: chainapi-autoheal
+  # ── TRON sync watchdog — detects node-2 block-height stall, restarts node-2 ──
+  # Stateless Docker healthchecks cannot detect "block not advancing" because
+  # they have no memory of previous runs. This sidecar tracks height over time:
+  # polls every 60 s, counts consecutive ticks where n2 is unchanged AND node-1
+  # is >100 blocks ahead. At 10 consecutive stall ticks (10 min) it restarts
+  # tron-node-2 via the Docker API. java-tron's ~30–60 s startup delay gives
+  # node-1's TIME_BANNED (30 s) time to expire before the first reconnect,
+  # breaking the ban-refresh feedback loop that causes the sync stall.
+  tron-sync-watchdog:
+    image: alpine/curl:latest
+    container_name: chainapi-tron-sync-watchdog
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      AUTOHEAL_CONTAINER_LABEL: autoheal   # only restart containers with this label
-      AUTOHEAL_INTERVAL: 30               # check Docker health status every 30 s
-      AUTOHEAL_START_PERIOD: 0            # monitor immediately; healthcheck start_period handles grace
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo "tron-sync-watchdog: 300 s grace period for stack startup..."
+        sleep 300
+        prev=0; stall=0
+        while true; do
+          sleep 60
+          n2=$$(curl -sf --max-time 5 http://tron-node-2:8090/wallet/getnowblock 2>/dev/null \
+               | grep -oE '"number":[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+          n1=$$(curl -sf --max-time 5 http://tron-node-1:8090/wallet/getnowblock 2>/dev/null \
+               | grep -oE '"number":[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+          n2=$${n2:-0}; n1=$${n1:-0}
+          if [ "$$n2" -gt 0 ] && [ "$$n2" -eq "$$prev" ] && [ "$$n1" -gt 0 ] && [ "$$((n1-n2))" -gt 100 ]; then
+            stall=$$((stall+1))
+            echo "tron-sync-watchdog: stall $${stall}/10 — node-2 at $$n2, node-1 at $$n1 (lag $$((n1-n2)))"
+            if [ "$$stall" -ge 10 ]; then
+              echo "tron-sync-watchdog: 10-min stall — restarting chainapi-tron-node-2 to clear TIME_BANNED loop"
+              curl -sf --max-time 10 --unix-socket /var/run/docker.sock \
+                -X POST http://localhost/containers/chainapi-tron-node-2/restart \
+                && echo "tron-sync-watchdog: restart issued" \
+                || echo "tron-sync-watchdog: restart failed (check socket mount)"
+              stall=0; sleep 90
+            fi
+          else
+            [ "$$stall" -gt 0 ] && echo "tron-sync-watchdog: node-2 resumed at block $$n2"
+            stall=0; prev=$$n2
+          fi
+        done
+    depends_on:
+      tron-node-2:
+        condition: service_healthy
 
   # ── Vault dev server for Enterprise signer (profile: signer-enterprise) ───
   # Dev-only: root token is fixed and security is intentionally relaxed.
