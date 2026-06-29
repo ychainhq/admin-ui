@@ -99,8 +99,19 @@ async function waitForConfirmation(txId, maxWaitMs = 60_000) {
     await new Promise(r => setTimeout(r, poll));
     const info = await post('/wallet/gettransactioninfobyid', { value: txId });
     if (info && info.id) {
-      if (info.receipt && info.receipt.result === 'FAILED') {
-        throw new Error(`Transaction ${txId} failed: ${JSON.stringify(info.receipt)}`);
+      // Check both top-level result and receipt.result — TRON can indicate failure via either.
+      // receipt.result covers: FAILED, ILLEGAL_OPERATION, OUT_OF_ENERGY, REVERT, etc.
+      // Top-level result: "FAILED" is set when the VM execution itself failed.
+      const topFailed  = info.result === 'FAILED';
+      const receiptBad = info.receipt && info.receipt.result && info.receipt.result !== 'SUCCESS';
+      if (topFailed || receiptBad) {
+        const receiptResult = info.receipt?.result ?? 'unknown';
+        const resMsg = info.resMessage
+          ? Buffer.from(info.resMessage, 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '')
+          : '';
+        throw new Error(
+          `Transaction ${txId} failed: ${receiptResult}${resMsg ? ' — ' + resMsg : ''}`
+        );
       }
       return info;
     }

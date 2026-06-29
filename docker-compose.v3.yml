@@ -130,6 +130,8 @@ x-tron-indexer-common: &tron-indexer-common
     INDEXER_FINALITY_CONFIRMATIONS: "20"
     # Set by start.sh after deploy-trc20.js; empty until first reset/start
     INDEXER_WATCHED_CONTRACTS: ${TRON_USDT_CONTRACT_ADDRESS:-}
+    # Same address — used by BalanceUpdater to query TRC-20 balances via triggerConstantContract
+    INDEXER_USDT_CONTRACT_ADDRESS: ${TRON_USDT_CONTRACT_ADDRESS:-}
 
 services:
 

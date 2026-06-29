@@ -695,6 +695,7 @@ sys.exit(0 if d.get('currentConnectCount', 0) > 0 else 1)
       -v "$CONTRACTS_DIR:/contracts" \
       ethereum/solc:0.8.20-alpine \
       --optimize --optimize-runs 200 \
+      --evm-version paris \
       --bin --abi \
       /contracts/TRC20Token.sol \
       -o /contracts/out \
