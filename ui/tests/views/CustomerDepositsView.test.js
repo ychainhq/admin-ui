@@ -360,4 +360,51 @@ describe('CustomerDepositsView — createController', () => {
     await ctrl.depositAddr.goToDevNodes({ preventDefault: jest.fn() });
     expect(router.navigate).toHaveBeenCalledWith('#/nodes');
   });
+
+  // ── from_address mapping ─────────────────────────────────────────────────────
+
+  test('deposit with from_address maps to fromAddress and fromAddressShort', async () => {
+    const FROM = 'TKSenderAddress12345678';
+    const getCustomerDeposits = jest.fn().mockResolvedValue({
+      data: [{ id: 'dep_1', amount_display: '10.000000', asset_id: 'tron:TRX', status: 'confirmed', address: 'TReceiver1', from_address: FROM }],
+      pagination: { nextCursor: null },
+    });
+    const { ctrl } = setup({ getCustomerDeposits });
+    await ctrl.load();
+    expect(ctrl.deposits[0].fromAddress).toBe(FROM);
+    expect(ctrl.deposits[0].fromAddressShort).toBe('TKSender…345678');
+  });
+
+  test('deposit with null from_address maps to fromAddress="—" and fromAddressShort="—"', async () => {
+    const getCustomerDeposits = jest.fn().mockResolvedValue({
+      data: [{ id: 'dep_1', amount_display: '0.5', asset_id: 'bitcoin:BTC', status: 'detected', address: 'bc1qtest', from_address: null }],
+      pagination: { nextCursor: null },
+    });
+    const { ctrl } = setup({ getCustomerDeposits });
+    await ctrl.load();
+    expect(ctrl.deposits[0].fromAddress).toBe('—');
+    expect(ctrl.deposits[0].fromAddressShort).toBe('—');
+  });
+
+  test('deposit without from_address field maps to fromAddress="—"', async () => {
+    const getCustomerDeposits = jest.fn().mockResolvedValue({
+      data: [{ id: 'dep_1', amount_display: '0.001', asset_id: 'bitcoin:BTC', status: 'confirmed', address: 'bc1qtest' }],
+      pagination: { nextCursor: null },
+    });
+    const { ctrl } = setup({ getCustomerDeposits });
+    await ctrl.load();
+    expect(ctrl.deposits[0].fromAddress).toBe('—');
+  });
+
+  test('short from_address is not truncated in fromAddressShort', async () => {
+    const SHORT_ADDR = 'TShort';
+    const getCustomerDeposits = jest.fn().mockResolvedValue({
+      data: [{ id: 'dep_1', amount_display: '1.0', asset_id: 'tron:TRX', status: 'detected', address: 'TRec', from_address: SHORT_ADDR }],
+      pagination: { nextCursor: null },
+    });
+    const { ctrl } = setup({ getCustomerDeposits });
+    await ctrl.load();
+    expect(ctrl.deposits[0].fromAddressShort).toBe(SHORT_ADDR);
+    expect(ctrl.deposits[0].fromAddressShort).not.toContain('…');
+  });
 });

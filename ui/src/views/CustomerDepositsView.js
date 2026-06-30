@@ -58,16 +58,21 @@ function normalizeDeposit(d) {
   const [, assetFromAssetId] = assetId.includes(':') ? assetId.split(':') : ['', ''];
   const addr = d.address || '';
   const status = d.status || '';
+  const fromAddr = d.from_address || d.fromAddress || null;
 
   return {
-    depositId:       d.depositId || d.deposit_id || d.id || '—',
-    amount:          d.amount || d.amount_display || d.amountDisplay || formatRawAmount(d.amount_raw || d.amountRaw, assetId),
-    asset:           d.asset || assetFromAssetId || assetId || '—',
-    statusLabel:     status.toUpperCase(),
+    depositId:        d.depositId || d.deposit_id || d.id || '—',
+    amount:           d.amount || d.amount_display || d.amountDisplay || formatRawAmount(d.amount_raw || d.amountRaw, assetId),
+    asset:            d.asset || assetFromAssetId || assetId || '—',
+    statusLabel:      status.toUpperCase(),
     statusBadgeClass: depositStatusBadge(status),
-    address:         addr,
-    addressShort:    addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr,
-    detectedAt:      fmtDate(d.detectedAt || d.detected_at || d.created_at || d.createdAt),
+    address:          addr,
+    addressShort:     addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr,
+    detectedAt:       fmtDate(d.detectedAt || d.detected_at || d.created_at || d.createdAt),
+    fromAddress:      fromAddr || '—',
+    fromAddressShort: fromAddr
+      ? (fromAddr.length > 16 ? fromAddr.slice(0, 8) + '…' + fromAddr.slice(-6) : fromAddr)
+      : '—',
   };
 }
 
@@ -263,6 +268,7 @@ const template = `
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ASSET</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">ADDRESS</th>
+                    <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">FROM</th>
                     <th class="px-md py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">DETECTED AT</th>
                   </tr>
                 </thead>
@@ -276,6 +282,9 @@ const template = `
                     </td>
                     <td class="px-md py-3">
                       <span rv-text="deposit.addressShort" rv-attr-title="deposit.address" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
+                    </td>
+                    <td class="px-md py-3">
+                      <span rv-text="deposit.fromAddressShort" rv-attr-title="deposit.fromAddress" class="font-mono-data text-on-surface-variant text-[12px] cursor-help"></span>
                     </td>
                     <td rv-text="deposit.detectedAt" class="px-md py-3 font-mono-data text-on-surface-variant text-[12px]"></td>
                   </tr>
@@ -298,6 +307,9 @@ const template = `
                 </div>
                 <p class="font-mono-data text-on-surface-variant text-[11px] truncate">
                   <span rv-text="deposit.addressShort"></span>
+                </p>
+                <p class="font-mono-data text-on-surface-variant text-[11px] mt-xs truncate">
+                  FROM: <span rv-text="deposit.fromAddressShort"></span>
                 </p>
                 <p rv-text="deposit.detectedAt" class="font-mono-data text-on-surface-variant text-[11px] mt-xs"></p>
               </div>

@@ -279,6 +279,7 @@ function makeTronCtrl(apiOverrides = {}) {
     tronRpc: jest.fn().mockResolvedValue({ block_header: { raw_data: { number: 500 } } }),
     tronFund: jest.fn().mockResolvedValue({ txid: 'tron_tx_mock123', result: true }),
     getConfig: jest.fn().mockResolvedValue({ hasAdminKey: true, hasApiKey: false, hasTronDevKey: false }),
+    testNodeConnection: jest.fn().mockResolvedValue({ data: { blocks: 500 } }),
     ...apiOverrides,
   });
   const router = makeRouter();
@@ -314,26 +315,26 @@ describe('NodeDetailView — TRON node', () => {
 
   // ─── TRON status ────────────────────────────────────────────────────────────
 
-  test('TRON init() calls tronRpc wallet/getnowblock instead of rpc getblockchaininfo', async () => {
-    const tronRpc = jest.fn().mockResolvedValue({ block_header: { raw_data: { number: 500 } } });
-    const rpc     = jest.fn().mockResolvedValue({ result: BLOCKCHAININFO });
-    const { ctrl } = makeTronCtrl({ tronRpc, rpc });
+  test('TRON init() calls testNodeConnection instead of rpc getblockchaininfo', async () => {
+    const testNodeConnection = jest.fn().mockResolvedValue({ data: { blocks: 500 } });
+    const rpc                = jest.fn().mockResolvedValue({ result: BLOCKCHAININFO });
+    const { ctrl } = makeTronCtrl({ testNodeConnection, rpc });
     await ctrl.init();
-    expect(tronRpc).toHaveBeenCalledWith('wallet/getnowblock', {});
+    expect(testNodeConnection).toHaveBeenCalledWith(TRON_NODE_ID);
     expect(rpc).not.toHaveBeenCalledWith('getblockchaininfo', expect.anything(), expect.anything());
   });
 
-  test('TRON init() sets blocksText from block_header.raw_data.number', async () => {
+  test('TRON init() sets blocksText from testNodeConnection data.blocks', async () => {
     const { ctrl } = makeTronCtrl({
-      tronRpc: jest.fn().mockResolvedValue({ block_header: { raw_data: { number: 500 } } }),
+      testNodeConnection: jest.fn().mockResolvedValue({ data: { blocks: 500 } }),
     });
     await ctrl.init();
     expect(ctrl.nodeStatus.blocksText).toBe('500');
   });
 
-  test('TRON init() sets showOffline on tronRpc failure', async () => {
+  test('TRON init() sets showOffline on testNodeConnection failure', async () => {
     const { ctrl } = makeTronCtrl({
-      tronRpc: jest.fn().mockRejectedValue(new Error('TRON unreachable')),
+      testNodeConnection: jest.fn().mockRejectedValue(new Error('TRON unreachable')),
     });
     await ctrl.init();
     expect(ctrl.nodeStatus.showOffline).toBe(true);
