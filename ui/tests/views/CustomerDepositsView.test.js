@@ -221,6 +221,80 @@ describe('CustomerDepositsView — createController', () => {
     expect(ctrl.header.canDisable).toBe(false);
   });
 
+  // ── Chain selector — auth contract & behaviour ──────────────────────────────
+
+  test('_loadAvailableChains() uses getMyTenantConfig with session token, not customerId', async () => {
+    const getMyTenantConfig = jest.fn().mockResolvedValue({ availableChains: ['bitcoin'], btcConfirmationsRequired: 1, tronConfirmationsRequired: 1, customerSessionTtlSeconds: 3600 });
+    const { ctrl } = setup({ getMyTenantConfig });
+    await ctrl.load();
+    expect(getMyTenantConfig).toHaveBeenCalledWith(SESSION_TOKEN);
+    expect(getMyTenantConfig.mock.calls[0][0]).not.toBe('cust_x');
+  });
+
+  test('_loadAvailableChains() populates availableChains from config', async () => {
+    const getMyTenantConfig = jest.fn().mockResolvedValue({ availableChains: ['bitcoin', 'tron'] });
+    const { ctrl } = setup({ getMyTenantConfig });
+    await ctrl.load();
+    expect(ctrl.availableChains).toHaveLength(2);
+    expect(ctrl.availableChains[0].id).toBe('bitcoin');
+    expect(ctrl.availableChains[1].id).toBe('tron');
+    expect(ctrl.availableChains[1].label).toContain('TRON');
+  });
+
+  test('_loadAvailableChains() sets chainsLoaded=true on success', async () => {
+    const { ctrl } = setup();
+    await ctrl.load();
+    expect(ctrl.chainsLoaded).toBe(true);
+  });
+
+  test('_loadAvailableChains() falls back to [bitcoin] on API error', async () => {
+    const getMyTenantConfig = jest.fn().mockRejectedValue(new Error('network error'));
+    const { ctrl } = setup({ getMyTenantConfig });
+    await ctrl.load();
+    expect(ctrl.availableChains).toHaveLength(1);
+    expect(ctrl.availableChains[0].id).toBe('bitcoin');
+    expect(ctrl.chainsLoaded).toBe(true);
+  });
+
+  test('_loadAvailableChains() called only on first load(), not on cursor page change', async () => {
+    const getMyTenantConfig = jest.fn().mockResolvedValue({ availableChains: ['bitcoin'] });
+    const getCustomerDeposits = jest.fn()
+      .mockResolvedValueOnce({ data: [], pagination: { nextCursor: 'cur_x' } })
+      .mockResolvedValueOnce({ data: [], pagination: { nextCursor: null } });
+    const { ctrl } = setup({ getMyTenantConfig, getCustomerDeposits });
+    await ctrl.load();
+    expect(getMyTenantConfig).toHaveBeenCalledTimes(1);
+    // Simulate cursor pagination (second load)
+    ctrl.pagination.pages.find(p => p.label === '2')?.go();
+    await Promise.resolve();
+    expect(getMyTenantConfig).toHaveBeenCalledTimes(1);
+  });
+
+  test('selectedChain defaults to bitcoin before load', () => {
+    const { ctrl } = setup();
+    expect(ctrl.selectedChain).toBe('bitcoin');
+  });
+
+  test('depositAddr.create() passes selectedChain to createDepositAddress', async () => {
+    const getMyTenantConfig = jest.fn().mockResolvedValue({ availableChains: ['tron'] });
+    const createDepositAddress = jest.fn().mockResolvedValue({ address: 'TXyz789', chain: 'tron' });
+    const { ctrl } = setup({ getMyTenantConfig, createDepositAddress });
+    await ctrl.load();
+    await ctrl.depositAddr.create();
+    expect(createDepositAddress).toHaveBeenCalledWith('cust_x', expect.objectContaining({ chain: 'tron' }));
+  });
+
+  test('onChainSelect() updates selectedChain and clears depositAddr state', async () => {
+    const { ctrl } = setup();
+    await ctrl.load();
+    ctrl.depositAddr.address = 'bc1qsomething';
+    ctrl.depositAddr.showCreate = false;
+    ctrl.onChainSelect({ target: { value: 'tron' } });
+    expect(ctrl.selectedChain).toBe('tron');
+    expect(ctrl.depositAddr.address).toBe('');
+    expect(ctrl.depositAddr.showCreate).toBe(true);
+  });
+
   test('depositAddr.create() adds address to depositAddresses list immediately', async () => {
     const createDepositAddress = jest.fn().mockResolvedValue({ address: 'bc1qimmediate', chain: 'bitcoin' });
     const { ctrl } = setup({ createDepositAddress });
@@ -247,5 +321,43 @@ describe('CustomerDepositsView — createController', () => {
     await ctrl.load();
     expect(ctrl.depositAddresses).toHaveLength(2);
     expect(ctrl.depositAddresses[0].addressShort).toBe('bc1qabcd');
+  });
+
+  // ── goToDevNodes — chain-aware navigation ───────────────────────────────────
+
+  test('depositAddr.goToDevNodes navigates to first bitcoin node by default', async () => {
+    const getChainNodes = jest.fn().mockResolvedValue({ data: [{ id: 'node_efeef00d86e8a1b7' }] });
+    const { ctrl, router } = setup({ getChainNodes });
+    await ctrl.load();
+    await ctrl.depositAddr.goToDevNodes({ preventDefault: jest.fn() });
+    expect(getChainNodes).toHaveBeenCalledWith(expect.objectContaining({ chainId: 'bitcoin' }));
+    expect(router.navigate).toHaveBeenCalledWith('#/nodes/node_efeef00d86e8a1b7');
+  });
+
+  test('depositAddr.goToDevNodes navigates to first tron node when tron is selected', async () => {
+    const getMyTenantConfig = jest.fn().mockResolvedValue({ availableChains: ['bitcoin', 'tron'] });
+    const getChainNodes = jest.fn().mockResolvedValue({ data: [{ id: 'node_42f348a6c4284ff9' }] });
+    const { ctrl, router } = setup({ getMyTenantConfig, getChainNodes });
+    await ctrl.load();
+    ctrl.selectedChain = 'tron';
+    await ctrl.depositAddr.goToDevNodes({ preventDefault: jest.fn() });
+    expect(getChainNodes).toHaveBeenCalledWith(expect.objectContaining({ chainId: 'tron' }));
+    expect(router.navigate).toHaveBeenCalledWith('#/nodes/node_42f348a6c4284ff9');
+  });
+
+  test('depositAddr.goToDevNodes falls back to #/nodes when no nodes found', async () => {
+    const getChainNodes = jest.fn().mockResolvedValue({ data: [] });
+    const { ctrl, router } = setup({ getChainNodes });
+    await ctrl.load();
+    await ctrl.depositAddr.goToDevNodes({ preventDefault: jest.fn() });
+    expect(router.navigate).toHaveBeenCalledWith('#/nodes');
+  });
+
+  test('depositAddr.goToDevNodes falls back to #/nodes on API error', async () => {
+    const getChainNodes = jest.fn().mockRejectedValue(new Error('network'));
+    const { ctrl, router } = setup({ getChainNodes });
+    await ctrl.load();
+    await ctrl.depositAddr.goToDevNodes({ preventDefault: jest.fn() });
+    expect(router.navigate).toHaveBeenCalledWith('#/nodes');
   });
 });

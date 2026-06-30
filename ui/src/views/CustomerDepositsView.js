@@ -118,6 +118,13 @@ const template = `
               <span class="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Deposit Address</span>
             </div>
             <div class="p-md">
+              <div rv-show="chainsLoaded" class="flex items-center gap-sm mb-sm">
+                <span class="text-[11px] text-on-surface-variant uppercase tracking-wider font-semibold">Chain:</span>
+                <select rv-on-change="onChainSelect"
+                  class="bg-[#151b2d] border border-white/10 rounded-lg px-sm py-1 text-on-surface text-[12px] font-mono-data focus:ring-1 focus:ring-secondary outline-none appearance-none">
+                  <option rv-each-ch="availableChains" rv-value="ch.id" rv-text="ch.label"></option>
+                </select>
+              </div>
               <div rv-show="depositAddr.error" class="flex items-center gap-sm mb-sm text-error">
                 <span class="material-symbols-outlined text-[16px]">error</span>
                 <span rv-text="depositAddr.error" class="font-body-sm"></span>
@@ -149,25 +156,9 @@ const template = `
 
           <!-- Deposit Addresses list -->
           <div class="glass-card rounded-xl overflow-hidden mb-md">
-            <div class="px-md py-sm bg-white/[0.03] border-b border-white/5 flex items-center justify-between">
-              <div class="flex items-center gap-sm">
-                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">wallet</span>
-                <span class="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Deposit Addresses</span>
-              </div>
-              <button rv-on-click="generateDepositAddress" rv-attr-disabled="depositGenerating"
-                class="flex items-center gap-xs px-sm py-1 rounded-lg bg-secondary text-on-secondary-fixed text-[12px] font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
-                <span class="material-symbols-outlined text-[14px]">add</span>
-                <span rv-hide="depositGenerating">Generate</span>
-                <span rv-show="depositGenerating">Generating…</span>
-              </button>
-            </div>
-            <div rv-show="depositGenResult" class="px-md py-sm bg-tertiary/10 border-b border-tertiary/20 flex items-center gap-sm">
-              <span class="material-symbols-outlined text-tertiary text-[16px]">check_circle</span>
-              <span rv-text="depositGenResult" class="font-mono-data text-tertiary text-[12px] break-all"></span>
-            </div>
-            <div rv-show="depositGenError" class="px-md py-sm bg-error/10 border-b border-error/20 flex items-center gap-sm">
-              <span class="material-symbols-outlined text-error text-[16px]">error</span>
-              <span rv-text="depositGenError" class="font-body-sm text-error"></span>
+            <div class="px-md py-sm bg-white/[0.03] border-b border-white/5 flex items-center gap-sm">
+              <span class="material-symbols-outlined text-on-surface-variant text-[18px]">wallet</span>
+              <span class="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Deposit Addresses</span>
             </div>
             <!-- Address filter bar -->
             <div rv-show="addressesLoaded" class="px-md py-sm border-b border-white/5 flex flex-wrap gap-sm items-center">
@@ -182,12 +173,12 @@ const template = `
               <select rv-on-change="onAddrFilterChange" name="chain"
                 class="bg-[#151b2d] border border-white/10 rounded-lg px-sm py-1 text-on-surface text-[12px] font-mono-data focus:ring-1 focus:ring-secondary outline-none appearance-none">
                 <option value="">All chains</option>
-                <option value="bitcoin">Bitcoin</option>
+                <option rv-each-ch="availableChains" rv-value="ch.id" rv-text="ch.label"></option>
               </select>
             </div>
             <div rv-show="depositAddressesEmpty" class="p-lg text-center">
               <span class="material-symbols-outlined text-[40px] text-on-surface-variant">account_balance_wallet</span>
-              <p class="font-body-sm text-on-surface-variant mt-sm">No deposit addresses yet — click Generate to create one</p>
+              <p class="font-body-sm text-on-surface-variant mt-sm">No deposit addresses yet</p>
             </div>
             <div rv-hide="depositAddressesEmpty" class="hidden lg:block overflow-x-auto">
               <table class="w-full text-left border-collapse">
@@ -365,15 +356,38 @@ export function createController({ api, router, id }) {
       chain: '',
     },
     addressesLoaded: false,
-    depositGenerating: false,
-    depositGenError: null,
-    depositGenResult: null,
+
     pagination: createPaginationController({ page: 1, total: 0, onPageChange: () => {} }),
     _cursor: undefined,
     _prevCursors: [],
     _nextCursor: undefined,
     _sessionToken: null,  // customer session token — set in load(), reused in loadDeposits()
     _activeFilters: {},
+    availableChains: [],  // [{id, label}] — populated from GET /v1/me/tenant-config via session token
+    selectedChain: 'bitcoin',
+    chainsLoaded: false,
+
+    async _loadAvailableChains() {
+      try {
+        const cfg = await api.getMyTenantConfig(self._sessionToken);
+        const chainLabels = { bitcoin: 'Bitcoin (BTC)', tron: 'TRON (TRX / USDT)' };
+        const chains = (cfg.availableChains || []).map(id => ({ id, label: chainLabels[id] || id }));
+        self.availableChains = chains;
+        if (chains.length > 0 && !chains.find(c => c.id === self.selectedChain)) {
+          self.selectedChain = chains[0].id;
+        }
+      } catch {
+        // Fallback: always allow bitcoin if config cannot be loaded
+        self.availableChains = [{ id: 'bitcoin', label: 'Bitcoin (BTC)' }];
+      }
+      self.chainsLoaded = true;
+    },
+
+    onChainSelect(e) {
+      self.selectedChain = e.target.value;
+      self.depositAddr.address = '';
+      self.depositAddr.showCreate = true;
+    },
 
     goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
     goToCustomers(e) { e?.preventDefault(); router.navigate('#/customers'); },
@@ -388,7 +402,7 @@ export function createController({ api, router, id }) {
         self.depositAddr.loading = true;
         self.depositAddr.error = null;
         try {
-          const result = await api.createDepositAddress(id, { chain: 'bitcoin' });
+          const result = await api.createDepositAddress(id, { chain: self.selectedChain });
           const addr = result.address || result.depositAddress || '';
           self.depositAddr.address = addr;
           self.depositAddr.showCreate = false;
@@ -414,7 +428,17 @@ export function createController({ api, router, id }) {
       copy() {
         if (self.depositAddr.address) navigator.clipboard.writeText(self.depositAddr.address).catch(() => {});
       },
-      goToDevNodes(e) { e?.preventDefault(); router.navigate('#/nodes/btc-regtest'); },
+      async goToDevNodes(e) {
+        e?.preventDefault();
+        try {
+          const res = await api.getChainNodes({ chainId: self.selectedChain });
+          const nodes = res?.data ?? res ?? [];
+          const node = Array.isArray(nodes) ? nodes[0] : null;
+          router.navigate(node?.id ? `#/nodes/${node.id}` : '#/nodes');
+        } catch {
+          router.navigate('#/nodes');
+        }
+      },
     },
 
     _applyAddrFilter() {
@@ -432,32 +456,6 @@ export function createController({ api, router, id }) {
       const { name, value } = e.target;
       self.addrFilter[name] = value;
       self._applyAddrFilter();
-    },
-
-    async generateDepositAddress() {
-      self.depositGenerating = true;
-      self.depositGenError = null;
-      self.depositGenResult = null;
-      try {
-        const result = await api.createDepositAddress(id, { chain: 'bitcoin' });
-        const addr = result.address || '';
-        const isActive = !result.status || result.status === 'active';
-        self._allDepositAddresses = [{
-          addressShort: addr,
-          chain:        result.chain || 'bitcoin',
-          statusLabel:  result.status || 'active',
-          statusBadgeClass: isActive
-            ? 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20'
-            : 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/5 text-on-surface-variant border border-white/10',
-          copy() { navigator.clipboard?.writeText(addr)?.catch(() => {}); },
-        }, ...self._allDepositAddresses];
-        self._applyAddrFilter();
-        self.depositGenResult = addr;
-      } catch (e) {
-        self.depositGenError = e.message;
-      } finally {
-        self.depositGenerating = false;
-      }
     },
 
     async disableCustomer() {
@@ -511,6 +509,11 @@ export function createController({ api, router, id }) {
         // Create customer session first — required for transactional data per CLAUDE.md
         const session = await api.createCustomerSession(id);
         self._sessionToken = session.accessToken || session.token;
+
+        // Load available chains once (based on tenant xpub config) — uses customer session token
+        if (!self.chainsLoaded) {
+          await self._loadAvailableChains();
+        }
 
         const [customer, , profileData, contactData, depositAddrsData] = await Promise.all([
           api.getCustomer(id),                                            // tenant API — admin record

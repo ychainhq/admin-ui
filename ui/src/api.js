@@ -219,6 +219,14 @@ export const api = {
   // Customer Self-Service API — requires session token from createCustomerSession().
   // Signature: (sessionToken, opts) — NOT (customerId, opts).
   // Tenant API must NOT be used for customer data when a /me/* endpoint exists.
+
+  getMyTenantConfig: async (sessionToken) => {
+    const res = await request('/customer/me/tenant-config', {
+      headers: { 'X-Session-Token': sessionToken },
+    });
+    return res.data ?? res;
+  },
+
   getMyProfile: async (sessionToken) => {
     const res = await request('/customer/me/profile', {
       headers: { 'X-Session-Token': sessionToken },
@@ -273,11 +281,12 @@ export const api = {
     });
   },
 
-  createDepositAddress: async (customerId, { chain }) => {
-    const res = await tenantRequest(`/api/customers/${encodeURIComponent(customerId)}/deposit-address`, {
-      method: 'POST',
-      body: JSON.stringify({ chain }),
-    });
+  createDepositAddress: async (customerId, { chain = 'bitcoin' } = {}) => {
+    const params = new URLSearchParams({ chain });
+    const res = await tenantRequest(
+      `/api/customers/${encodeURIComponent(customerId)}/deposit-address?${params}`,
+      { method: 'POST' },
+    );
     return res.data ?? res;
   },
 

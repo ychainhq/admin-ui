@@ -27,6 +27,7 @@ export function makeMockApi(overrides = {}) {
     getCustomerBalances: jest.fn().mockResolvedValue({ customerId: 'cust_test', balances: [] }),
     getCustomerDeposits: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
     getCustomerAddresses: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),
+    getMyTenantConfig: jest.fn().mockResolvedValue({ availableChains: ['bitcoin'], btcConfirmationsRequired: 1, tronConfirmationsRequired: 1, customerSessionTtlSeconds: 3600 }),
     getMyProfile: jest.fn().mockResolvedValue(null),
     getMyContact: jest.fn().mockResolvedValue(null),
     getMyAddresses: jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } }),

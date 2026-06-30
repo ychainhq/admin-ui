@@ -125,4 +125,21 @@ describe('api — customer write wrappers', () => {
     const result = await api.upsertCustomerProfile('cust_1', {});
     expect(result).toEqual({ partyType: 'natural_person' });
   });
+
+  test('createDepositAddress sends chain as URL query param, not body', async () => {
+    const fetch = mockFetch(201, { data: { address: 'TAbc123', chain: 'tron' } });
+    await api.createDepositAddress('cust_1', { chain: 'tron' });
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toContain('?chain=tron');
+    expect(url).toContain('/api/customers/cust_1/deposit-address');
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBeUndefined();
+  });
+
+  test('createDepositAddress defaults chain to bitcoin', async () => {
+    const fetch = mockFetch(201, { data: { address: 'bc1qabc', chain: 'bitcoin' } });
+    await api.createDepositAddress('cust_1', {});
+    const [url] = fetch.mock.calls[0];
+    expect(url).toContain('?chain=bitcoin');
+  });
 });
