@@ -555,3 +555,246 @@ describe('CustomerWithdrawalsView — navigation', () => {
     expect(router.navigate).toHaveBeenCalledWith('#/customers');
   });
 });
+
+describe('CustomerWithdrawalsView — asset selector integration', () => {
+  test('load() calls getMyTenantConfig with customer session token', async () => {
+    const getMyTenantConfig = jest.fn().mockResolvedValue({
+      availableChains: ['bitcoin'],
+      availableAssets: [{ chainId: 'bitcoin', assetId: 'bitcoin:BTC', symbol: 'BTC', label: 'Bitcoin (BTC)' }],
+    });
+    const { ctrl } = makeCtrl({ getMyTenantConfig });
+    await ctrl.load();
+    expect(getMyTenantConfig).toHaveBeenCalledWith('tok_test');
+    expect(getMyTenantConfig.mock.calls[0][0]).not.toBe(CUSTOMER_ID);
+  });
+
+  test('load() sets _chainId and _assetId from first available asset (TRON)', async () => {
+    const { ctrl } = makeCtrl({
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [
+          { chainId: 'tron', assetId: 'tron:TRX',  symbol: 'TRX',  label: 'TRON (TRX)' },
+          { chainId: 'tron', assetId: 'tron:USDT', symbol: 'USDT', label: 'USDT (TRC-20)' },
+        ],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl._chainId).toBe('tron');
+    expect(ctrl._assetId).toBe('tron:TRX');
+  });
+
+  test('load() sets _chainId and _assetId from first available asset (BTC)', async () => {
+    const { ctrl } = makeCtrl({
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['bitcoin'],
+        availableAssets: [{ chainId: 'bitcoin', assetId: 'bitcoin:BTC', symbol: 'BTC', label: 'Bitcoin (BTC)' }],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl._chainId).toBe('bitcoin');
+    expect(ctrl._assetId).toBe('bitcoin:BTC');
+  });
+
+  test('load() does not crash when getMyTenantConfig fails', async () => {
+    const { ctrl } = makeCtrl({
+      getMyTenantConfig: jest.fn().mockRejectedValue(new Error('network')),
+    });
+    await expect(ctrl.load()).resolves.not.toThrow();
+    expect(ctrl._chainId).toBe('bitcoin');
+  });
+
+  test('load() updates amountLabel to match first asset', async () => {
+    const { ctrl } = makeCtrl({
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [
+          { chainId: 'tron', assetId: 'tron:TRX',  symbol: 'TRX',  label: 'TRON (TRX)' },
+          { chainId: 'tron', assetId: 'tron:USDT', symbol: 'USDT', label: 'USDT (TRC-20)' },
+        ],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl.form.amountLabel).toContain('TRX');
+  });
+
+  test('withdrawableAssets has one item per available asset', async () => {
+    const { ctrl } = makeCtrl({
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [
+          { chainId: 'tron', assetId: 'tron:TRX',  symbol: 'TRX',  label: 'TRON (TRX)' },
+          { chainId: 'tron', assetId: 'tron:USDT', symbol: 'USDT', label: 'USDT (TRC-20)' },
+        ],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl.withdrawableAssets).toHaveLength(2);
+    const ids = ctrl.withdrawableAssets.map(a => a.assetId);
+    expect(ids).toContain('tron:TRX');
+    expect(ids).toContain('tron:USDT');
+  });
+
+  test('showAssetSelector is true when > 1 asset available', async () => {
+    const { ctrl } = makeCtrl({
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [
+          { chainId: 'tron', assetId: 'tron:TRX',  symbol: 'TRX',  label: 'TRON (TRX)' },
+          { chainId: 'tron', assetId: 'tron:USDT', symbol: 'USDT', label: 'USDT (TRC-20)' },
+        ],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl.showAssetSelector).toBe(true);
+  });
+
+  test('showAssetSelector is false when only 1 asset available', async () => {
+    const { ctrl } = makeCtrl(); // default mock: only BTC
+    await ctrl.load();
+    expect(ctrl.showAssetSelector).toBe(false);
+  });
+
+  test('_onAssetSelected updates _chainId, _assetId, amountLabel and rebuilds withdrawableAssets', async () => {
+    const { ctrl } = makeCtrl({
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [
+          { chainId: 'tron', assetId: 'tron:TRX',  symbol: 'TRX',  label: 'TRON (TRX)' },
+          { chainId: 'tron', assetId: 'tron:USDT', symbol: 'USDT', label: 'USDT (TRC-20)' },
+        ],
+      }),
+    });
+    await ctrl.load();
+    ctrl._onAssetSelected({ chainId: 'tron', assetId: 'tron:USDT', asset: { amountLabel: 'Amount (USDT)', placeholder: 'np. 50.00' } });
+    expect(ctrl._assetId).toBe('tron:USDT');
+    expect(ctrl.form.amountLabel).toBe('Amount (USDT)');
+    const usdt = ctrl.withdrawableAssets.find(a => a.assetId === 'tron:USDT');
+    const trx  = ctrl.withdrawableAssets.find(a => a.assetId === 'tron:TRX');
+    expect(usdt.isActive).toBe(true);
+    expect(trx.isActive).toBe(false);
+  });
+
+  test('_onAssetSelected clears amount and hides fee estimate', async () => {
+    const { ctrl } = makeCtrl({
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [
+          { chainId: 'tron', assetId: 'tron:TRX',  symbol: 'TRX',  label: 'TRON (TRX)' },
+          { chainId: 'tron', assetId: 'tron:USDT', symbol: 'USDT', label: 'USDT (TRC-20)' },
+        ],
+      }),
+    });
+    await ctrl.load();
+    ctrl.form.amount = '50000';
+    ctrl.feeEstimate.visible = true;
+    ctrl._onAssetSelected({ chainId: 'tron', assetId: 'tron:USDT', asset: { amountLabel: 'Amount (USDT)', placeholder: '0' } });
+    expect(ctrl.form.amount).toBe('');
+    expect(ctrl.feeEstimate.visible).toBe(false);
+  });
+
+  test('submit passes _chainId and _assetId to createWithdrawalAsCustomer (TRON TRX)', async () => {
+    const createWithdrawal = jest.fn().mockResolvedValue({ id: 'wd_tron', status: 'queued' });
+    const { ctrl } = makeCtrl({
+      createWithdrawalAsCustomer: createWithdrawal,
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [{ chainId: 'tron', assetId: 'tron:TRX', symbol: 'TRX', label: 'TRON (TRX)' }],
+      }),
+    });
+    await ctrl.load();
+    ctrl.form.address = 'TXtest1234';
+    ctrl.form.amount = '10.5'; // TRX float input
+    await ctrl.form.submit();
+    expect(createWithdrawal).toHaveBeenCalledWith('tok_test', expect.objectContaining({
+      chainId: 'tron',
+      assetId: 'tron:TRX',
+    }));
+  });
+
+  test('submit converts TRX float to sun units before sending', async () => {
+    const createWithdrawal = jest.fn().mockResolvedValue({ id: 'wd_tron', status: 'queued' });
+    const { ctrl } = makeCtrl({
+      createWithdrawalAsCustomer: createWithdrawal,
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [{ chainId: 'tron', assetId: 'tron:TRX', symbol: 'TRX', label: 'TRON (TRX)' }],
+      }),
+    });
+    await ctrl.load();
+    ctrl.form.address = 'TXtest1234';
+    ctrl.form.amount = '10.5'; // 10.5 TRX = 10_500_000 sun
+    await ctrl.form.submit();
+    const payload = createWithdrawal.mock.calls[0][1];
+    expect(payload.amountSats).toBe('10500000');
+  });
+
+  test('submit passes bitcoin:BTC by default (no getMyTenantConfig override)', async () => {
+    const createWithdrawal = jest.fn().mockResolvedValue({ id: 'wd_btc', status: 'queued' });
+    const createSession = jest.fn().mockResolvedValue({ accessToken: 'tok_abc' });
+    const { ctrl } = makeCtrl({ createWithdrawalAsCustomer: createWithdrawal, createCustomerSession: createSession });
+    ctrl.form.address = 'bcrt1qtest';
+    ctrl.form.amount = '5000';
+    await ctrl.form.submit();
+    expect(createWithdrawal).toHaveBeenCalledWith('tok_abc', expect.objectContaining({
+      chainId: 'bitcoin',
+      assetId: 'bitcoin:BTC',
+    }));
+  });
+});
+
+describe('CustomerWithdrawalsView — asset-aware balance display', () => {
+  test('_applyBalanceData shows BTC sats label when _assetId is bitcoin:BTC', async () => {
+    const { ctrl } = makeCtrl({
+      getCustomerBalances: jest.fn().mockResolvedValue({
+        balances: [{ asset_id: 'bitcoin:BTC', settled: '123456' }],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl.balance.confirmedSatsLabel).toBe('123456 sats');
+    expect(ctrl.balance.confirmedBtcLabel).toBe('0.00123456 BTC');
+  });
+
+  test('_applyBalanceData shows TRX label when _assetId is tron:TRX', async () => {
+    const { ctrl } = makeCtrl({
+      getCustomerBalances: jest.fn().mockResolvedValue({
+        balances: [{ asset_id: 'tron:TRX', settled: '10500000' }],
+      }),
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [{ chainId: 'tron', assetId: 'tron:TRX', symbol: 'TRX', label: 'TRON (TRX)' }],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl.balance.confirmedSatsLabel).toContain('TRX');
+    expect(ctrl.balance.confirmedSatsLabel).not.toContain('sats');
+    expect(ctrl.balance.confirmedBtcLabel).toBe('');
+  });
+
+  test('_applyBalanceData shows USDT label when _assetId is tron:USDT', async () => {
+    const { ctrl } = makeCtrl({
+      getCustomerBalances: jest.fn().mockResolvedValue({
+        balances: [{ asset_id: 'tron:USDT', settled: '50000000' }],
+      }),
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [{ chainId: 'tron', assetId: 'tron:USDT', symbol: 'USDT', label: 'USDT (TRC-20)' }],
+      }),
+    });
+    await ctrl.load();
+    // Force assetId (getMyTenantConfig returns only USDT so first asset sets it)
+    expect(ctrl.balance.confirmedSatsLabel).toContain('USDT');
+    expect(ctrl.balance.confirmedBtcLabel).toBe('');
+  });
+
+  test('_applyBalanceData shows Unavailable when TRON balance not in response', async () => {
+    const { ctrl } = makeCtrl({
+      getCustomerBalances: jest.fn().mockResolvedValue({ balances: [] }),
+      getMyTenantConfig: jest.fn().mockResolvedValue({
+        availableChains: ['tron'],
+        availableAssets: [{ chainId: 'tron', assetId: 'tron:TRX', symbol: 'TRX', label: 'TRON (TRX)' }],
+      }),
+    });
+    await ctrl.load();
+    expect(ctrl.balance.confirmedSatsLabel).toBe('Unavailable');
+  });
+});

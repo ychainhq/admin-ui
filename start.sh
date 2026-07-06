@@ -739,6 +739,32 @@ sys.exit(0 if d.get('currentConnectCount', 0) > 0 else 1)
   detail "Contract persisted in engine/.env — reused on next start (without reset)"
 }
 
+# ─── Fund TRON hot wallet from genesis account ────────────────────────────────
+step_fund_tron_hot_wallet() {
+  header "Step 5c — Fund TRON hot wallet (TRX + USDT)"
+
+  [ -n "$TRON_HOT_ADDRESS"          ] || TRON_HOT_ADDRESS=$(env_get "$ENGINE_ENV" "TRON_DEV_HOT_ADDRESS")
+  [ -n "$TRON_USDT_CONTRACT_ADDRESS" ] || TRON_USDT_CONTRACT_ADDRESS=$(env_get "$ENGINE_ENV" "TRON_USDT_CONTRACT_ADDRESS")
+
+  if [ -z "$TRON_HOT_ADDRESS" ]; then
+    warn "TRON_DEV_HOT_ADDRESS not set — skipping hot wallet funding"
+    return
+  fi
+  if [ -z "$TRON_USDT_CONTRACT_ADDRESS" ]; then
+    warn "TRON_USDT_CONTRACT_ADDRESS not set — skipping hot wallet funding"
+    return
+  fi
+
+  info "Funding hot wallet ${TRON_HOT_ADDRESS} (500 TRX + 10M USDT from genesis)..."
+  TRON_NODE_URL="http://localhost:8090" \
+  TRON_GENESIS_PRIV_HEX="$TRON_GENESIS_PRIVATE_KEY_HEX" \
+  TRON_HOT_ADDRESS="$TRON_HOT_ADDRESS" \
+  TRON_USDT_CONTRACT_ADDRESS="$TRON_USDT_CONTRACT_ADDRESS" \
+  node "$SCRIPT_DIR/scripts/fund-tron-hot-wallet.js" >/dev/null \
+    && ok "Hot wallet funded: 500 TRX + 10M USDT" \
+    || die "Failed to fund TRON hot wallet — check node logs"
+}
+
 # ─── Configure tron xpub on tenant_default via API (after engines are up) ─────
 step_configure_tron_tenant() {
   local admin_key base
@@ -2005,6 +2031,7 @@ case "$CMD" in
     step_engine_env           # write engine/.env with TRON vars
     step_seed                 # migrations + seed → extracts BTC+TRON xpub/xprv
     step_tron_genesis         # waits for tron-node-1, compiles+deploys USDT TRC-20
+    step_fund_tron_hot_wallet # activate hot wallet: 500 TRX + 10M USDT from genesis
     step_engines              # start engines with TRON_USDT_CONTRACT_ADDRESS already set
     step_register_nodes       # register btc-node-1/2 + tron-node-1/2
     step_indexers             # start btc-indexer-1/2 + tron-indexer-1/2
@@ -2030,6 +2057,7 @@ case "$CMD" in
     step_engine_env           # write engine/.env with TRON vars
     step_seed                 # migrations + seed → extracts BTC+TRON xpub/xprv
     step_tron_genesis         # waits for tron-node-1, compiles+deploys USDT TRC-20
+    step_fund_tron_hot_wallet # activate hot wallet: 500 TRX + 10M USDT from genesis
     step_engines              # start engines with TRON_USDT_CONTRACT_ADDRESS already set
     step_register_nodes       # register btc-node-1/2 + tron-node-1/2
     step_indexers             # start btc-indexer-1/2 + tron-indexer-1/2

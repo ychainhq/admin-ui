@@ -5,11 +5,12 @@ import { template as sidebarTpl, createSidebarController } from '../components/D
 import { template as mobileDrawerTpl, createMobileDrawerController } from '../components/MobileDrawer.js';
 import { template as paginationTpl, createPaginationController } from '../components/Pagination.js';
 import { template as withdrawalHistorySearchTpl, createWithdrawalHistorySearchFormController } from '../components/WithdrawalHistorySearchForm.js';
+import { buildWithdrawableAssets, getAssetMeta } from '../components/WithdrawalAssetSelector.js';
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { template as headerTpl, createCustomerDetailHeaderController } from '../components/CustomerDetailHeader.js';
 import { getActiveTenantKey } from '../api.js';
-import { getConfirmedBitcoinBalance, formatSunAsTrx, formatMicroUsdt } from '../balanceHelpers.js';
+import { getConfirmedBitcoinBalance, getTronTrxBalance, getTronUsdtBalance, formatSunAsTrx, formatMicroUsdt, tronDecimalToSun } from '../balanceHelpers.js';
 
 const ROUTE = '/customers';
 const ACTIVE_TAB = 'withdrawals';
@@ -137,6 +138,21 @@ const template = `
                 <span rv-text="form.success" class="font-body-sm font-semibold"></span>
               </div>
 
+              <!-- Asset selector — flat list, one button per withdrawable asset.
+                   Rivets rv-each: onClick is a closure ON each item (rv-on-click="a.onClick"),
+                   NOT on parent scope. Re-assigned as plain array so Rivets detects changes. -->
+              <div rv-show="showAssetSelector" class="space-y-xs">
+                <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Asset</label>
+                <div class="flex flex-wrap gap-xs">
+                  <button rv-each-a="withdrawableAssets"
+                    rv-on-click="a.onClick"
+                    rv-attr-class="a.btnClass"
+                    class="px-sm py-1 rounded-lg border text-[12px] font-semibold transition-all">
+                    <span rv-text="a.label"></span>
+                  </button>
+                </div>
+              </div>
+
               <!-- Fee policy info banner -->
               <div class="flex items-start gap-sm p-sm rounded-lg bg-white/[0.04] border border-white/10">
                 <span rv-text="feeCoverageIcon" class="material-symbols-outlined text-secondary text-[18px] shrink-0 mt-[1px]"></span>
@@ -187,10 +203,10 @@ const template = `
 
               <div class="grid grid-cols-1 md:grid-cols-3 gap-sm">
                 <div>
-                  <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Amount (satoshi)</label>
+                  <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs" rv-text="form.amountLabel"></label>
                   <input rv-on-input="form.onAmountInput"
                     class="w-full bg-surface-container-low border border-white/10 rounded-lg px-sm py-2 text-on-surface font-mono-data text-[13px] focus:ring-1 focus:ring-secondary focus:border-secondary transition-all outline-none"
-                    type="text" placeholder="90000" autocomplete="off" />
+                    type="text" rv-attr-placeholder="form.amountPlaceholder" autocomplete="off" />
                 </div>
                 <div>
                   <label class="block text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-xs">Balance</label>
@@ -213,7 +229,7 @@ const template = `
               <!-- Fee estimate panel -->
               <div rv-show="feeEstimate.visible" class="rounded-lg bg-white/[0.04] border border-white/10 p-sm text-[12px] space-y-xs">
                 <div class="flex items-center justify-between">
-                  <span class="text-on-surface-variant">Est. network fee</span>
+                  <span rv-text="feeEstimate.feeLabel" class="text-on-surface-variant"></span>
                   <span rv-text="feeEstimate.feeSats" class="font-mono-data text-on-surface font-semibold"></span>
                 </div>
                 <div rv-show="feeEstimate.showDebit" class="flex items-center justify-between border-t border-white/5 pt-xs">
@@ -224,7 +240,7 @@ const template = `
                   <span class="text-on-surface-variant">Recipient receives</span>
                   <span rv-text="feeEstimate.recipientAmount" class="font-mono-data text-tertiary font-semibold"></span>
                 </div>
-                <p class="text-on-surface-variant text-[10px] pt-xs border-t border-white/5">Rate: <span rv-text="feeEstimate.rateLabel" class="font-mono-data"></span> · Estimate only — actual fee set at batch time</p>
+                <p rv-text="feeEstimate.rateLabel" class="text-on-surface-variant text-[10px] pt-xs border-t border-white/5 font-mono-data"></p>
               </div>
 
               <button rv-on-click="form.submit" rv-attr-disabled="form.loading"
@@ -406,18 +422,21 @@ export function createController({ api, router, id }) {
 
     // Fee estimate panel
     feeEstimate: {
-      visible:              false,
-      feeSats:              '—',   // primary fee line (sats for BTC, TRX for TRON)
-      rateLabel:            '—',   // rate/resource detail line
-      showDebit:            false,
-      debitLabel:           'Total deducted from balance',
-      debitAmount:          '—',
-      showRecipient:        false,
-      recipientAmount:      '—',
-      showFeeCoverageNote:  false,
-      feeCoverageNote:      '',    // for USDT: "Network fee paid in TRX by platform"
+      visible:         false,
+      feeLabel:        'Est. network fee', // dynamic: 'USDT withdrawal fee' for USDT asset
+      feeSats:         '—',   // primary fee amount (sats / TRX / USDT depending on asset)
+      rateLabel:       '—',   // full secondary info line (rate detail or TRX gas note for USDT)
+      showDebit:       false,
+      debitLabel:      'Total deducted from balance',
+      debitAmount:     '—',
+      showRecipient:   false,
+      recipientAmount: '—',
     },
-    _chainId: 'bitcoin', // active chain for withdrawal form
+    _chainId: 'bitcoin',
+    _assetId: 'bitcoin:BTC',
+    _availableAssets: [],       // full list from API — kept for rebuilding withdrawableAssets on selection
+    withdrawableAssets: [],     // plain array for rv-each (rebuilt on load + on selection change)
+    showAssetSelector: false,   // true when > 1 asset available
 
     balance: {
       loading: false,
@@ -450,6 +469,8 @@ export function createController({ api, router, id }) {
       loading: false,
       error: null,
       success: null,
+      amountLabel: 'Amount (satoshi)',
+      amountPlaceholder: '90000',
       // Address resolution state
       resolving: false,
       isInternalAddress: false,
@@ -525,11 +546,24 @@ export function createController({ api, router, id }) {
 
         if (!address) { self.form.error = 'Destination address is required'; return; }
         if (!amountStr) { self.form.error = 'Amount is required'; return; }
-        try {
-          if (BigInt(amountStr) <= 0n) throw new Error('Amount must be > 0');
-        } catch {
-          self.form.error = 'Amount must be a valid positive integer (satoshi)';
-          return;
+
+        // Convert and validate amount based on asset input mode
+        const _meta = getAssetMeta(self._assetId);
+        let finalAmountStr = amountStr;
+        if (_meta.inputMode === 'float') {
+          // User types decimal TRX/USDT — convert to smallest unit (sun / micro-USDT)
+          const converted = tronDecimalToSun(amountStr);
+          if (!converted) { self.form.error = `Enter a valid positive amount (e.g. 10.5)`; return; }
+          try { if (BigInt(converted) <= 0n) throw new Error(); } catch {
+            self.form.error = 'Amount must be greater than zero';
+            return;
+          }
+          finalAmountStr = converted;
+        } else {
+          try { if (BigInt(amountStr) <= 0n) throw new Error(); } catch {
+            self.form.error = 'Amount must be a valid positive integer (satoshi)';
+            return;
+          }
         }
 
         self.form.loading = true;
@@ -540,9 +574,9 @@ export function createController({ api, router, id }) {
 
           const forceExternal = self.form.isInternalAddress && self.form.preferExternal;
           const result = await api.createWithdrawalAsCustomer(token, {
-            chain: 'bitcoin',
-            assetId: 'bitcoin:BTC',
-            amountSats: amountStr,
+            chainId: self._chainId,
+            assetId: self._assetId,
+            amountSats: finalAmountStr,
             toAddress: address,
             note: self.form.note.trim() || undefined,
             forceExternal: forceExternal || undefined,
@@ -572,8 +606,14 @@ export function createController({ api, router, id }) {
 
     _updateFeeEstimate() {
       const amountStr = self.form.amount.trim();
+      const _feeMeta = getAssetMeta(self._assetId);
       let amount = 0n;
-      try { amount = BigInt(amountStr); } catch { /* invalid input */ }
+      if (_feeMeta.inputMode === 'float') {
+        const converted = tronDecimalToSun(amountStr);
+        if (converted) try { amount = BigInt(converted); } catch { /* invalid input */ }
+      } else {
+        try { amount = BigInt(amountStr); } catch { /* invalid input */ }
+      }
 
       const willBeInternal = self.form.isInternalAddress && !self.form.preferExternal;
       if (amount <= 0n || willBeInternal) {
@@ -591,9 +631,9 @@ export function createController({ api, router, id }) {
       const estimatedFee = BigInt(Math.ceil(ESTIMATED_VSIZE_1IN_2OUT * feeRate));
 
       self.feeEstimate.visible = true;
+      self.feeEstimate.feeLabel = 'Est. network fee';
       self.feeEstimate.feeSats = estimatedFee.toString() + ' sats';
-      self.feeEstimate.rateLabel = `~${feeRate} sat/vB (normal priority) · ~${ESTIMATED_VSIZE_1IN_2OUT} vB`;
-      self.feeEstimate.showFeeCoverageNote = false;
+      self.feeEstimate.rateLabel = `~${feeRate} sat/vB (normal priority) · ~${ESTIMATED_VSIZE_1IN_2OUT} vB · Estimate only`;
 
       const coverage = self._feeCoverage;
       self.feeEstimate.showDebit = coverage === 'sender_pays';
@@ -609,16 +649,14 @@ export function createController({ api, router, id }) {
     },
 
     async _loadTronFeeEstimate(amountStr) {
-      // Show a placeholder while loading
       self.feeEstimate.visible = true;
       self.feeEstimate.feeSats = '…';
       self.feeEstimate.rateLabel = 'Estimating…';
       self.feeEstimate.showDebit = false;
       self.feeEstimate.showRecipient = false;
-      self.feeEstimate.showFeeCoverageNote = false;
 
       try {
-        const assetId = self._assetId || 'tron:USDT';
+        const assetId = self._assetId;
         const fees = await api.getTronFees({ assetId, amount: amountStr });
         const data = fees?.data;
         if (!data) { self.feeEstimate.visible = false; return; }
@@ -626,58 +664,59 @@ export function createController({ api, router, id }) {
         const isUsdt = assetId === 'tron:USDT';
         const estimatedFeeSun = BigInt(data.estimatedFeeSun ?? '0');
         const amount = BigInt(amountStr);
-
-        if (data.hotWalletHasEnoughResources) {
-          self.feeEstimate.feeSats = '0 TRX (platform covers via staked resources)';
-        } else {
-          self.feeEstimate.feeSats = `~${formatSunAsTrx(data.estimatedFeeSun)}`;
-        }
-
-        const bd = data.breakdown ?? {};
-        if (isUsdt && bd.energyNeeded > 0) {
-          self.feeEstimate.rateLabel = `${bd.energyNeeded.toLocaleString()} energy × ${bd.energyPriceSun} sun/unit`;
-        } else {
-          self.feeEstimate.rateLabel = `${bd.bandwidthNeeded ?? 185} bytes bandwidth × ${bd.bandwidthPriceSun ?? 1000} sun/byte`;
-        }
-
         const coverage = self._feeCoverage;
+        const bd = data.breakdown ?? {};
 
         if (isUsdt) {
-          // TRX gas: always paid by hot wallet — show informational note
-          const trxGasNote = data.hotWalletHasEnoughResources
-            ? 'TRX gas covered by staked resources (0 cost)'
-            : `TRX gas ~${formatSunAsTrx(data.estimatedFeeSun)} paid by platform hot wallet`;
-
-          // USDT fee: configurable via tronUsdtWithdrawalFee + feeCoverage
+          // For USDT: TRX gas is ALWAYS paid by the platform hot wallet — user never pays it.
+          // The fee the user may pay is tronUsdtWithdrawalFee (configured USDT amount).
           const usdtFeeRaw = data.tronUsdtWithdrawalFee ?? '0';
           const usdtFee = BigInt(usdtFeeRaw);
           const responseCoverage = data.feeCoverage ?? coverage;
 
+          self.feeEstimate.feeLabel = 'USDT withdrawal fee';
+
+          // Primary fee line: the USDT fee (what user may pay in USDT)
           if (usdtFee === 0n || responseCoverage === 'tenant_pays') {
+            self.feeEstimate.feeSats = '0 USDT (platform pays)';
             self.feeEstimate.showDebit = false;
             self.feeEstimate.showRecipient = false;
-            self.feeEstimate.showFeeCoverageNote = true;
-            self.feeEstimate.feeCoverageNote = `${trxGasNote}. No USDT withdrawal fee.`;
           } else if (responseCoverage === 'sender_pays') {
             const usdtFeeDisplay = formatMicroUsdt(usdtFeeRaw);
+            self.feeEstimate.feeSats = usdtFeeDisplay;
             self.feeEstimate.showDebit = true;
             self.feeEstimate.showRecipient = false;
-            self.feeEstimate.showFeeCoverageNote = true;
-            self.feeEstimate.feeCoverageNote = trxGasNote;
             self.feeEstimate.debitLabel = `Total deducted from your USDT balance (amount + ${usdtFeeDisplay} fee)`;
             self.feeEstimate.debitAmount = formatMicroUsdt((amount + usdtFee).toString());
           } else if (responseCoverage === 'recipient_pays') {
-            const usdtFeeDisplay = formatMicroUsdt(usdtFeeRaw);
+            self.feeEstimate.feeSats = formatMicroUsdt(usdtFeeRaw);
             const recipientGets = amount > usdtFee ? amount - usdtFee : 0n;
             self.feeEstimate.showDebit = false;
             self.feeEstimate.showRecipient = true;
-            self.feeEstimate.showFeeCoverageNote = true;
-            self.feeEstimate.feeCoverageNote = trxGasNote;
             self.feeEstimate.recipientAmount = formatMicroUsdt(recipientGets.toString());
           }
+
+          // Secondary info line: TRX gas — always paid by platform, shown for transparency
+          const trxGasStr = data.hotWalletHasEnoughResources
+            ? '0 TRX (staked resources)'
+            : `~${formatSunAsTrx(data.estimatedFeeSun)}`;
+          const energyInfo = bd.energyNeeded > 0
+            ? `${bd.energyNeeded.toLocaleString()} energy × ${bd.energyPriceSun} sun/unit`
+            : `${bd.bandwidthNeeded ?? 285} bytes × ${bd.bandwidthPriceSun ?? 1000} sun/byte`;
+          self.feeEstimate.rateLabel = `TRX gas: ${trxGasStr} · paid by platform · ${energyInfo}`;
+
         } else {
-          // For TRX: fee is in same asset — apply coverage setting
-          self.feeEstimate.showFeeCoverageNote = false;
+          // For TRX: the network fee IS what the user pays (in TRX/sun), per feeCoverage setting
+          self.feeEstimate.feeLabel = 'Est. network fee';
+          self.feeEstimate.feeSats = data.hotWalletHasEnoughResources
+            ? '0 TRX (platform covers via staked resources)'
+            : `~${formatSunAsTrx(data.estimatedFeeSun)}`;
+
+          const bwInfo = bd.energyNeeded > 0
+            ? `${bd.energyNeeded.toLocaleString()} energy × ${bd.energyPriceSun} sun/unit`
+            : `${bd.bandwidthNeeded ?? 185} bytes bandwidth × ${bd.bandwidthPriceSun ?? 1000} sun/byte`;
+          self.feeEstimate.rateLabel = `${bwInfo} · Estimate only`;
+
           self.feeEstimate.showDebit = coverage === 'sender_pays';
           self.feeEstimate.showRecipient = coverage === 'recipient_pays';
           if (coverage === 'sender_pays') {
@@ -693,16 +732,64 @@ export function createController({ api, router, id }) {
       }
     },
 
+    _onAssetSelected({ chainId, assetId, asset }) {
+      self._chainId = chainId;
+      self._assetId = assetId;
+      self.form.amountLabel = asset?.amountLabel || 'Amount';
+      self.form.amountPlaceholder = asset?.placeholder || '0';
+      self.form.amount = '';
+      self.feeEstimate.visible = false;
+      // Rebuild array with updated isActive flags — plain assignment triggers Rivets update.
+      self.withdrawableAssets = buildWithdrawableAssets(self._availableAssets, assetId, self._onAssetSelected);
+      // Reload balance for the newly selected asset (fire-and-forget, non-blocking).
+      self.loadBalance(null).catch(() => {});
+    },
+
+    async _loadAvailableAssets(sessionToken) {
+      try {
+        const cfg = await api.getMyTenantConfig(sessionToken);
+        const assets = cfg.availableAssets || [];
+        self._availableAssets = assets;
+
+        if (assets.length > 0) {
+          const first = assets[0];
+          const meta = getAssetMeta(first.assetId);
+          self._chainId = first.chainId;
+          self._assetId = first.assetId;
+          self.form.amountLabel = meta.amountLabel;
+          self.form.amountPlaceholder = meta.placeholder;
+        }
+
+        self.showAssetSelector = assets.length > 1;
+        self.withdrawableAssets = buildWithdrawableAssets(assets, self._assetId, self._onAssetSelected);
+      } catch {
+        // non-fatal — keep defaults (bitcoin, single asset)
+      }
+    },
+
     goToTenants(e) { e?.preventDefault(); router.navigate('#/tenants'); },
     goToCustomers(e) { e?.preventDefault(); router.navigate('#/customers'); },
     goToCustomer(e) { e?.preventDefault(); router.navigate(`#/customers/${encodeURIComponent(id)}/profile`); },
     goToBatches(e) { e?.preventDefault(); router.navigate('#/withdrawal-batches'); },
 
     _applyBalanceData(balancesData) {
-      const confirmed = getConfirmedBitcoinBalance(balancesData);
-      self.balance.confirmedSats = confirmed.confirmedSats;
-      self.balance.confirmedSatsLabel = confirmed.confirmedSatsLabel;
-      self.balance.confirmedBtcLabel = confirmed.confirmedBtcLabel;
+      const assetId = self._assetId;
+      if (assetId === 'tron:TRX') {
+        const trx = getTronTrxBalance(balancesData);
+        self.balance.confirmedSats = trx.rawUnits;
+        self.balance.confirmedSatsLabel = trx.available ? trx.label : 'Unavailable';
+        self.balance.confirmedBtcLabel = '';
+      } else if (assetId === 'tron:USDT') {
+        const usdt = getTronUsdtBalance(balancesData);
+        self.balance.confirmedSats = usdt.rawUnits;
+        self.balance.confirmedSatsLabel = usdt.available ? usdt.label : 'Unavailable';
+        self.balance.confirmedBtcLabel = '';
+      } else {
+        const confirmed = getConfirmedBitcoinBalance(balancesData);
+        self.balance.confirmedSats = confirmed.confirmedSats;
+        self.balance.confirmedSatsLabel = confirmed.confirmedSatsLabel;
+        self.balance.confirmedBtcLabel = confirmed.confirmedBtcLabel;
+      }
     },
 
     async loadBalance(sessionToken) {
@@ -786,6 +873,8 @@ export function createController({ api, router, id }) {
       try {
         const session = await api.createCustomerSession(id);
         const sessionToken = session.accessToken || session.token || session.sessionToken;
+        // Load available assets before other parallel calls so assetSelector is initialized early
+        await self._loadAvailableAssets(sessionToken);
         const [customer, balancesData, profileData, contactData] = await Promise.all([
           api.getCustomer(id),                                  // tenant API — admin record
           api.getCustomerBalances(sessionToken).catch(() => null), // /customer/me/balances
