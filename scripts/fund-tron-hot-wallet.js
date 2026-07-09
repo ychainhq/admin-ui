@@ -146,13 +146,24 @@ async function waitForTx(txId, maxWaitMs = 30_000) {
     process.stderr.write(`[fund-tron-hot-wallet] TRX confirmed ✓\n`);
   }
 
-  // ── Step 2: USDT TRC-20 transfer ─────────────────────────────────────────
+  // ── Step 2: USDT TRC-20 transfer (idempotent) ────────────────────────────
+  const balanceRes = await post('/wallet/triggerconstantcontract', {
+    owner_address:     genesisAddr,
+    contract_address:  USDT_CONTRACT,
+    function_selector: 'balanceOf(address)',
+    parameter:         abiAddress(HOT_ADDRESS),
+    visible:           true,
+  });
+  const balanceHex = (balanceRes.constant_result || [])[0] || '0'.repeat(64);
+  const existingUsdt = BigInt(`0x${balanceHex}`);
+  if (existingUsdt >= USDT_AMOUNT_SUN) {
+    process.stderr.write(`[fund-tron-hot-wallet] Hot wallet already has ${existingUsdt} sun USDT — skipping USDT transfer\n`);
+    process.stdout.write(`FUNDED hot_address=${HOT_ADDRESS} trx_sun=${TRX_AMOUNT_SUN} usdt_sun=0 (already funded)\n`);
+    return;
+  }
   process.stderr.write(`[fund-tron-hot-wallet] Sending ${USDT_AMOUNT_SUN} sun USDT to hot wallet...\n`);
 
   // ABI encode: transfer(address,uint256)
-  const transferSelector = 'a9059cbb';
-  const encodedData = transferSelector + abiAddress(HOT_ADDRESS) + abiUint256(USDT_AMOUNT_SUN);
-
   const usdtTx = await post('/wallet/triggersmartcontract', {
     owner_address:     genesisAddr,
     contract_address:  USDT_CONTRACT,
