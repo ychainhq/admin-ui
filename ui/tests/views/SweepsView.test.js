@@ -12,9 +12,11 @@ const SAMPLE_SWEEP = {
 };
 
 const SAMPLE_SUMMARY = {
-  threshold_sats: '100000',
-  current_total_sats: '75000',
-  missing_sats: '25000',
+  chain_id: 'bitcoin',
+  asset_id: 'bitcoin:BTC',
+  threshold_raw: '100000',
+  current_total_raw: '75000',
+  missing_raw: '25000',
   progress_pct: 75,
   total_deposit_addresses: 1250,
   addresses_with_balance: 45,
@@ -152,7 +154,7 @@ describe('SweepsView — loadSummary()', () => {
     expect(api.getSweepsSummary).toHaveBeenCalled();
   });
 
-  test('summary.hasThreshold true when threshold_sats set', async () => {
+  test('summary.hasThreshold true when threshold_raw set', async () => {
     const { ctrl } = makeCtrl({
       getSweepsSummary: jest.fn().mockResolvedValue(SAMPLE_SUMMARY),
     });
@@ -322,7 +324,7 @@ describe('SweepsView — loadConfig()', () => {
 
   test('config.thresholdLabel shows formatted threshold', async () => {
     const { ctrl } = makeCtrl({
-      getActiveTenantConfig: jest.fn().mockResolvedValue({ btcSweepThresholdSats: '100000' }),
+      getActiveTenantConfig: jest.fn().mockResolvedValue({ btcSweepThresholdSats: '100000', btcXpub: 'xpub6test' }),
     });
     await ctrl.loadConfig();
     expect(ctrl.config.thresholdLabel).toMatch(/100/);
@@ -330,7 +332,7 @@ describe('SweepsView — loadConfig()', () => {
 
   test('config.thresholdLabel shows Not configured when null', async () => {
     const { ctrl } = makeCtrl({
-      getActiveTenantConfig: jest.fn().mockResolvedValue({}),
+      getActiveTenantConfig: jest.fn().mockResolvedValue({ btcXpub: 'xpub6test' }),
     });
     await ctrl.loadConfig();
     expect(ctrl.config.thresholdLabel).toBe('Not configured');
@@ -338,7 +340,7 @@ describe('SweepsView — loadConfig()', () => {
 
   test('config.nextDerivationIndex shows index value', async () => {
     const { ctrl } = makeCtrl({
-      getActiveTenantConfig: jest.fn().mockResolvedValue({ btcNextDerivationIndex: 42 }),
+      getActiveTenantConfig: jest.fn().mockResolvedValue({ btcNextDerivationIndex: 42, btcXpub: 'xpub6test' }),
     });
     await ctrl.loadConfig();
     expect(ctrl.config.nextDerivationIndex).toBe('42');
@@ -366,5 +368,184 @@ describe('SweepsView — navigation', () => {
     const { ctrl, router } = makeCtrl();
     ctrl.goToTenants({ preventDefault: jest.fn() });
     expect(router.navigate).toHaveBeenCalledWith('#/tenants');
+  });
+});
+
+// ─── Multi-chain: loadConfig + availableChains ────────────────────────────────
+
+describe('SweepsView — multi-chain loadConfig', () => {
+  test('loadConfig with btcXpub adds BTC to chainSelector', async () => {
+    const { ctrl } = makeCtrl({
+      getActiveTenantConfig: jest.fn().mockResolvedValue({ btcXpub: 'xpub6realtest' }),
+    });
+    await ctrl.loadConfig();
+    expect(ctrl.chainSelector.hasChains).toBe(true);
+    const items = ctrl.chainSelector.items;
+    expect(items.some(i => i.assetId === 'bitcoin:BTC')).toBe(true);
+  });
+
+  test('loadConfig with tronXpub adds TRX and USDT chains', async () => {
+    const { ctrl } = makeCtrl({
+      getActiveTenantConfig: jest.fn().mockResolvedValue({ tronXpub: 'xpubTronTest' }),
+    });
+    await ctrl.loadConfig();
+    const items = ctrl.chainSelector.items;
+    expect(items.some(i => i.assetId === 'tron:TRX')).toBe(true);
+    expect(items.some(i => i.assetId === 'tron:USDT')).toBe(true);
+  });
+
+  test('loadConfig with both xpubs adds BTC + TRX + USDT', async () => {
+    const { ctrl } = makeCtrl({
+      getActiveTenantConfig: jest.fn().mockResolvedValue({ btcXpub: 'xpub6test', tronXpub: 'xpubTronTest' }),
+    });
+    await ctrl.loadConfig();
+    const items = ctrl.chainSelector.items;
+    expect(items).toHaveLength(3);
+  });
+
+  test('loadConfig without any xpub → chainSelector has no chains', async () => {
+    const { ctrl } = makeCtrl({
+      getActiveTenantConfig: jest.fn().mockResolvedValue({}),
+    });
+    await ctrl.loadConfig();
+    expect(ctrl.chainSelector.hasChains).toBe(false);
+  });
+
+  test('config.chainLabel is Bitcoin / BTC when BTC selected', async () => {
+    const { ctrl } = makeCtrl({
+      getActiveTenantConfig: jest.fn().mockResolvedValue({ btcXpub: 'xpub6test' }),
+    });
+    await ctrl.loadConfig();
+    expect(ctrl.config.chainLabel).toBe('Bitcoin / BTC');
+  });
+
+  test('config.chainLabel is TRON / TRX when tronXpub set and no btcXpub', async () => {
+    const { ctrl } = makeCtrl({
+      getActiveTenantConfig: jest.fn().mockResolvedValue({ tronXpub: 'xpubTronTest' }),
+    });
+    await ctrl.loadConfig();
+    expect(ctrl.config.chainLabel).toBe('TRON / TRX');
+  });
+});
+
+// ─── Multi-chain: loadSummary with chain params ───────────────────────────────
+
+describe('SweepsView — loadSummary chain params', () => {
+  test('loadSummary passes selectedChainId to getSweepsSummary', async () => {
+    const getSweepsSummary = jest.fn().mockResolvedValue(SAMPLE_SUMMARY);
+    const { ctrl } = makeCtrl({ getSweepsSummary });
+    ctrl._selectedChainId = 'bitcoin';
+    ctrl._selectedAssetId = 'bitcoin:BTC';
+    await ctrl.loadSummary();
+    expect(getSweepsSummary).toHaveBeenCalledWith('bitcoin', 'bitcoin:BTC');
+  });
+
+  test('loadSummary passes tron params when chain is TRON', async () => {
+    const tronSummary = { ...SAMPLE_SUMMARY, chain_id: 'tron', asset_id: 'tron:TRX', total_utxos: null };
+    const getSweepsSummary = jest.fn().mockResolvedValue(tronSummary);
+    const { ctrl } = makeCtrl({ getSweepsSummary });
+    ctrl._selectedChainId = 'tron';
+    ctrl._selectedAssetId = 'tron:TRX';
+    await ctrl.loadSummary();
+    expect(getSweepsSummary).toHaveBeenCalledWith('tron', 'tron:TRX');
+  });
+
+  test('summary.showUtxos is true when total_utxos is a number', async () => {
+    const getSweepsSummary = jest.fn().mockResolvedValue({ ...SAMPLE_SUMMARY, total_utxos: 5 });
+    const { ctrl } = makeCtrl({ getSweepsSummary });
+    await ctrl.loadSummary();
+    expect(ctrl.summary.showUtxos).toBe(true);
+  });
+
+  test('summary.showUtxos is false when total_utxos is null (TRON)', async () => {
+    const tronSummary = { ...SAMPLE_SUMMARY, chain_id: 'tron', asset_id: 'tron:TRX', total_utxos: null };
+    const getSweepsSummary = jest.fn().mockResolvedValue(tronSummary);
+    const { ctrl } = makeCtrl({ getSweepsSummary });
+    await ctrl.loadSummary();
+    expect(ctrl.summary.showUtxos).toBe(false);
+  });
+});
+
+// ─── Multi-chain: load() passes chain params ──────────────────────────────────
+
+describe('SweepsView — load() chain params', () => {
+  test('load() passes chainId and assetId to getSweeps', async () => {
+    const getSweeps = jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } });
+    const { ctrl } = makeCtrl({ getSweeps });
+    ctrl._selectedChainId = 'tron';
+    ctrl._selectedAssetId = 'tron:TRX';
+    await ctrl.load();
+    expect(getSweeps).toHaveBeenCalledWith(
+      expect.objectContaining({ chainId: 'tron', assetId: 'tron:TRX' })
+    );
+  });
+
+  test('chain switch resets cursor', async () => {
+    const getSweeps = jest.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null } });
+    const { ctrl } = makeCtrl({ getSweeps });
+    ctrl._cursor = 'some_cursor';
+    ctrl._prevCursors = ['prev1'];
+
+    // Simulate onChainSelect
+    ctrl.chainSelector = { init: jest.fn() };
+    ctrl._selectedChainId = 'tron';
+    ctrl._selectedAssetId = 'tron:TRX';
+    ctrl._cursor = undefined;
+    ctrl._prevCursors = [];
+    await ctrl.load();
+
+    const callArgs = getSweeps.mock.calls[0][0];
+    expect(callArgs.cursor).toBeUndefined();
+  });
+});
+
+// ─── Multi-chain: normalizeSweep formatting ───────────────────────────────────
+
+describe('SweepsView — normalizeSweep amount formatting', () => {
+  const BTC_SWEEP  = { id: 'sw1', status: 'confirmed', amount_raw: '100000000', fee_raw: '5000', from_addresses: [], tx_hash: '', created_at: 0, chain_id: 'bitcoin', asset_id: 'bitcoin:BTC' };
+  const TRX_SWEEP  = { id: 'sw2', status: 'confirmed', amount_raw: '10000000',  fee_raw: '1000', from_addresses: [], tx_hash: '', created_at: 0, chain_id: 'tron',    asset_id: 'tron:TRX' };
+  const USDT_SWEEP = { id: 'sw3', status: 'confirmed', amount_raw: '5000000',   fee_raw: '0',    from_addresses: [], tx_hash: '', created_at: 0, chain_id: 'tron',    asset_id: 'tron:USDT' };
+
+  test('BTC sweep amountFmt shows BTC symbol for large amounts', async () => {
+    const getSweeps = jest.fn().mockResolvedValue({ data: [BTC_SWEEP], pagination: { nextCursor: null } });
+    const { ctrl } = makeCtrl({ getSweeps });
+    await ctrl.load();
+    expect(ctrl.sweeps[0].amountFmt).toContain('BTC');
+  });
+
+  test('TRX sweep amountFmt shows TRX symbol', async () => {
+    const getSweeps = jest.fn().mockResolvedValue({ data: [TRX_SWEEP], pagination: { nextCursor: null } });
+    const { ctrl } = makeCtrl({ getSweeps });
+    await ctrl.load();
+    expect(ctrl.sweeps[0].amountFmt).toContain('TRX');
+  });
+
+  test('USDT sweep amountFmt shows USDT symbol', async () => {
+    const getSweeps = jest.fn().mockResolvedValue({ data: [USDT_SWEEP], pagination: { nextCursor: null } });
+    const { ctrl } = makeCtrl({ getSweeps });
+    await ctrl.load();
+    expect(ctrl.sweeps[0].amountFmt).toContain('USDT');
+  });
+
+  test('small BTC amount shows sats subunit', async () => {
+    const smallBtc = { ...BTC_SWEEP, amount_raw: '500' };
+    const getSweeps = jest.fn().mockResolvedValue({ data: [smallBtc], pagination: { nextCursor: null } });
+    const { ctrl } = makeCtrl({ getSweeps });
+    await ctrl.load();
+    expect(ctrl.sweeps[0].amountFmt).toContain('sats');
+  });
+
+  test('sweep chainLabel is TRON for tron sweeps', async () => {
+    const getSweeps = jest.fn().mockResolvedValue({ data: [TRX_SWEEP], pagination: { nextCursor: null } });
+    const { ctrl } = makeCtrl({ getSweeps });
+    await ctrl.load();
+    expect(ctrl.sweeps[0].chainLabel).toBe('TRON');
+  });
+
+  test('sweep chainLabel is BTC for bitcoin sweeps', async () => {
+    const getSweeps = jest.fn().mockResolvedValue({ data: [BTC_SWEEP], pagination: { nextCursor: null } });
+    const { ctrl } = makeCtrl({ getSweeps });
+    await ctrl.load();
+    expect(ctrl.sweeps[0].chainLabel).toBe('BTC');
   });
 });

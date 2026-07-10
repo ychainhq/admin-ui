@@ -13,6 +13,19 @@ const STATUS_OPTIONS = [
   { value: 'failed',           label: 'Failed' },
 ];
 
+const CHAIN_OPTIONS = [
+  { value: '',        label: 'All chains' },
+  { value: 'bitcoin', label: 'Bitcoin' },
+  { value: 'tron',    label: 'TRON' },
+];
+
+const ASSET_OPTIONS = [
+  { value: '',            label: 'All assets' },
+  { value: 'bitcoin:BTC', label: 'BTC' },
+  { value: 'tron:TRX',   label: 'TRX' },
+  { value: 'tron:USDT',  label: 'USDT (TRC-20)' },
+];
+
 const sweepSearchConfig = {
   bindName: 'sweepSearchForm',
   title: 'Filter Sweeps',
@@ -22,7 +35,9 @@ const sweepSearchConfig = {
       label: 'Filters',
       expanded: true,
       fields: [
-        { name: 'status', label: 'Status', type: 'select', options: STATUS_OPTIONS },
+        { name: 'chainId', label: 'Chain',  type: 'select', options: CHAIN_OPTIONS },
+        { name: 'assetId', label: 'Asset',  type: 'select', options: ASSET_OPTIONS },
+        { name: 'status',  label: 'Status', type: 'select', options: STATUS_OPTIONS },
       ],
     },
     {

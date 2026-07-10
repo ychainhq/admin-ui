@@ -5,6 +5,7 @@ import { template as sidebarTpl, createSidebarController } from '../components/D
 import { template as mobileDrawerTpl, createMobileDrawerController } from '../components/MobileDrawer.js';
 import { template as paginationTpl, createPaginationController } from '../components/Pagination.js';
 import { template as sweepSearchTpl, createSweepSearchFormController } from '../components/SweepSearchForm.js';
+import { template as chainSelectorTpl, createSweepChainSelectorController } from '../components/SweepChainSelector.js';
 import { desktopTopBarHtml } from '../components/DesktopTopBar.js';
 import { createActiveTenantController } from '../components/ActiveTenantBadge.js';
 import { getActiveTenantKey } from '../api.js';
@@ -12,18 +13,30 @@ import { getActiveTenantKey } from '../api.js';
 const ROUTE = '/sweeps';
 const LIMIT = 20;
 
+// ─── Amount formatting — chain-agnostic ──────────────────────────────────────
+
+const ASSET_META = {
+  'bitcoin:BTC': { decimals: 8, symbol: 'BTC',  subunit: 'sats' },
+  'tron:TRX':   { decimals: 6, symbol: 'TRX',  subunit: 'sun' },
+  'tron:USDT':  { decimals: 6, symbol: 'USDT', subunit: 'µUSDT' },
+};
+
+function formatAssetRaw(raw, assetId) {
+  if (raw === null || raw === undefined || raw === '—') return '—';
+  const meta = ASSET_META[assetId] ?? { decimals: 8, symbol: '?', subunit: 'units' };
+  try {
+    const n = BigInt(raw);
+    const divisor = BigInt(10 ** meta.decimals);
+    if (n >= divisor / 100n) {
+      return (Number(n) / 10 ** meta.decimals).toFixed(4) + ' ' + meta.symbol;
+    }
+    return Number(n).toLocaleString() + ' ' + meta.subunit;
+  } catch { return String(raw); }
+}
+
 function fmtDate(v) {
   if (!v) return '—';
   try { return new Date(v * 1000).toISOString().slice(0, 16).replace('T', ' '); } catch { return '—'; }
-}
-
-function fmtSats(v) {
-  if (v === null || v === undefined || v === '—') return '—';
-  try {
-    const n = BigInt(v);
-    if (n >= BigInt(100_000_000)) return (Number(n) / 1e8).toFixed(4) + ' BTC';
-    return Number(n).toLocaleString() + ' sats';
-  } catch { return String(v) + ' sats'; }
 }
 
 function shortId(v) {
@@ -46,20 +59,123 @@ function normalizeSweep(s) {
   const status = s.status || '';
   const txHash = s.tx_hash || s.txHash || '';
   const fromAddresses = Array.isArray(s.from_addresses) ? s.from_addresses : [];
+  const assetId = s.asset_id ?? 'bitcoin:BTC';
   return {
     id:               s.id || '—',
     idShort:          shortId(s.id),
     statusLabel:      status.toUpperCase().replace(/_/g, ' '),
     statusBadgeClass: sweepStatusBadge(status),
-    amountFmt:        fmtSats(s.amount_raw ?? s.amountRaw),
-    feeFmt:           fmtSats(s.fee_raw ?? s.feeRaw),
+    amountFmt:        formatAssetRaw(s.amount_raw ?? s.amountRaw, assetId),
+    feeFmt:           formatAssetRaw(s.fee_raw ?? s.feeRaw, assetId),
     addressCount:     fromAddresses.length,
+    chainId:          s.chain_id ?? 'bitcoin',
+    assetId,
+    chainLabel:       s.chain_id === 'tron' ? 'TRON' : 'BTC',
     txHash,
     txHashShort:      txHash.length > 16 ? txHash.slice(0, 8) + '…' + txHash.slice(-6) : (txHash || '—'),
     createdAt:        fmtDate(s.created_at ?? s.createdAt),
     error:            s.error || '',
   };
 }
+
+// ─── Summary normalization ────────────────────────────────────────────────────
+
+function normalizeSummary(data) {
+  if (!data) {
+    return {
+      hasThreshold: false, hasPending: false, hasGap: false, showUtxos: false,
+      currentFmt: '—', thresholdFmt: '—', missingFmt: '—',
+      progressPctLabel: '0%', progressStyle: 'width:0%;background:var(--color-secondary)',
+      pendingSweepIdShort: '—',
+      totalDepositAddresses: 0, addressesWithBalance: 0, totalUtxos: 0,
+      hotWalletAddress: '—', hotWalletAddressFull: '',
+    };
+  }
+  const assetId = data.asset_id ?? 'bitcoin:BTC';
+  const hasThreshold = data.threshold_raw !== null && data.threshold_raw !== undefined;
+  const progressPct = data.progress_pct ?? 0;
+  const hasGap = hasThreshold && (data.missing_raw && data.missing_raw !== '0');
+  const barColor = progressPct >= 100 ? 'var(--color-tertiary)' : 'var(--color-secondary)';
+  const hotFull = data.hot_wallet_address ?? '';
+  return {
+    hasThreshold,
+    hasPending: !!data.pending_sweep_id,
+    hasGap,
+    showUtxos: data.total_utxos !== null && data.total_utxos !== undefined,
+    currentFmt:        formatAssetRaw(data.current_total_raw, assetId),
+    thresholdFmt:      hasThreshold ? formatAssetRaw(data.threshold_raw, assetId) : '—',
+    missingFmt:        data.missing_raw ? formatAssetRaw(data.missing_raw, assetId) : '—',
+    progressPctLabel:  `${progressPct}%`,
+    progressStyle:     `width:${Math.min(progressPct, 100)}%;background:${barColor}`,
+    pendingSweepIdShort: data.pending_sweep_id ? shortId(data.pending_sweep_id) : '—',
+    totalDepositAddresses: data.total_deposit_addresses ?? 0,
+    addressesWithBalance:  data.addresses_with_balance ?? 0,
+    totalUtxos:            data.total_utxos ?? 0,
+    hotWalletAddress:      hotFull ? (hotFull.length > 20 ? hotFull.slice(0, 10) + '…' + hotFull.slice(-8) : hotFull) : '—',
+    hotWalletAddressFull:  hotFull,
+  };
+}
+
+// ─── Config normalization — per selected chain ────────────────────────────────
+
+function normalizeConfig(cfg, selectedChain) {
+  const defaults = { thresholdLabel: '—', xpub: '—', xpubShort: '—', chainLabel: 'Chain', nextDerivationIndex: '—' };
+  if (!cfg || !selectedChain) return defaults;
+
+  const truncateXpub = (xpub) => xpub
+    ? (xpub.length > 20 ? xpub.slice(0, 10) + '…' + xpub.slice(-8) : xpub)
+    : 'Not configured';
+
+  if (selectedChain.chainId === 'bitcoin') {
+    const xpub = cfg.btcXpub ?? cfg.btc_xpub ?? null;
+    const threshold = cfg.btcSweepThresholdSats ?? cfg.btc_sweep_threshold_sats ?? null;
+    const nextIdx = cfg.btcNextDerivationIndex ?? cfg.btc_next_derivation_index;
+    return {
+      chainLabel: 'Bitcoin / BTC',
+      thresholdLabel: threshold ? formatAssetRaw(threshold, 'bitcoin:BTC') : 'Not configured',
+      xpub: xpub ?? 'Not configured',
+      xpubShort: truncateXpub(xpub),
+      nextDerivationIndex: (nextIdx !== null && nextIdx !== undefined) ? String(nextIdx) : '—',
+    };
+  }
+
+  if (selectedChain.chainId === 'tron') {
+    const xpub = cfg.tronXpub ?? cfg.tron_xpub ?? null;
+    const isUsdt = selectedChain.assetId === 'tron:USDT';
+    const threshold = isUsdt
+      ? null
+      : (cfg.tronSweepThresholdSun ?? cfg.tron_sweep_threshold_sun ?? null);
+    const nextIdx = cfg.tronNextDerivationIndex ?? cfg.tron_next_derivation_index;
+    return {
+      chainLabel: isUsdt ? 'TRON / USDT' : 'TRON / TRX',
+      thresholdLabel: threshold ? formatAssetRaw(threshold, 'tron:TRX') : 'Not configured',
+      xpub: xpub ?? 'Not configured',
+      xpubShort: truncateXpub(xpub),
+      nextDerivationIndex: (nextIdx !== null && nextIdx !== undefined) ? String(nextIdx) : '—',
+    };
+  }
+
+  return defaults;
+}
+
+// ─── Available chains — derived from tenant config ────────────────────────────
+
+function deriveAvailableChains(cfg) {
+  if (!cfg) return [];
+  const chains = [];
+  const btcXpub = cfg.btcXpub ?? cfg.btc_xpub;
+  const tronXpub = cfg.tronXpub ?? cfg.tron_xpub;
+  if (btcXpub) {
+    chains.push({ chainId: 'bitcoin', assetId: 'bitcoin:BTC', symbol: 'BTC', label: 'BTC' });
+  }
+  if (tronXpub) {
+    chains.push({ chainId: 'tron', assetId: 'tron:TRX',   symbol: 'TRX',  label: 'TRX' });
+    chains.push({ chainId: 'tron', assetId: 'tron:USDT',  symbol: 'USDT', label: 'USDT' });
+  }
+  return chains;
+}
+
+// ─── Template ─────────────────────────────────────────────────────────────────
 
 const desktopTopBarTpl = desktopTopBarHtml({
   breadcrumbHtml: `
@@ -96,6 +212,9 @@ const template = `
 
         <div rv-hide="noActiveTenant">
 
+          <!-- Chain selector -->
+          ${chainSelectorTpl}
+
           <!-- ── Top row: Config + Current State ── -->
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-md mb-md">
 
@@ -103,7 +222,7 @@ const template = `
             <div class="glass-card rounded-xl overflow-hidden">
               <div class="px-md py-sm bg-white/[0.03] border-b border-white/5 flex items-center gap-sm">
                 <span class="material-symbols-outlined text-on-surface-variant text-[18px]">settings</span>
-                <span class="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Sweep Configuration · Bitcoin</span>
+                <span rv-text="config.chainLabel" class="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]"></span>
               </div>
               <div rv-show="configLoading" class="flex justify-center py-lg">
                 <div class="w-6 h-6 rounded-full border-2 border-secondary border-t-transparent animate-spin"></div>
@@ -171,7 +290,7 @@ const template = `
                 </div>
 
                 <!-- Stats row -->
-                <div class="grid grid-cols-3 gap-sm mt-sm">
+                <div class="grid gap-sm mt-sm" rv-attr-class="summary.statsGridClass">
                   <div class="text-center p-sm rounded-lg bg-white/[0.03] border border-white/5">
                     <p rv-text="summary.totalDepositAddresses" class="font-mono-data text-on-surface text-[18px] font-bold"></p>
                     <p class="font-body-sm text-on-surface-variant text-[10px] mt-xs">deposit addresses</p>
@@ -180,7 +299,7 @@ const template = `
                     <p rv-text="summary.addressesWithBalance" class="font-mono-data text-secondary text-[18px] font-bold"></p>
                     <p class="font-body-sm text-on-surface-variant text-[10px] mt-xs">with balance</p>
                   </div>
-                  <div class="text-center p-sm rounded-lg bg-white/[0.03] border border-white/5">
+                  <div rv-show="summary.showUtxos" class="text-center p-sm rounded-lg bg-white/[0.03] border border-white/5">
                     <p rv-text="summary.totalUtxos" class="font-mono-data text-on-surface text-[18px] font-bold"></p>
                     <p class="font-body-sm text-on-surface-variant text-[10px] mt-xs">UTXOs ready</p>
                   </div>
@@ -231,10 +350,11 @@ const template = `
 
             <!-- Desktop table -->
             <div rv-hide="sweepsEmpty" class="hidden lg:block overflow-x-auto">
-              <table class="w-full text-left border-collapse" style="min-width:900px">
+              <table class="w-full text-left border-collapse" style="min-width:960px">
                 <thead>
                   <tr class="border-b border-white/5 bg-white/[0.02]">
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">SWEEP ID</th>
+                    <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">CHAIN</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">STATUS</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">AMOUNT</th>
                     <th class="px-sm py-3 text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider text-right">FEE</th>
@@ -247,6 +367,9 @@ const template = `
                   <tr rv-each-sweep="sweeps" class="hover:bg-white/[0.02]">
                     <td class="px-sm py-3">
                       <span rv-text="sweep.idShort" rv-attr-title="sweep.id" class="font-mono-data text-on-surface text-[12px] cursor-help"></span>
+                    </td>
+                    <td class="px-sm py-3">
+                      <span rv-text="sweep.chainLabel" class="font-mono-data text-on-surface-variant text-[11px]"></span>
                     </td>
                     <td class="px-sm py-3">
                       <span rv-text="sweep.statusLabel" rv-attr-class="sweep.statusBadgeClass"></span>
@@ -267,7 +390,10 @@ const template = `
             <div rv-hide="sweepsEmpty" class="lg:hidden divide-y divide-white/5">
               <div rv-each-sweep="sweeps" class="px-md py-3">
                 <div class="flex items-start justify-between mb-xs">
-                  <p rv-text="sweep.idShort" class="font-mono-data text-on-surface text-[12px]"></p>
+                  <div>
+                    <p rv-text="sweep.idShort" class="font-mono-data text-on-surface text-[12px]"></p>
+                    <p rv-text="sweep.chainLabel" class="font-mono-data text-on-surface-variant text-[10px]"></p>
+                  </div>
                   <span rv-text="sweep.statusLabel" rv-attr-class="sweep.statusBadgeClass"></span>
                 </div>
                 <p class="font-mono-data text-on-surface-variant text-[11px] mb-xs"><span rv-text="sweep.txHashShort"></span></p>
@@ -300,54 +426,7 @@ const template = `
 </div>
 `;
 
-function normalizeSummary(data) {
-  if (!data) {
-    return {
-      hasThreshold: false, hasPending: false, hasGap: false,
-      currentFmt: '0 sats', thresholdFmt: '—', missingFmt: '—',
-      progressPctLabel: '0%', progressStyle: 'width:0%;background:var(--color-secondary)',
-      pendingSweepIdShort: '—',
-      totalDepositAddresses: 0, addressesWithBalance: 0, totalUtxos: 0,
-      hotWalletAddress: '—', hotWalletAddressFull: '',
-    };
-  }
-  const hasThreshold = data.threshold_sats !== null && data.threshold_sats !== undefined;
-  const progressPct = data.progress_pct ?? 0;
-  const hasGap = hasThreshold && (data.missing_sats && data.missing_sats !== '0');
-  const barColor = progressPct >= 100 ? 'var(--color-tertiary)' : 'var(--color-secondary)';
-  const hotFull = data.hot_wallet_address ?? '';
-  return {
-    hasThreshold,
-    hasPending: !!data.pending_sweep_id,
-    hasGap,
-    currentFmt: fmtSats(data.current_total_sats),
-    thresholdFmt: hasThreshold ? fmtSats(data.threshold_sats) : '—',
-    missingFmt: data.missing_sats ? fmtSats(data.missing_sats) : '—',
-    progressPctLabel: `${progressPct}%`,
-    progressStyle: `width:${Math.min(progressPct, 100)}%;background:${barColor}`,
-    pendingSweepIdShort: data.pending_sweep_id ? shortId(data.pending_sweep_id) : '—',
-    totalDepositAddresses: data.total_deposit_addresses ?? 0,
-    addressesWithBalance: data.addresses_with_balance ?? 0,
-    totalUtxos: data.total_utxos ?? 0,
-    hotWalletAddress: hotFull ? (hotFull.length > 20 ? hotFull.slice(0, 10) + '…' + hotFull.slice(-8) : hotFull) : '—',
-    hotWalletAddressFull: hotFull,
-  };
-}
-
-function normalizeConfig(cfg) {
-  if (!cfg) return {
-    thresholdLabel: '—', nextDerivationIndex: '—', xpub: '—', xpubShort: '—',
-  };
-  const xpub = cfg.btcXpub ?? cfg.btc_xpub ?? null;
-  const threshold = cfg.btcSweepThresholdSats ?? cfg.btc_sweep_threshold_sats ?? null;
-  const nextIdx = cfg.btcNextDerivationIndex ?? cfg.btc_next_derivation_index;
-  return {
-    thresholdLabel: threshold ? fmtSats(threshold) : 'Not configured',
-    nextDerivationIndex: (nextIdx !== null && nextIdx !== undefined) ? String(nextIdx) : '—',
-    xpub: xpub ?? 'Not configured',
-    xpubShort: xpub ? (xpub.length > 20 ? xpub.slice(0, 10) + '…' + xpub.slice(-8) : xpub) : 'Not configured',
-  };
-}
+// ─── Controller ───────────────────────────────────────────────────────────────
 
 export function createController({ api, router }) {
   const self = {
@@ -371,7 +450,23 @@ export function createController({ api, router }) {
     sweeps: [],
     sweepsEmpty: true,
     summary: normalizeSummary(null),
-    config: normalizeConfig(null),
+    config: normalizeConfig(null, null),
+
+    _selectedChainId: 'bitcoin',
+    _selectedAssetId: 'bitcoin:BTC',
+    _availableChains: [],
+
+    chainSelector: createSweepChainSelectorController({
+      chains: [],
+      onSelect(chainId, assetId) {
+        self._selectedChainId = chainId;
+        self._selectedAssetId = assetId;
+        self._cursor = undefined;
+        self._prevCursors = [];
+        self.loadSummary();
+        self.load();
+      },
+    }),
 
     _activeFilters: {},
     _cursor: undefined,
@@ -384,7 +479,7 @@ export function createController({ api, router }) {
     async loadSummary() {
       self.summaryLoading = true;
       try {
-        const data = await api.getSweepsSummary();
+        const data = await api.getSweepsSummary(self._selectedChainId, self._selectedAssetId);
         self.summary = normalizeSummary(data);
       } catch (_e) {
         // non-fatal — summary card stays in default state
@@ -397,9 +492,34 @@ export function createController({ api, router }) {
       self.configLoading = true;
       try {
         const cfg = await api.getActiveTenantConfig();
-        self.config = normalizeConfig(cfg);
+        self._availableChains = deriveAvailableChains(cfg);
+
+        self.chainSelector = createSweepChainSelectorController({
+          chains: self._availableChains,
+          onSelect(chainId, assetId) {
+            self._selectedChainId = chainId;
+            self._selectedAssetId = assetId;
+            self._cursor = undefined;
+            self._prevCursors = [];
+            self.loadSummary();
+            self.load();
+          },
+        });
+
+        const first = self._availableChains[0];
+        if (first) {
+          self.chainSelector.init(first.chainId, first.assetId);
+          self._selectedChainId = first.chainId;
+          self._selectedAssetId = first.assetId;
+        }
+
+        const selectedChain = self._availableChains.find(
+          c => c.chainId === self._selectedChainId && c.assetId === self._selectedAssetId
+        ) ?? (self._availableChains[0] ?? null);
+
+        self.config = normalizeConfig(cfg, selectedChain);
       } catch (_e) {
-        self.config = normalizeConfig(null);
+        self.config = normalizeConfig(null, null);
       } finally {
         self.configLoading = false;
       }
@@ -412,6 +532,8 @@ export function createController({ api, router }) {
         const res = await api.getSweeps({
           limit: LIMIT,
           cursor: self._cursor,
+          chainId: self._selectedChainId,
+          assetId: self._selectedAssetId,
           ...self._activeFilters,
         });
         const items = res.data || res || [];
@@ -444,9 +566,10 @@ export function createController({ api, router }) {
 
     init() {
       if (!self.noActiveTenant) {
-        self.loadSummary();
-        self.loadConfig();
-        self.load();
+        self.loadConfig().then(() => {
+          self.loadSummary();
+          self.load();
+        });
       }
     },
   };

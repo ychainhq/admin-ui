@@ -349,15 +349,18 @@ export const api = {
     return res.data ?? res;
   },
 
-  getSweepsSummary: async () => {
-    const res = await tenantRequest('/api/sweeps/summary');
+  getSweepsSummary: async (chainId = 'bitcoin', assetId = 'bitcoin:BTC') => {
+    const params = new URLSearchParams({ chainId, assetId });
+    const res = await tenantRequest(`/api/sweeps/summary?${params}`);
     return res.data ?? res;
   },
 
-  getSweeps: ({ limit = 20, cursor, status } = {}) => {
+  getSweeps: ({ limit = 20, cursor, status, chainId, assetId } = {}) => {
     const params = new URLSearchParams({ limit: String(limit) });
-    if (cursor) params.set('cursor', cursor);
-    if (status) params.set('status', status);
+    if (cursor)  params.set('cursor', cursor);
+    if (status)  params.set('status', status);
+    if (chainId) params.set('chainId', chainId);
+    if (assetId) params.set('assetId', assetId);
     return tenantRequest(`/api/sweeps?${params}`);
   },
 
